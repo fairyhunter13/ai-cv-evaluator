@@ -103,7 +103,7 @@ Comprehensive guidance for metrics and tracing.
   ```
 - App env:
   - `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317`
-  - `OTEL_SERVICE_NAME=cv-job-matching`
+  - `OTEL_SERVICE_NAME=ai-cv-evaluator`
   - Ensure logs are JSON with `trace_id`, `span_id`, `request_id` (see `10a-logging.md`).
 
 # End-to-End Tracking (How-To)

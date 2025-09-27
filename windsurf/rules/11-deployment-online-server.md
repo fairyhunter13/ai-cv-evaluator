@@ -6,7 +6,7 @@ Provide a concrete path to deploy online via a Docker-capable VPS.
 
 # VPS Strategy
 - Requirements on VPS: Docker, docker compose, ports open for app and Postgres/Redis/Qdrant if remote.
-- Directory on VPS: `$REMOTE_COMPOSE_PATH` (e.g., `/opt/cv-job-matching`).
+- Directory on VPS: `$REMOTE_COMPOSE_PATH` (e.g., `/opt/ai-cv-evaluator`).
 - Compose file includes app, db, redis, qdrant; app uses image from GHCR.
 
 # GitHub Actions Deploy (non-blocking, no quotes)
@@ -32,7 +32,7 @@ Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker run --rm --netwo
 # Server Provisioning & Prerequisites
 - OS: Ubuntu LTS (recommended) with a non-root user in `docker` group.
 - Install Docker and docker compose plugin from official repos; enable on boot.
-- Create application directory on VPS: `$REMOTE_COMPOSE_PATH` (e.g., `/opt/cv-job-matching`).
+- Create application directory on VPS: `$REMOTE_COMPOSE_PATH` (e.g., `/opt/ai-cv-evaluator`).
 - Networking:
   - Open the app port only; keep DB/Redis/Qdrant on an internal network.
   - Optional reverse proxy (Caddy/Nginx) terminates TLS and forwards to app.
