@@ -44,6 +44,12 @@ Define clear API contracts, input validation, and consistent error responses.
         "overall_summary": "..."
       }
     }
+  - Failed response (optional, recommended):
+    {
+      "id": "456",
+      "status": "failed",
+      "error": { "code": "SCHEMA_INVALID", "message": "validation failed" }
+    }
 
 # Error Model
 - Error response:

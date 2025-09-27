@@ -22,6 +22,16 @@ Standardize repository documentation, governance, and collaboration workflows to
   - How to update OpenAPI and re-generate clients (if any).
 - `SECURITY.md`
   - Vulnerability disclosure policy, secret handling, supported versions.
+- `docs/STUDY_CASE.md`
+  - Follow the study case submission template with the following sections:
+    - Initial Plan
+    - System & Database Design (API, schema/ERD, job queue/long-running handling)
+    - LLM Integration (provider rationale, prompt design, chaining, RAG strategy)
+    - Resilience & Error Handling (timeouts, retries, randomness control)
+    - Edge Cases Considered (inputs/scenarios and how they were tested)
+    - Results & Reflection (what worked, what didn’t, stability rationale)
+    - Future Improvements (trade-offs and constraints)
+  - Link this file from `README.md` for easy discovery.
 - `docs/` (optional)
   - ADRs (Architecture Decision Records) for key choices (queue, vector DB, AI provider).
   - Runbooks for common ops tasks (restart, roll back, run migrations, rotate secrets).

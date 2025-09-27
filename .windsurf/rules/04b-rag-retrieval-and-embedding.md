@@ -44,6 +44,19 @@ Define retrieval strategy, embeddings, chunking, and Qdrant collections for dete
 - Separate retrievers for CV scoring and Project scoring; tune independently.
 - Provide simple interfaces to swap implementations in tests.
 
+# RAG Data Ingestion & Versioning
+- Corpus sources:
+  - Option A (config-seeded): ingest from versioned files under `configs/` (e.g., `configs/job_description.yaml`, `configs/scoring_rubric.yaml`) at startup; re-ingest on change in dev.
+  - Option B (admin-managed): authenticated admin routes allow uploading/updating corpora; persist version metadata.
+- Versioning:
+  - Attach `version`, `source`, and `ingested_at` metadata to payloads in Qdrant for both collections.
+  - Log the corpus version used in each evaluation to aid reproducibility and drift analysis.
+
+# Per-Request Context (Ad Hoc Inputs)
+- Ad hoc `job_description` and `study_case_brief` provided via `POST /evaluate` are embedded on-the-fly and treated as ephemeral context.
+- Do NOT persist ad hoc inputs into Qdrant by default. Optionally allow persistence behind a feature flag for specific environments.
+- Merge retrieval results from static corpora with ephemeral embeddings to build the final prompt context.
+
 # Definition of Done (RAG)
 - Retrieval returns relevant chunks for both CV and project tasks in integration tests.
 - Deterministic results in mock mode across runs.

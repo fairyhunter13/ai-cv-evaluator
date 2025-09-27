@@ -46,6 +46,18 @@ Comprehensive guidance for metrics and tracing.
   - Elevated job failures or DLQ growth.
   - AI upstream error spikes (429/5xx) or timeouts.
 
+# AI Score Drift Monitoring
+- Metrics:
+  - Export time series for `cv_match_rate` and `project_score` at job completion (e.g., summarize per hour via counters/histograms or record gauges).
+  - Track distribution (mean, p50, p95) per environment and per model/provider version.
+  - Label with corpus version used (see `04b-rag-retrieval-and-embedding.md`).
+- Dashboards:
+  - Panels showing rolling averages and percentiles of scores over time.
+  - Compare distributions across releases (annotations) to detect shifts.
+- Alerts:
+  - Trigger when mean or p95 deviates beyond a threshold compared to a recent baseline window.
+  - Trigger on sudden drops to zero/near-zero rates which may indicate schema/LLM failures.
+
 # SLOs & Alerts (Guidance)
 - Example SLIs: p95 latency < 300ms; 5xx rate < 1%.
 - Alerts via Prometheus Alertmanager (optional).

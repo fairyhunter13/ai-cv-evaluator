@@ -26,6 +26,19 @@ Deliver high-confidence coverage with clear separation between unit, integration
 - Fast path: `go test -short ./...` runs pure unit tests (integration/E2E skipped via build tags).
 - Coverage target ≥ 80% for core domain/usecase packages; ≥ 60% overall minimum.
 
+# Unit Test Placement & Naming (Strict)
+- Co-locate unit tests next to the code they test in the same package directory. Example: `internal/usecase/service.go` → `internal/usecase/service_test.go`.
+- Do NOT place unit tests under the top-level `test/` tree. The `test/` tree is reserved for E2E suites (e.g., `test/e2e/`) and cross-cutting fixtures only.
+- Package usage:
+  - Black-box: `package foo_test` in the same directory to exercise only the public API.
+  - White-box: `package foo` only when testing unexported helpers is necessary.
+- Naming conventions:
+  - File names end with `_test.go` (e.g., `service_test.go`).
+  - Test functions use `TestXxx`, table-driven subtests use `t.Run(tc.name, ...)`.
+- Test data:
+  - Prefer a package-local `testdata/` subdirectory for package-specific fixtures.
+  - Use `test/testdata/` only for shared, cross-cutting fixtures referenced by multiple packages.
+
 # Integration Tests
 - Use `testcontainers-go` to launch Postgres (v16+), Redis (v7+), and Qdrant.
 - Apply migrations up in setup; teardown afterwards via `t.Cleanup`.
@@ -55,6 +68,7 @@ Deliver high-confidence coverage with clear separation between unit, integration
   - `/evaluate` enqueues and returns `{id, status:"queued"}`.
   - `/result/{id}` for queued, processing, completed shapes (match `project.md`).
 - Golden files for stable JSON responses under `test/testdata/golden/`.
+- Completed result golden responses must include exactly the example fields from `project.md` (`cv_match_rate`, `cv_feedback`, `project_score`, `project_feedback`, `overall_summary`) with correct types.
 - Build tags: mark E2E tests with `//go:build e2e` (and legacy `+build e2e`).
 - Readiness:
   - Wait for health/readiness endpoint before assertions.

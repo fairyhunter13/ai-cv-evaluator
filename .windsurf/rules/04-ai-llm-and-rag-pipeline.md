@@ -56,7 +56,10 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 # Chain-of-Thought (CoT) Handling
 - Never request, collect, store, or return free-form step-by-step reasoning to clients.
 - Prompts must explicitly instruct: "You may reason privately but return only JSON matching the schema. Do not include your reasoning or chain-of-thought in the output."
-- If justification is needed, use concise fields already defined (e.g., `cv_feedback`, `project_feedback`, `overall_summary`) and keep them short (1–3 sentences). No step-by-step.
+- If justification is needed, use the designated fields and lengths:
+  - `cv_feedback`, `project_feedback`: concise, 1–3 sentences.
+  - `overall_summary`: richer narrative, 3–5 sentences (per `project.md`).
+  - No step-by-step reasoning.
 - Validation must reject outputs that leak CoT (e.g., patterns like "Step 1", "First,", "I think", long numbered lists) outside allowed fields/lengths.
 - Do not log raw prompts or completions in production. Log only token counts and status/latency metrics; optionally sample sanitized snippets in dev only.
 - Tests should assert absence of CoT leakage in responses and that only the allowed JSON schema is returned.
@@ -121,7 +124,7 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 
 # Provider Abstraction & Keys
 - Create `AIClient` interface with methods: `Embed(ctx, texts)`, `ChatJSON(ctx, prompt, schema)`.
-- Implement providers: OpenAI and Mock.
+- Implement providers: OpenAI and Mock; design the interface to be pluggable so additional providers can be swapped in without changing usecases.
 - Configure via env: `OPENAI_API_KEY`, `EMBEDDINGS_MODEL`, `CHAT_MODEL`.
 - Pluggable via DI to swap in mocks for tests and offline mode.
 

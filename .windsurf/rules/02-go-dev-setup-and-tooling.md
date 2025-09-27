@@ -65,6 +65,20 @@ Provide a productive Go developer experience with strict linting, formatting, an
   - Optional: `go test -short ./...` to catch quick regressions.
 - Commit hooks live under `.githooks/` and are enabled via `core.hooksPath`.
 
+# Test Placement Enforcement (Local)
+- Unit tests MUST be co-located next to the code under test in the same package directory (e.g., `foo.go` ↔ `foo_test.go`).
+- The top-level `test/` tree is reserved for E2E suites (`test/e2e/`) and shared fixtures only. Do not place unit tests under `test/`.
+- Optional pre-commit guard to block misplaced tests:
+  ```bash
+  #!/usr/bin/env bash
+  set -euo pipefail
+  # Disallow *_test.go directly under top-level test/ except test/e2e/**
+  if git ls-files -- '*.go' | grep -E '^test/.*_test\.go$' | grep -vE '^test/e2e/'; then
+    echo "Error: unit tests must be colocated next to code. Move tests out of top-level test/ (allowed only under test/e2e/)." >&2
+    exit 1
+  fi
+  ```
+
 # Makefile Guidance
 - Export common flags: `GOFLAGS=-trimpath`, `CGO_ENABLED=0` (unless needed for PDF/DOCX), `GOTOOLCHAIN=auto`.
 - Use pattern targets to test only changed packages when possible.
