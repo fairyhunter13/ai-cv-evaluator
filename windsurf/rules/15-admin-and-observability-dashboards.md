@@ -12,6 +12,10 @@ Define both observability dashboards and an admin UI for testing/consuming APIs.
 - Tracing (Jaeger/Tempo) with spans across HTTP → queue → worker → AI/Qdrant.
 - Document dashboard links and basic runbooks in `docs/`.
 
+## Local Access
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (anonymous access enabled in docker-compose for local dev)
+
 # Trace–Log Correlation Dashboard (Grafana)
 - Data sources: Tempo (or Jaeger via data source) and Loki.
 - Panels (example):
@@ -22,7 +26,7 @@ Define both observability dashboards and an admin UI for testing/consuming APIs.
 
 # Admin UI (Behind Login)
 - Purpose: allow authenticated users to test and consume the API from a browser UI.
-- Tech: Tailwind CSS for styling, minimal HTML + vanilla JS for interactivity (no heavy framework required).
+- Tech: Vue 3 + Tailwind CSS for styling; SPA served by the Go app.
 - Routes (examples):
   - `/admin/login` → username/password form
   - `/admin/` → dashboard home (links to Upload, Evaluate, Results)
@@ -40,6 +44,11 @@ Define both observability dashboards and an admin UI for testing/consuming APIs.
 - Deployment:
   - Admin UI can be served by the same Go app (embedded templates) or as static files behind the app.
   - Disable or restrict admin UI in public environments via feature flag.
+
+## Admin Access (Env)
+- Enable: `FEATURE_ENABLE_ADMIN=true`
+- Credentials: `ADMIN_USERNAME`, `ADMIN_PASSWORD`
+- Session secret: `ADMIN_SESSION_SECRET` (HMAC signing key for cookies)
 
 # Admin: RAG Data Management (Optional)
 - Routes (behind auth):

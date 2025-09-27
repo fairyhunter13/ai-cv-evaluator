@@ -24,7 +24,7 @@ Define the domain model (entities, states, invariants) and a consistent error ta
   - Fields: `job_id`, `cv_match_rate`, `cv_feedback`, `project_score`, `project_feedback`, `overall_summary`, `created_at`.
   - Bounds:
     - `cv_match_rate` ∈ [0.0, 1.0]
-    - `project_score` ∈ [0.0, 10.0] (weighted 1–5 → ×2, aligns with `project.md` example)
+    - `project_score` ∈ [1.0, 10.0] (weighted 1–5 → ×2, min 1)
   - Text fields trimmed; max lengths enforced at adapter (HTTP) layer.
 
 # Value Objects & Aggregation
@@ -32,7 +32,7 @@ Define the domain model (entities, states, invariants) and a consistent error ta
 - Status: enumerate `queued|processing|completed|failed`.
 - Scores (1–5) per-parameter; compute weighted averages:
   - CV: weights 40/25/20/15 → weighted average (1–5) → normalize to [0,1] by dividing by 5 (×0.2) → `cv_match_rate`.
-  - Project: weights 30/25/20/15/10 → average (1–5) → normalize ×2 → `project_score`.
+  - Project: weights 30/25/20/15/10 → average (1–5) → normalize ×2 → clamp to [1,10] → `project_score`.
 - Store raw per-parameter scores (optional, future) to enable audits/drilldowns.
 
 Note: `cv_match_rate` is stored and returned as a normalized fraction in [0,1] (e.g., 0.82). For UI display as a percentage, multiply by 100.

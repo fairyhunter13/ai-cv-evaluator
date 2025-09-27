@@ -73,7 +73,7 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 
 # Scoring Aggregation (from `project.md`)
 - CV Match: weights 40/25/20/15 → weighted average (1–5) → normalize to [0,1] by dividing by 5 (×0.2) → `cv_match_rate` in [0.0,1.0].
-- Project Deliverable: weights 30/25/20/15/10 → weighted average (1–5) → normalize ×2 → `project_score` in [0.0,10.0].
+- Project Deliverable: weights 30/25/20/15/10 → weighted average (1–5) → normalize ×2 → clamp to [1.0,10.0] → `project_score`.
 - Final fields: `cv_match_rate`, `cv_feedback`, `project_score`, `project_feedback`, `overall_summary`.
 
 # Asynchronous Job Handling
