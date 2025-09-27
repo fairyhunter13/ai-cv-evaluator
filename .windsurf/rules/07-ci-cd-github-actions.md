@@ -47,6 +47,21 @@ Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker run --rm --netwo
 - Artifacts:
   - Upload coverage files and test logs for all steps.
 
+# Test Placement Policy (CI check)
+- Add a CI step to enforce unit tests are co-located next to code and not under the top-level `test/` tree (except `test/e2e/`).
+- Example GitHub Actions step:
+  ```yaml
+  - name: Enforce unit test placement
+    shell: bash
+    run: |
+      set -euo pipefail
+      # Find any *_test.go under top-level test/ except test/e2e/**
+      if git ls-files -- ':!:test/e2e/**' 'test/**/_test.go' | grep -E '.+'; then
+        echo "Misplaced unit tests detected under top-level test/. Move unit tests next to code (e.g., pkg/foo/foo_test.go)." >&2
+        exit 1
+      fi
+  ```
+
 # Caching & Performance
 - Use `actions/setup-go` with module and build cache.
 - Warm cache: run go mod download before lint/test.
@@ -59,6 +74,28 @@ Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker run --rm --netwo
 # Security Scans
 - `govulncheck` as part of CI.
 - Container scan (e.g., `trivy`) on the built image in publish workflow.
+
+# Naming Hygiene (CI)
+- Enforce naming/documentation hygiene to avoid sensitive or external brand terms.
+- Maintain a denylist file at `tools/naming_denylist.txt` (one term per line). Keep this file private to your org if needed.
+- Example GitHub Actions step:
+  ```yaml
+  - name: Naming hygiene check
+    shell: bash
+    run: |
+      set -euo pipefail
+      if [ -f tools/naming_denylist.txt ]; then
+        terms=$(grep -vE '^\s*(#|$)' tools/naming_denylist.txt || true)
+        if [ -n "$terms" ]; then
+          echo "$terms" | while IFS= read -r term; do
+            if grep -RIn --exclude-dir=.git --binary-files=without-match -- "$term" .; then
+              echo "Found disallowed term in repo content: $term" >&2
+              exit 1
+            fi
+          done
+        fi
+      fi
+  ```
 
 # Secrets with SOPS (CI usage)
 - You may commit an encrypted secrets file (e.g., `.env.sops.yaml`) to the repo using SOPS with age keys; do NOT commit a plaintext `.env`.
