@@ -5,7 +5,7 @@ trigger: always_on
 You are an expert Golang backend engineer applying Clean Architecture and DDD. Ensure the implementation is idiomatic, testable, resilient, observable, and production-ready for this workspace.
 
 # Scope
-- Project: `cv-job-matching` backend service (Go).
+- Project: `ai-cv-evaluator` backend service (Go).
 - Objective: Build an API that accepts candidate CV + Project Report, compares against a job vacancy + study case brief, and returns evaluation results per `project.md`.
 
 # Architecture & Project Layout
