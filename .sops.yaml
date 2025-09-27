@@ -1,0 +1,17 @@
+# SOPS configuration: standardize recipients and encrypted files
+creation_rules:
+  # Encrypted environment file (YAML), committed as .env.sops.yaml
+  - path_regex: '(^|.*/)\.env\.sops\.ya?ml$'
+    age: ['age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd']
+
+  # Encrypted secrets files by convention
+  - path_regex: '(^|.*/)secrets\.sops\.(ya?ml|json)$'
+    age: ['age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd']
+
+  # Encrypted project brief artifact
+  - path_regex: '(^|.*/)project\.md\.sops$'
+    age: ['age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd']
+
+  # Catch-all for other *.sops and *.sops.{yaml,json}
+  - path_regex: '(^|.*/).*\.sops(\.(ya?ml|json))?$'
+    age: ['age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd']
