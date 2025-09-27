@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-Deliver high-confidence coverage with clear separation between unit, integration, and E2E tests.
+Deliver high-confidence coverage focusing on Unit and E2E tests. Integration tests are retired in favor of E2E that exercise the running app directly.
 
 # Unit Tests
 - Table-driven tests with `t.Run(tc.name, func(t *testing.T) { ... })`; follow Arrange-Act-Assert for clarity.
@@ -39,30 +39,10 @@ Deliver high-confidence coverage with clear separation between unit, integration
   - Prefer a package-local `testdata/` subdirectory for package-specific fixtures.
   - Use `test/testdata/` only for shared, cross-cutting fixtures referenced by multiple packages.
 
-# Integration Tests
-- Use `testcontainers-go` to launch Postgres (v16+), Redis (v7+), and Qdrant.
-- Apply migrations up in setup; teardown afterwards via `t.Cleanup`.
-- Validate:
-  - Upload text extraction using sample fixtures.
-  - Queue consumption end-to-end (status transitions).
-  - RAG retrieval returns expected chunks.
-  - LLM mocked responses aggregate correctly.
-  - Aggregation computes weighted scores per `project.md` (CV and Project components).
-- Container orchestration details:
-  - Use wait strategies (e.g., `wait.ForListeningPort()`) and health endpoints.
-  - Build DSNs from container host/ports dynamically; pass via env (`DB_URL`, `REDIS_URL`, `QDRANT_URL`).
-- AI interactions:
-  - Default to deterministic mock clients unless `OPENAI_API_KEY` is provided.
-  - Store fixtures under `test/testdata/ai_fixtures/`.
-- Build tags and isolation:
-  - Mark integration tests with `//go:build integration` (and legacy `+build integration`).
-  - Avoid calling external networks; rely on containers only.
-- Resource hygiene and timeouts:
-  - Use `t.Cleanup` for container termination and DB teardown.
-  - Keep suite under a few minutes; set per-test deadlines.
+# Integration Tests (Retired)
+- Integration tests are removed to simplify the testing matrix. The E2E suite assumes the app is running (via Docker Compose or similar) and hits live endpoints.
 
-# E2E/API Tests
-- Run full stack via testcontainers network (spawn app + deps) or `docker compose up -d` then hit the live app.
+- Run the stack via `docker compose up -d` (recommended) and hit the live app.
 - Use `httpexpect` or `resty` to test:
   - `/upload` happy path and invalid cases (size, type, corrupt files).
   - `/evaluate` enqueues and returns `{id, status:"queued"}`.
@@ -82,11 +62,9 @@ Deliver high-confidence coverage with clear separation between unit, integration
 # CI Integration (Testing)
 - Unit tests (fast, race, coverage):
   - Run: go test -race -short -coverprofile=coverage.unit.out ./...
-- Integration tests (containers, coverage, tagged):
-  - Run: go test -tags=integration -coverprofile=coverage.int.out ./...
 - E2E tests (optional in PRs, mandatory on main/tags):
   - Run: go test -tags=e2e ./test/e2e/...
 - Upload coverage files and test logs as CI artifacts.
 
 # Definition of Done (Testing)
-- `make test` (unit with `-race`), `make test-int` (integration with containers), and E2E all pass locally and in CI.
+- `make test` (unit with `-race`) and E2E pass locally and in CI.
