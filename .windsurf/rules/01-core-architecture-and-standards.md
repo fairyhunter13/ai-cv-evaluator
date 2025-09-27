@@ -121,6 +121,14 @@ You are an expert Golang backend engineer applying Clean Architecture and DDD. E
 - Diagrams for request lifecycle and evaluation pipeline.
 - Code comments for exported types and functions (GoDoc style).
 
+# Testing Placement Policy (Strict)
+- Unit tests MUST be co-located next to the code under test in the same package directory.
+  - Example: `internal/usecase/service.go` → `internal/usecase/service_test.go`.
+- The top-level `test/` tree is reserved for E2E suites (e.g., `test/e2e/`) and shared cross-cutting fixtures only.
+  - Do not place unit tests under `test/`; no `*_test.go` in `test/` except under `test/e2e/`.
+- Integration tests: prefer co-location next to code with `//go:build integration` build tag.
+- E2E tests: live under `test/e2e/` with `//go:build e2e` build tag and their own module-aware harness.
+
 # Definition of Done (Core)
 - Builds with Go 1.22+; `go vet` and `golangci-lint` clean; `govulncheck` clean.
 - Unit + integration tests cover core flows.
