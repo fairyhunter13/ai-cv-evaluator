@@ -22,7 +22,7 @@ Provide a productive Go developer experience with strict linting, formatting, an
 - `make vet` → run `go vet ./...`.
 - `make vuln` → run `govulncheck ./...`.
 - `make test` → unit tests.
-- `make test-int` → integration tests (may spin containers).
+- `make test-int` → e2e tests (may spin containers).
 - `make test-e2e` → end-to-end API tests.
 - `make cover` → coverage report (HTML artifact).
 - `make run` → run server using `.env`.
@@ -45,6 +45,11 @@ Provide a productive Go developer experience with strict linting, formatting, an
   - `QDRANT_URL`, `QDRANT_API_KEY`
   - `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`
 - Provide `.env.example` and README instructions.
+
+## Secrets & Local .env Handling
+- Never commit or modify the developer's local `.env` file from automation. Treat it as user-owned, ephemeral config.
+- Credentials for OpenRouter/OpenAI are provided in the local `.env` (see the first lines for keys). Do not alter them. In CI, use GitHub Secrets; in code, rely on `config.Config` env parsing.
+- Use SOPS for encrypted artifacts only (`.env.sops.yaml`, `project.md.sops`). When encrypting/decrypting locally, use `SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt`.
 
 # Repository Hygiene
 - `.editorconfig` for consistent whitespace.
