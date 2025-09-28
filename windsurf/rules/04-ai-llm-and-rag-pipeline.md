@@ -43,7 +43,7 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
   - `scoring_rubric` (payload: parameter, weight, description)
 - Embeddings: default `text-embedding-3-small` (configurable).
 - Build retrievers tuned for: CV scoring and project scoring.
-- If `OPENAI_API_KEY` absent: deterministic mock embeddings + mock LLM fixtures.
+  (Requires valid `OPENAI_API_KEY` for embeddings.)
 
 # Prompting & Chaining
 - Use system prompts enforcing JSON schema output; no freeform text.
@@ -140,10 +140,7 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 - Fallback to cached intermediate results when possible to reduce cost.
 
 # Offline / Mock Mode
-- If `OPENAI_API_KEY` is missing, use deterministic mocks:
-  - Embeddings: stable hash → vector generator.
-  - Chat: load canned responses from `test/testdata/ai_fixtures/`.
-- Ensure e2e and E2E tests operate in mock mode by default in CI.
+- Mock mode is deprecated and disabled. The project uses real providers (OpenAI/OpenRouter) only.
 
 # Evaluation & Quality
 - Add golden tests for prompt I/O pairs; verify schema compliance and stability.
