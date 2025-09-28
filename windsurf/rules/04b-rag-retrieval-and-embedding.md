@@ -58,5 +58,5 @@ Define retrieval strategy, embeddings, chunking, and Qdrant collections for dete
 - Merge retrieval results from static corpora with ephemeral embeddings to build the final prompt context.
 
 # Definition of Done (RAG)
-- Retrieval returns relevant chunks for both CV and project tasks in integration tests.
+- Retrieval returns relevant chunks for both CV and project tasks in e2e tests.
 - Deterministic results in mock mode across runs.

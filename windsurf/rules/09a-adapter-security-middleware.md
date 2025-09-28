@@ -36,5 +36,5 @@ Adapter Security Middleware Cookbook for the HTTP layer (chi or similar).
 - Allow `GET /result/{id}` to use `ETag`/`If-None-Match` for completed results.
 
 # Definition of Done (Adapter Security)
-- Middleware stack applied; headers verified in integration/E2E tests.
+- Middleware stack applied; headers verified in e2e/E2E tests.
 - Rate limiting and timeouts enforced on mutating endpoints.

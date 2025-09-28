@@ -103,7 +103,7 @@ Define clear API contracts, input validation, and consistent error responses.
 
 # Contract-First and OpenAPI Practices
 - Maintain `api/openapi.yaml` as the source of truth.
-- Validate handlers in integration tests using OpenAPI (e.g., `kin-openapi` or generated clients via `oapi-codegen`).
+- Validate handlers in e2e tests using OpenAPI (e.g., `kin-openapi` or generated clients via `oapi-codegen`).
 - Keep response shapes (including error envelope) in sync with the spec.
 - Version the API (`/v1`) and document breaking-change policy.
 

@@ -74,7 +74,7 @@ Guide LLM prompting and JSON-schema-constrained outputs to ensure deterministic,
 
 # Mock Mode
 - Without API keys: use deterministic mock responses based on stable input hashing.
-- Store fixtures under `test/testdata/ai_fixtures/` for integration/E2E tests.
+- Store fixtures under `test/testdata/ai_fixtures/` for e2e/E2E tests.
 
 # Frugality & Cost Controls (Chat)
 - Minimize token usage: keep prompts compact, remove irrelevant context, and cap `max_tokens`.
