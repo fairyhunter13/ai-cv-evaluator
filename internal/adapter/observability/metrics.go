@@ -10,6 +10,7 @@ import (
 )
 
 var (
+	// HTTPRequestsTotal counts HTTP requests by route, method, and status label.
 	HTTPRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "http_requests_total",
@@ -17,6 +18,7 @@ var (
 		},
 		[]string{"route", "method", "status"},
 	)
+	// HTTPRequestDuration records request durations by route and method.
 	HTTPRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "http_request_duration_seconds",
@@ -26,6 +28,7 @@ var (
 		[]string{"route", "method"},
 	)
 
+	// AIRequestsTotal counts AI requests by provider and operation.
 	AIRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "ai_requests_total",
@@ -33,6 +36,7 @@ var (
 		},
 		[]string{"provider", "operation"},
 	)
+	// AIRequestDuration records durations of AI requests by provider and operation.
 	AIRequestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "ai_request_duration_seconds",
@@ -42,6 +46,7 @@ var (
 		[]string{"provider", "operation"},
 	)
 
+	// JobsEnqueuedTotal counts jobs enqueued by type.
 	JobsEnqueuedTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "jobs_enqueued_total",
@@ -49,6 +54,7 @@ var (
 		},
 		[]string{"type"},
 	)
+	// JobsProcessing is a gauge of the number of currently processing jobs by type.
 	JobsProcessing = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "jobs_processing",
@@ -56,6 +62,7 @@ var (
 		},
 		[]string{"type"},
 	)
+	// JobsCompletedTotal counts jobs completed by type.
 	JobsCompletedTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "jobs_completed_total",
@@ -63,6 +70,7 @@ var (
 		},
 		[]string{"type"},
 	)
+	// JobsFailedTotal counts jobs failed by type.
 	JobsFailedTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "jobs_failed_total",
@@ -71,7 +79,7 @@ var (
 		[]string{"type"},
 	)
 
-	// Evaluation outcome distributions
+	// CVMatchRateHistogram is the histogram of normalized cv_match_rate [0,1].
 	CVMatchRateHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "evaluation_cv_match_rate",
@@ -79,6 +87,7 @@ var (
 			Buckets: []float64{0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 		},
 	)
+	// ProjectScoreHistogram is the histogram of project_score [1,10].
 	ProjectScoreHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "evaluation_project_score",
@@ -88,6 +97,7 @@ var (
 	)
 )
 
+// InitMetrics registers all Prometheus metrics with the default registry.
 func InitMetrics() {
 	prometheus.MustRegister(HTTPRequestsTotal)
 	prometheus.MustRegister(HTTPRequestDuration)
@@ -124,19 +134,23 @@ func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// EnqueueJob increments the enqueued jobs counter for the given type.
 func EnqueueJob(jobType string) {
 	JobsEnqueuedTotal.WithLabelValues(jobType).Inc()
 }
 
+// StartProcessingJob increments the processing gauge for the given type.
 func StartProcessingJob(jobType string) {
 	JobsProcessing.WithLabelValues(jobType).Inc()
 }
 
+// CompleteJob marks a job complete by decrementing processing gauge and incrementing completed counter.
 func CompleteJob(jobType string) {
 	JobsProcessing.WithLabelValues(jobType).Dec()
 	JobsCompletedTotal.WithLabelValues(jobType).Inc()
 }
 
+// FailJob marks a job failed by decrementing processing gauge and incrementing failed counter.
 func FailJob(jobType string) {
 	JobsProcessing.WithLabelValues(jobType).Dec()
 	JobsFailedTotal.WithLabelValues(jobType).Inc()

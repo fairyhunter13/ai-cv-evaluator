@@ -24,7 +24,7 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, r *http.Request, err error, details interface{}) {
+func writeError(w http.ResponseWriter, _ *http.Request, err error, details interface{}) {
 	code := http.StatusInternalServerError
 	codeStr := "INTERNAL"
 	switch {

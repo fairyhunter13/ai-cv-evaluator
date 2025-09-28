@@ -9,13 +9,13 @@ import (
 
 type fakeAI struct{ embedCalls int }
 
-func (f *fakeAI) Embed(ctx domain.Context, texts []string) ([][]float32, error) {
+func (f *fakeAI) Embed(_ domain.Context, texts []string) ([][]float32, error) {
 	f.embedCalls++
 	out := make([][]float32, len(texts))
 	for i := range texts { out[i] = []float32{1,2,3} }
 	return out, nil
 }
-func (f *fakeAI) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+func (f *fakeAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, error) {
 	return "{}", nil
 }
 

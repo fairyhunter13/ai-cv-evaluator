@@ -39,10 +39,10 @@ func TestReadyzHandler_OK_And_Unavailable(t *testing.T) {
 	resSvc := usecase.NewResultService(nil, nil)
 	s := httpserver.NewServer(cfg, upSvc, evSvc, resSvc,
 		nil,
-		func(ctx context.Context) error { return nil },
-		func(ctx context.Context) error { return nil },
-		func(ctx context.Context) error { return nil },
-		func(ctx context.Context) error { return nil },
+		func(_ context.Context) error { return nil },
+		func(_ context.Context) error { return nil },
+		func(_ context.Context) error { return nil },
+		func(_ context.Context) error { return nil },
 	)
 	w := httptest.NewRecorder()
 	s.ReadyzHandler()(w, httptest.NewRequest("GET", "/readyz", nil))
@@ -51,10 +51,10 @@ func TestReadyzHandler_OK_And_Unavailable(t *testing.T) {
 	// now make one check fail
 	s = httpserver.NewServer(cfg, upSvc, evSvc, resSvc,
 		nil,
-		func(ctx context.Context) error { return nil },
-		func(ctx context.Context) error { return nil },
-		func(ctx context.Context) error { return nil },
-		func(ctx context.Context) error { return http.ErrHandlerTimeout },
+		func(_ context.Context) error { return nil },
+		func(_ context.Context) error { return nil },
+		func(_ context.Context) error { return nil },
+		func(_ context.Context) error { return http.ErrHandlerTimeout },
 	)
 	w2 := httptest.NewRecorder()
 	s.ReadyzHandler()(w2, httptest.NewRequest("GET", "/readyz", nil))

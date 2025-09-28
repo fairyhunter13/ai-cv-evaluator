@@ -16,19 +16,19 @@ import (
 
 type stubJobRepoRes struct{ job domain.Job }
 
-func (s *stubJobRepoRes) Create(ctx domain.Context, j domain.Job) (string, error) { return "", nil }
-func (s *stubJobRepoRes) UpdateStatus(ctx domain.Context, id string, status domain.JobStatus, errMsg *string) error {
+func (s *stubJobRepoRes) Create(_ domain.Context, _ domain.Job) (string, error) { return "", nil }
+func (s *stubJobRepoRes) UpdateStatus(_ domain.Context, _ string, _ domain.JobStatus, _ *string) error {
 	return nil
 }
-func (s *stubJobRepoRes) Get(ctx domain.Context, id string) (domain.Job, error) { return s.job, nil }
-func (s *stubJobRepoRes) FindByIdempotencyKey(ctx domain.Context, key string) (domain.Job, error) {
+func (s *stubJobRepoRes) Get(_ domain.Context, _ string) (domain.Job, error) { return s.job, nil }
+func (s *stubJobRepoRes) FindByIdempotencyKey(_ domain.Context, _ string) (domain.Job, error) {
 	return domain.Job{}, domain.ErrNotFound
 }
 
 type stubResultRepoRes struct{ res domain.Result }
 
-func (s *stubResultRepoRes) Upsert(ctx domain.Context, r domain.Result) error { return nil }
-func (s *stubResultRepoRes) GetByJobID(ctx domain.Context, jobID string) (domain.Result, error) { return s.res, nil }
+func (s *stubResultRepoRes) Upsert(_ domain.Context, _ domain.Result) error { return nil }
+func (s *stubResultRepoRes) GetByJobID(_ domain.Context, _ string) (domain.Result, error) { return s.res, nil }
 
 func newResultServer(job domain.Job, res domain.Result) *httpserver.Server {
 	cfg := config.Config{Port: 8080, AppEnv: "dev"}

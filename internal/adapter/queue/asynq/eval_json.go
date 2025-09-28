@@ -1,3 +1,4 @@
+// Package asynqadp contains queue worker helpers for evaluation job processing.
 package asynqadp
 
 import (
@@ -159,24 +160,24 @@ func extractFirstJSONObject(s string) (string, bool) {
 	return "", false
 }
 
-func truncate(s string, max int) string {
-	if len(s) <= max { return s }
-	if max <= 3 { return s[:max] }
-	return s[:max-3] + "..."
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen { return s }
+	if maxLen <= 3 { return s[:maxLen] }
+	return s[:maxLen-3] + "..."
 }
 
-func trimSentence(s string, max int) string {
+func trimSentence(s string, maxLen int) string {
 	s = strings.TrimSpace(s)
-	if len(s) <= max { return s }
+	if len(s) <= maxLen { return s }
 	// try to cut at last period before max
-	idx := strings.LastIndex(s[:max], ".")
+	idx := strings.LastIndex(s[:maxLen], ".")
 	if idx > 20 { return s[:idx+1] }
-	return s[:int(math.Min(float64(len(s)), float64(max)))]
+	return s[:int(math.Min(float64(len(s)), float64(maxLen)))]
 }
 
-func limitSentences(s string, min, max int) string {
+func limitSentences(s string, minCount, maxCount int) string {
 	s = strings.TrimSpace(s)
-	if s == "" || max <= 0 { return s }
+	if s == "" || maxCount <= 0 { return s }
 	// naive sentence split
 	parts := []string{}
 	curr := strings.Builder{}
@@ -197,8 +198,8 @@ func limitSentences(s string, min, max int) string {
 		if tail != "" { parts = append(parts, tail) }
 	}
 	if len(parts) == 0 { return s }
-	if len(parts) > max { parts = parts[:max] }
-	// if less than min sentences, return as-is; LLM should be guided by prompts, we won't pad.
+	if len(parts) < minCount { return s }
+	if len(parts) > maxCount { parts = parts[:maxCount] }
 	return strings.Join(parts, " ")
 }
 

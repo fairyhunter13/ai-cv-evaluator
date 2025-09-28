@@ -1,3 +1,4 @@
+// Package textx contains tests for the text utilities.
 package textx
 
 import "testing"
@@ -5,7 +6,7 @@ import "testing"
 func TestSanitizeText(t *testing.T) {
 	in := "he\x00llo\nwo\x7frld\t!"
 	got := SanitizeText(in)
-	if got != "he\nwo\trld!" {
+	if got != "hello\nworld\t!" {
 		t.Fatalf("unexpected: %q", got)
 	}
 }

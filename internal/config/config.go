@@ -1,3 +1,4 @@
+// Package config defines configuration parsing and helpers.
 package config
 
 import (
@@ -51,6 +52,7 @@ func (c Config) AdminEnabled() bool {
     return c.AdminUsername != "" && c.AdminPassword != "" && c.AdminSessionSecret != ""
 }
 
+// Load parses environment variables into a Config.
 func Load() (Config, error) {
     var cfg Config
     if err := env.Parse(&cfg); err != nil {
@@ -59,6 +61,7 @@ func Load() (Config, error) {
     return cfg, nil
 }
 
-// Helpers
+// IsDev reports whether the app is running in development mode.
 func (c Config) IsDev() bool   { return strings.ToLower(c.AppEnv) == "dev" }
+// IsProd reports whether the app is running in production mode.
 func (c Config) IsProd() bool  { return strings.ToLower(c.AppEnv) == "prod" }

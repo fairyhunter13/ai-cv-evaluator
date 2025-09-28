@@ -8,7 +8,9 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,27 +59,33 @@ func HashPassword(password string, params Argon2Params) (string, error) {
 
 // VerifyPassword verifies a password against its Argon2id hash
 func VerifyPassword(password, encodedHash string) bool {
-	var iterations, memory, parallelism uint32
-	var saltB64, hashB64 string
-
-	_, err := fmt.Sscanf(encodedHash, "argon2id$%d$%d$%d$%s$%s",
-		&iterations, &memory, &parallelism, &saltB64, &hashB64)
+	// Expected format: argon2id$iterations$memory$parallelism$salt$hash (base64 raw std for salt/hash)
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 || parts[0] != "argon2id" {
+		return false
+	}
+	// Parse numeric params
+	iters64, err1 := parseUint32(parts[1])
+	mem64, err2 := parseUint32(parts[2])
+	par64, err3 := parseUint32(parts[3])
+	if err1 != nil || err2 != nil || err3 != nil {
+		return false
+	}
+	// Decode salt and hash
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return false
+	}
+	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
 		return false
 	}
 
-	salt, err := base64.RawStdEncoding.DecodeString(saltB64)
-	if err != nil {
-		return false
-	}
-
-	expectedHash, err := base64.RawStdEncoding.DecodeString(hashB64)
-	if err != nil {
-		return false
-	}
-
-	actualHash := argon2.IDKey([]byte(password), salt, iterations, memory, uint8(parallelism), uint32(len(expectedHash)))
-
+    // Clamp parallelism to uint8 range to avoid overflow
+    var par uint8
+    if par64 > math.MaxUint8 { par = math.MaxUint8 } else { par = uint8(par64) }
+    keyLen := defaultArgon2Params.KeyLen
+    actualHash := argon2.IDKey([]byte(password), salt, iters64, mem64, par, keyLen)
 	return subtle.ConstantTimeCompare(actualHash, expectedHash) == 1
 }
 
@@ -199,6 +207,9 @@ func (sm *SessionManager) ClearSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, cookie)
 }
 
+// sessionKey is an unexported context key type for session data.
+type sessionKey struct{}
+
 // AuthRequired middleware for protecting admin routes
 func (sm *SessionManager) AuthRequired(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -215,15 +226,29 @@ func (sm *SessionManager) AuthRequired(next http.Handler) http.Handler {
 			return
 		}
 
-		// Add session data to request context
-		ctx := context.WithValue(r.Context(), "session", sessionData)
+		// Add session data to request context using a typed key
+		ctx := context.WithValue(r.Context(), sessionKey{}, sessionData)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
 // parseInt64 safely parses string to int64, returns 0 on error
 func parseInt64(s string) int64 {
-	var result int64
-	fmt.Sscanf(s, "%d", &result)
-	return result
+	x, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return x
+}
+
+// parseUint32 parses a decimal string into uint32; returns error on failure
+func parseUint32(s string) (uint32, error) {
+	x, err := strconv.ParseUint(s, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("parse")
+	}
+	if x > math.MaxUint32 {
+		return 0, fmt.Errorf("parse")
+	}
+	return uint32(x), nil
 }
