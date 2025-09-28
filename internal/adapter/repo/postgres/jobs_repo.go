@@ -11,10 +11,13 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
 
+// JobRepo persists and loads jobs from PostgreSQL using a minimal pgx pool.
 type JobRepo struct { Pool PgxPool }
 
+// NewJobRepo constructs a JobRepo with the given pool.
 func NewJobRepo(p PgxPool) *JobRepo { return &JobRepo{Pool: p} }
 
+// Create inserts a new job and returns its id.
 func (r *JobRepo) Create(ctx domain.Context, j domain.Job) (string, error) {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.Create")
@@ -27,6 +30,7 @@ func (r *JobRepo) Create(ctx domain.Context, j domain.Job) (string, error) {
 	return id, nil
 }
 
+// UpdateStatus updates a job's status and optional error message.
 func (r *JobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobStatus, errMsg *string) error {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.UpdateStatus")
@@ -37,6 +41,7 @@ func (r *JobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobS
 	return nil
 }
 
+// Get loads a job by id.
 func (r *JobRepo) Get(ctx domain.Context, id string) (domain.Job, error) {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.Get")
@@ -55,6 +60,7 @@ func (r *JobRepo) Get(ctx domain.Context, id string) (domain.Job, error) {
 	return j, nil
 }
 
+// FindByIdempotencyKey loads a job by idempotency key.
 func (r *JobRepo) FindByIdempotencyKey(ctx domain.Context, key string) (domain.Job, error) {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.FindByIdempotencyKey")

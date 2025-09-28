@@ -16,12 +16,12 @@ import (
 )
 
 func TestClient_ExtractPath(t *testing.T) {
-	t.Parallel()
+	t.Setenv("TIKA_ALLOW_ABSPATHS", "1")
 
 	// Create a temporary test file
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
-	err := os.WriteFile(testFile, []byte("This is test content"), 0644)
+	err := os.WriteFile(testFile, []byte("This is test content"), 0o600)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -46,7 +46,7 @@ func TestClient_ExtractPath(t *testing.T) {
 				assert.Equal(t, "This is test content", string(body))
 				
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("Extracted text content"))
+				_, _ = w.Write([]byte("Extracted text content"))
 			},
 			want:    "Extracted text content",
 			wantErr: false,
@@ -59,7 +59,7 @@ func TestClient_ExtractPath(t *testing.T) {
 				assert.Equal(t, "application/pdf", r.Header.Get("Content-Type"))
 				
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("PDF content extracted"))
+				_, _ = w.Write([]byte("PDF content extracted"))
 			},
 			want:    "PDF content extracted",
 			wantErr: false,
@@ -73,7 +73,7 @@ func TestClient_ExtractPath(t *testing.T) {
 					r.Header.Get("Content-Type"))
 				
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("DOCX content extracted"))
+				_, _ = w.Write([]byte("DOCX content extracted"))
 			},
 			want:    "DOCX content extracted",
 			wantErr: false,
@@ -82,9 +82,9 @@ func TestClient_ExtractPath(t *testing.T) {
 			name:     "server error",
 			fileName: "test.txt",
 			filePath: testFile,
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte("Internal Server Error"))
+				_, _ = w.Write([]byte("Internal Server Error"))
 			},
 			wantErr: true,
 			errMsg:  "tika status 500",
@@ -93,7 +93,7 @@ func TestClient_ExtractPath(t *testing.T) {
 			name:     "file not found",
 			fileName: "nonexistent.txt",
 			filePath: "/path/to/nonexistent/file.txt",
-			handler:  func(w http.ResponseWriter, r *http.Request) {},
+			handler:  func(_ http.ResponseWriter, _ *http.Request) {},
 			wantErr:  true,
 			errMsg:   "no such file",
 		},
@@ -101,7 +101,7 @@ func TestClient_ExtractPath(t *testing.T) {
 			name:     "unsupported status",
 			fileName: "test.txt",
 			filePath: testFile,
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusUnsupportedMediaType)
 			},
 			wantErr: true,
@@ -111,9 +111,9 @@ func TestClient_ExtractPath(t *testing.T) {
 			name:     "normalized text with special characters",
 			fileName: "test.txt",
 			filePath: testFile,
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("Text with\ttabs\nand\r\nnewlines   and    spaces"))
+				_, _ = w.Write([]byte("Text with\ttabs\nand\r\nnewlines   and    spaces"))
 			},
 			want:    "Text with tabs and newlines and spaces",
 			wantErr: false,
@@ -123,10 +123,9 @@ func TestClient_ExtractPath(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			
-			server := httptest.NewServer(tt.handler)
-			defer server.Close()
+            
+            server := httptest.NewServer(tt.handler)
+            defer server.Close()
 			
 			client := tika.New(server.URL)
 			ctx := context.Background()
@@ -145,9 +144,6 @@ func TestClient_ExtractPath(t *testing.T) {
 		})
 	}
 }
-
-// TestClient_ExtractReader tests are commented out as ExtractReader is not implemented
-// func TestClient_ExtractReader(t *testing.T) {
 
 func TestNew(t *testing.T) {
 	t.Parallel()
@@ -173,12 +169,6 @@ func TestNew(t *testing.T) {
 			
 			client := tika.New(tt.baseURL)
 			assert.NotNil(t, client)
-			
-			// Test that default URL is used when empty
-			if tt.baseURL == "" {
-				// This would be tested in ExtractPath when baseURL is empty
-				// The client uses default URL internally
-			}
 		})
 	}
 }

@@ -49,9 +49,9 @@ func Test_OpenAPIServe_200(t *testing.T) {
     evSvc := usecase.NewEvaluateService(nil, nil, nil)
     resSvc := usecase.NewResultService(nil, nil)
     // Ensure api/openapi.yaml exists relative to test working dir
-    _ = os.MkdirAll("api", 0o755)
+    if err := os.MkdirAll("api", 0o750); err != nil { t.Fatalf("mkdir: %v", err) }
     t.Cleanup(func(){ _ = os.RemoveAll("api") })
-    if err := os.WriteFile("api/openapi.yaml", []byte("openapi: 3.0.0\ninfo:\n  title: test\n  version: 1.0.0\n"), 0o644); err != nil {
+    if err := os.WriteFile("api/openapi.yaml", []byte("openapi: 3.0.0\ninfo:\n  title: test\n  version: 1.0.0\n"), 0o600); err != nil {
         t.Fatalf("write openapi: %v", err)
     }
     s := NewServer(cfg, upSvc, evSvc, resSvc, nil, nil, nil, nil, nil)

@@ -1,3 +1,4 @@
+// Package postgres contains Postgres adapters for repositories and services.
 package postgres
 
 import (
@@ -6,17 +7,29 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 )
 
 // CleanupService handles data retention and cleanup
 type CleanupService struct {
-	Pool       *pgxpool.Pool
+	Pool       Beginner
 	RetentionDays int
 }
 
+// Beginner is a minimal interface for starting a transaction.
+type Beginner interface {
+	Begin(ctx context.Context) (Tx, error)
+}
+
+// Tx is a minimal transaction interface used by CleanupService.
+type Tx interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Commit(ctx context.Context) error
+	Rollback(ctx context.Context) error
+}
+
 // NewCleanupService creates a new cleanup service
-func NewCleanupService(pool *pgxpool.Pool, retentionDays int) *CleanupService {
+func NewCleanupService(pool Beginner, retentionDays int) *CleanupService {
 	if retentionDays <= 0 {
 		retentionDays = 90 // default 90 days
 	}
@@ -32,7 +45,7 @@ func (s *CleanupService) CleanupOldData(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("cleanup begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func(){ _ = tx.Rollback(ctx) }()
 
 	// Delete old results (cascade from jobs)
 	var deletedResults int64

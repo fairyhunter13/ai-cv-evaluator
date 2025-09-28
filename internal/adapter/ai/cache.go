@@ -1,3 +1,4 @@
+// Package ai provides AI client adapters and wrappers used by the application.
 package ai
 
 import (
@@ -16,19 +17,19 @@ import (
 
 type embedCacheClient struct {
 	base domain.AIClient
-	cap  int
+	capacity  int
 	mu   sync.RWMutex
 	m    map[string][]float32
 	ord  []string
 }
 
 // NewEmbedCache wraps base with an embedding cache of given capacity (number of entries).
-// If cap <= 0, base is returned unmodified.
-func NewEmbedCache(base domain.AIClient, cap int) domain.AIClient {
-	if cap <= 0 || base == nil {
+// If capacity <= 0, base is returned unmodified.
+func NewEmbedCache(base domain.AIClient, capacity int) domain.AIClient {
+	if capacity <= 0 || base == nil {
 		return base
 	}
-	return &embedCacheClient{base: base, cap: cap, m: make(map[string][]float32), ord: make([]string, 0, cap)}
+	return &embedCacheClient{base: base, capacity: capacity, m: make(map[string][]float32), ord: make([]string, 0, capacity)}
 }
 
 func (c *embedCacheClient) Embed(ctx domain.Context, texts []string) ([][]float32, error) {
@@ -73,7 +74,7 @@ func (c *embedCacheClient) put(text string, vec []float32) {
 		c.m[k] = vec
 		return
 	}
-	if len(c.ord) >= c.cap {
+	if len(c.ord) >= c.capacity {
 		old := c.ord[0]
 		c.ord = c.ord[1:]
 		delete(c.m, old)

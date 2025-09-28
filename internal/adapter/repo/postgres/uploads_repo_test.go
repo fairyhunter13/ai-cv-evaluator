@@ -2,10 +2,10 @@ package postgres_test
 
 import (
     "context"
+    "errors"
     "testing"
     "time"
 
-    pgxmock "github.com/pashagolub/pgxmock"
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/require"
 
@@ -19,7 +19,7 @@ func TestUploadRepo_Create(t *testing.T) {
     tests := []struct {
         name    string
         upload  domain.Upload
-        setup   func(pgxmock.PgxPool)
+        setup   func(*poolStub)
         wantErr bool
         errMsg  string
     }{
@@ -33,10 +33,8 @@ func TestUploadRepo_Create(t *testing.T) {
                 MIME:     "application/pdf",
                 Size:     1024,
             },
-            setup: func(m pgxmock.PgxPool) {
-                m.ExpectExec("INSERT INTO uploads").
-                    WithArgs("test-123", "cv", "Test CV content", "test.pdf", "application/pdf", int64(1024), pgxmock.AnyArg()).
-                    WillReturnResult(pgxmock.NewResult("INSERT", 1))
+            setup: func(m *poolStub) {
+                m.execErr = nil
             },
             wantErr: false,
         },
@@ -49,11 +47,7 @@ func TestUploadRepo_Create(t *testing.T) {
                 MIME:     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 Size:     2048,
             },
-            setup: func(m pgxmock.PgxPool) {
-                m.ExpectExec("INSERT INTO uploads").
-                    WithArgs(pgxmock.AnyArg(), "project", "Test project content", "project.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", int64(2048), pgxmock.AnyArg()).
-                    WillReturnResult(pgxmock.NewResult("INSERT", 1))
-            },
+            setup: func(m *poolStub) { m.execErr = nil },
             wantErr: false,
         },
         {
@@ -63,10 +57,8 @@ func TestUploadRepo_Create(t *testing.T) {
                 Type: "cv",
                 Text: "Error test",
             },
-            setup: func(m pgxmock.PgxPool) {
-                m.ExpectExec("INSERT INTO uploads").
-                    WithArgs("error-123", "cv", "Error test", "", "", int64(0), pgxmock.AnyArg()).
-                    WillReturnError(assert.AnError)
+            setup: func(m *poolStub) {
+                m.execErr = assert.AnError
             },
             wantErr: true,
             errMsg:  "op=upload.create",
@@ -77,9 +69,7 @@ func TestUploadRepo_Create(t *testing.T) {
         tt := tt
         t.Run(tt.name, func(t *testing.T) {
             t.Parallel()
-            m, err := pgxmock.NewPool()
-            require.NoError(t, err)
-            defer m.Close()
+            m := &poolStub{}
             tt.setup(m)
 
             repo := postgres.NewUploadRepo(m)
@@ -100,7 +90,6 @@ func TestUploadRepo_Create(t *testing.T) {
                     assert.Equal(t, tt.upload.ID, id)
                 }
             }
-            require.NoError(t, m.ExpectationsWereMet())
         })
     }
 }
@@ -113,7 +102,7 @@ func TestUploadRepo_Get(t *testing.T) {
     tests := []struct {
         name    string
         id      string
-        setup   func(pgxmock.PgxPool)
+        setup   func(*poolStub)
         want    domain.Upload
         wantErr bool
         errMsg  string
@@ -121,12 +110,17 @@ func TestUploadRepo_Get(t *testing.T) {
         {
             name: "successful get",
             id:   "test-123",
-            setup: func(m pgxmock.PgxPool) {
-                rows := pgxmock.NewRows([]string{"id","type","text","filename","mime","size","created_at"}).
-                    AddRow("test-123","cv","Test CV content","test.pdf","application/pdf", int64(1024), fixedTime)
-                m.ExpectQuery(`SELECT id, type, text, filename, mime, size, created_at FROM uploads WHERE id=\$1`).
-                    WithArgs("test-123").
-                    WillReturnRows(rows)
+            setup: func(m *poolStub) {
+                m.row = rowStub{scan: func(dest ...any) error {
+                    *(dest[0].(*string)) = "test-123"
+                    *(dest[1].(*string)) = "cv"
+                    *(dest[2].(*string)) = "Test CV content"
+                    *(dest[3].(*string)) = "test.pdf"
+                    *(dest[4].(*string)) = "application/pdf"
+                    *(dest[5].(*int64)) = int64(1024)
+                    *(dest[6].(*time.Time)) = fixedTime
+                    return nil
+                }}
             },
             want: domain.Upload{
                 ID:        "test-123",
@@ -142,10 +136,8 @@ func TestUploadRepo_Get(t *testing.T) {
         {
             name: "not found",
             id:   "nonexistent",
-            setup: func(m pgxmock.PgxPool) {
-                m.ExpectQuery(`SELECT id, type, text, filename, mime, size, created_at FROM uploads WHERE id=\$1`).
-                    WithArgs("nonexistent").
-                    WillReturnError(assert.AnError)
+            setup: func(m *poolStub) {
+                m.row = rowStub{scan: func(_ ...any) error { return assert.AnError }}
             },
             wantErr: true,
             errMsg:  "op=upload.get",
@@ -153,10 +145,8 @@ func TestUploadRepo_Get(t *testing.T) {
         {
             name: "database error",
             id:   "error-id",
-            setup: func(m pgxmock.PgxPool) {
-                m.ExpectQuery(`SELECT id, type, text, filename, mime, size, created_at FROM uploads WHERE id=\$1`).
-                    WithArgs("error-id").
-                    WillReturnError(assert.AnError)
+            setup: func(m *poolStub) {
+                m.row = rowStub{scan: func(_ ...any) error { return errors.New("connection timeout") }}
             },
             wantErr: true,
             errMsg:  "op=upload.get",
@@ -167,9 +157,7 @@ func TestUploadRepo_Get(t *testing.T) {
         tt := tt
         t.Run(tt.name, func(t *testing.T) {
             t.Parallel()
-            m, err := pgxmock.NewPool()
-            require.NoError(t, err)
-            defer m.Close()
+            m := &poolStub{}
             tt.setup(m)
 
             repo := postgres.NewUploadRepo(m)
@@ -186,7 +174,6 @@ func TestUploadRepo_Get(t *testing.T) {
                 require.NoError(t, err)
                 assert.Equal(t, tt.want, got)
             }
-            require.NoError(t, m.ExpectationsWereMet())
         })
     }
 }

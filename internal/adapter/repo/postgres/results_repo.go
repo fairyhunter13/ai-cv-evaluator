@@ -8,10 +8,13 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+// ResultRepo persists and loads evaluation results from PostgreSQL.
 type ResultRepo struct { Pool PgxPool }
 
+// NewResultRepo constructs a ResultRepo with the given pool.
 func NewResultRepo(p PgxPool) *ResultRepo { return &ResultRepo{Pool: p} }
 
+// Upsert inserts or updates a result by job_id.
 func (r *ResultRepo) Upsert(ctx domain.Context, res domain.Result) error {
 	tracer := otel.Tracer("repo.results")
 	ctx, span := tracer.Start(ctx, "results.Upsert")
@@ -25,6 +28,7 @@ func (r *ResultRepo) Upsert(ctx domain.Context, res domain.Result) error {
 	return nil
 }
 
+// GetByJobID loads a result by its job_id.
 func (r *ResultRepo) GetByJobID(ctx domain.Context, jobID string) (domain.Result, error) {
 	tracer := otel.Tracer("repo.results")
 	ctx, span := tracer.Start(ctx, "results.GetByJobID")

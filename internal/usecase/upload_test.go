@@ -14,13 +14,13 @@ import (
 )
 
 type stubUploadRepo2 struct{ created []domain.Upload; idSeq int; err error }
-func (r *stubUploadRepo2) Create(ctx domain.Context, u domain.Upload) (string, error) {
+func (r *stubUploadRepo2) Create(_ domain.Context, u domain.Upload) (string, error) {
 	r.created = append(r.created, u)
 	if r.err != nil { return "", r.err }
 	r.idSeq++
 	return time.Now().Format("150405") + "-" + fmt.Sprintf("%d", r.idSeq), nil
 }
-func (r *stubUploadRepo2) Get(ctx domain.Context, id string) (domain.Upload, error) { return domain.Upload{ID:id}, nil }
+func (r *stubUploadRepo2) Get(_ domain.Context, id string) (domain.Upload, error) { return domain.Upload{ID:id}, nil }
 
 func TestUpload_Ingest_Success(t *testing.T) {
 	t.Parallel()

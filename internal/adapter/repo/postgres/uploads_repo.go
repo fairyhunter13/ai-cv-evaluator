@@ -13,12 +13,16 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
 
+// UploadRepo persists and loads uploads using a minimal pgx pool.
 type UploadRepo struct { Pool PgxPool }
 
+// PgxPool is a minimal subset of pgxpool used by the repos for easy testing.
 type PgxPool interface { Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error); QueryRow(ctx context.Context, sql string, args ...any) pgx.Row }
 
+// NewUploadRepo constructs an UploadRepo with the given pool.
 func NewUploadRepo(p PgxPool) *UploadRepo { return &UploadRepo{Pool: p} }
 
+// Create stores a new upload and returns its id (generates one if empty).
 func (r *UploadRepo) Create(ctx domain.Context, u domain.Upload) (string, error) {
 	tracer := otel.Tracer("repo.uploads")
 	ctx, span := tracer.Start(ctx, "uploads.Create")
@@ -31,6 +35,7 @@ func (r *UploadRepo) Create(ctx domain.Context, u domain.Upload) (string, error)
 	return id, nil
 }
 
+// Get loads an upload by id or returns an error.
 func (r *UploadRepo) Get(ctx domain.Context, id string) (domain.Upload, error) {
 	tracer := otel.Tracer("repo.uploads")
 	ctx, span := tracer.Start(ctx, "uploads.Get")

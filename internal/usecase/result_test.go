@@ -13,15 +13,15 @@ import (
 
 type stubJobRepoR struct{ job domain.Job; getErr error }
 
-func (s *stubJobRepoR) Create(ctx domain.Context, j domain.Job) (string, error) { return "", nil }
-func (s *stubJobRepoR) UpdateStatus(ctx domain.Context, id string, status domain.JobStatus, errMsg *string) error { return nil }
-func (s *stubJobRepoR) Get(ctx domain.Context, id string) (domain.Job, error) { return s.job, s.getErr }
-func (s *stubJobRepoR) FindByIdempotencyKey(ctx domain.Context, key string) (domain.Job, error) { return domain.Job{}, domain.ErrNotFound }
+func (s *stubJobRepoR) Create(_ domain.Context, _ domain.Job) (string, error) { return "", nil }
+func (s *stubJobRepoR) UpdateStatus(_ domain.Context, _ string, _ domain.JobStatus, _ *string) error { return nil }
+func (s *stubJobRepoR) Get(_ domain.Context, _ string) (domain.Job, error) { return s.job, s.getErr }
+func (s *stubJobRepoR) FindByIdempotencyKey(_ domain.Context, _ string) (domain.Job, error) { return domain.Job{}, domain.ErrNotFound }
 
 type stubResultRepoR struct{}
 
-func (s *stubResultRepoR) Upsert(ctx domain.Context, r domain.Result) error { return nil }
-func (s *stubResultRepoR) GetByJobID(ctx domain.Context, jobID string) (domain.Result, error) { return domain.Result{}, nil }
+func (s *stubResultRepoR) Upsert(_ domain.Context, _ domain.Result) error { return nil }
+func (s *stubResultRepoR) GetByJobID(_ domain.Context, _ string) (domain.Result, error) { return domain.Result{}, nil }
 
 func TestResult_FailedShape_ReturnsErrorObject(t *testing.T) {
 	svc := usecase.NewResultService(&stubJobRepoR{job: domain.Job{ID: "job1", Status: domain.JobFailed, Error: "schema invalid: missing field"}}, &stubResultRepoR{})

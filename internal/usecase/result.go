@@ -1,7 +1,7 @@
 package usecase
 
 import (
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -11,13 +11,19 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
 
+// ResultService provides read access to evaluation results and assembles
+// the API response envelope including ETag logic and error mapping.
 type ResultService struct {
 	Jobs    domain.JobRepository
 	Results domain.ResultRepository
 }
 
+// NewResultService constructs a ResultService with the given repositories.
 func NewResultService(j domain.JobRepository, r domain.ResultRepository) ResultService { return ResultService{Jobs: j, Results: r} }
 
+// Fetch returns the HTTP status code, response body, and ETag for the given job id.
+// It implements conditional responses (304 Not Modified) based on If-None-Match ETag
+// and returns proper shapes for queued/processing/failed states per API rules.
 func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, map[string]any, string, error) {
 	job, err := s.Jobs.Get(ctx, id)
 	if err != nil {
@@ -59,7 +65,7 @@ func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, m
 
 func makeETag(v any) string {
 	b, _ := json.Marshal(v)
-	s := sha1.Sum(b)
+	s := sha256.Sum256(b)
 	return hex.EncodeToString(s[:])
 }
 

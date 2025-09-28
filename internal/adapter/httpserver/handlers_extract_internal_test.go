@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-type nilExtractor struct{}
-
-func (n *nilExtractor) ExtractPath(ctx context.Context, fileName, path string) (string, error) { return "", nil }
-
 func Test_extractUploadedText_Txt_Sanitized(t *testing.T) {
 	h := &multipart.FileHeader{Filename: "note.txt"}
 	got, err := extractUploadedText(context.Background(), nil, h, []byte("hello\tworld\n"))

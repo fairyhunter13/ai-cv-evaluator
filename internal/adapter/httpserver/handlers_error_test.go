@@ -194,13 +194,13 @@ func buildMultipartWithNames(t *testing.T, fields map[string][]byte, names map[s
 
 type stubJobRepoNotFound struct{}
 
-func (s *stubJobRepoNotFound) Create(ctx domain.Context, j domain.Job) (string, error) { return "", nil }
-func (s *stubJobRepoNotFound) UpdateStatus(ctx domain.Context, id string, status domain.JobStatus, errMsg *string) error {
+func (s *stubJobRepoNotFound) Create(_ domain.Context, _ domain.Job) (string, error) { return "", nil }
+func (s *stubJobRepoNotFound) UpdateStatus(_ domain.Context, _ string, _ domain.JobStatus, _ *string) error {
 	return nil
 }
-func (s *stubJobRepoNotFound) Get(ctx domain.Context, id string) (domain.Job, error) {
+func (s *stubJobRepoNotFound) Get(_ domain.Context, _ string) (domain.Job, error) {
 	return domain.Job{}, domain.ErrNotFound
 }
-func (s *stubJobRepoNotFound) FindByIdempotencyKey(ctx domain.Context, key string) (domain.Job, error) {
+func (s *stubJobRepoNotFound) FindByIdempotencyKey(_ domain.Context, _ string) (domain.Job, error) {
 	return domain.Job{}, domain.ErrNotFound
 }
