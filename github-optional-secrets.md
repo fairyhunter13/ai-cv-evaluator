@@ -11,6 +11,7 @@ These secrets are optional. If present, additional security scans and notificati
 - FOSSA_API_KEY
   - Purpose: License compliance analysis upload.
   - Used by: `.github/workflows/ci.yml`
+- Notes: Where applicable, CI steps are now Makefile-driven; scanners/actions that require their own GitHub Action remain unaffected.
 - SLACK_WEBHOOK_URL
   - Purpose: Deployment notifications to Slack.
   - Used by: `.github/workflows/deploy.yml`

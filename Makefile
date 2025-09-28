@@ -7,9 +7,9 @@ GOTOOLCHAIN := auto
 CGO_ENABLED ?= 0
 SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 
-.PHONY: all deps fmt lint vet vuln test test-e2e cover run build docker-build docker-run migrate tools generate seed-rag \
+.PHONY: all deps fmt lint vet vuln test test-e2e cover run build docker-build docker-build-ci docker-run migrate tools generate seed-rag \
 	encrypt-env decrypt-env encrypt-env-production decrypt-env-production verify-project-sops encrypt-project decrypt-project \
-	ci-test ci-e2e
+	ci-test ci-e2e openapi-validate build-matrix verify-test-placement vendor-redismock
 
 all: fmt lint vet test
 
@@ -21,6 +21,7 @@ all: fmt lint vet test
 	goimports -w . || true
 
  lint:
+	@which golangci-lint >/dev/null 2>&1 || (echo "Installing golangci-lint..." && GOBIN=$(PWD)/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1)
 	golangci-lint run ./...
 
  vet:
@@ -81,7 +82,8 @@ verify-project-sops:
 	govulncheck ./...
 
  test:
-	$(GO) test -race -short -coverprofile=coverage.unit.out ./...
+	@pkgs=$$(go list ./... | grep -v "/cmd/"); \
+	$(GO) test -race -short -coverprofile=coverage.unit.out $$pkgs
 
  test-e2e:
 	$(GO) test -tags=e2e -v -timeout=5m ./test/e2e/...
@@ -98,14 +100,15 @@ verify-project-sops:
  docker-build:
 	docker build -t $(APP_NAME):local .
 
+docker-build-ci:
+	@[ -n "$(TAG)" ] || (echo "Usage: make docker-build-ci TAG=<tag>" && exit 1)
+	docker build -t $(APP_NAME):$(TAG) .
+
  docker-run:
 	docker compose up -d --build
 
  migrate:
 	$(GO) run github.com/pressly/goose/v3/cmd/goose@latest -dir ./deploy/migrations postgres "$$DB_URL" up
-
-seed-rag:
-	QDRANT_URL=$${QDRANT_URL:-http://localhost:6333} $(GO) run ./cmd/ragseed
 
  tools:
 	GOBIN=$(PWD)/bin go install github.com/mgechev/revive@latest
@@ -116,11 +119,29 @@ seed-rag:
  generate:
 	$(GO) generate ./...
 
+openapi-validate:
+	$(GO) run github.com/getkin/kin-openapi/cmd/validate@latest api/openapi.yaml
+
+build-matrix:
+	GOOS=linux GOARCH=amd64 $(GO) build -ldflags="-w -s" -o dist/server-linux-amd64 ./cmd/server
+	GOOS=linux GOARCH=arm64 $(GO) build -ldflags="-w -s" -o dist/server-linux-arm64 ./cmd/server
+	GOOS=darwin GOARCH=amd64 $(GO) build -ldflags="-w -s" -o dist/server-darwin-amd64 ./cmd/server
+	GOOS=darwin GOARCH=arm64 $(GO) build -ldflags="-w -s" -o dist/server-darwin-arm64 ./cmd/server
+
+verify-test-placement:
+	@set -euo pipefail; \
+	if git ls-files -- '*.go' | grep -E '^test/.*_test\.go$$' | grep -vE '^test/e2e/' ; then \
+	  echo "Error: unit tests must be colocated next to code. Move tests out of top-level test/ (allowed only under test/e2e/)." >&2; \
+	  exit 1; \
+	fi
+
 # --- CI convenience targets ---------------------------------------------------
+
 
 ci-test:
 	@set -euo pipefail; \
-	$(GO) test -race -short -coverprofile=coverage.unit.out ./...; \
+	pkgs=$$(go list ./... | grep -v "/cmd/"); \
+	$(GO) test -race -short -coverprofile=coverage.unit.out $$pkgs; \
 	go tool cover -func=coverage.unit.out | tee coverage.func.txt; \
 	total=$$(grep -E "^total:\\s*\\(statements\\)\\s*[0-9.]+%$$" coverage.func.txt | awk '{print $$3}' | tr -d '%'); \
 	total_int=$${total%.*}; \
@@ -136,6 +157,12 @@ ci-test:
 	  echo "Core coverage $$total% is below 80% target" >&2; \
 	  exit 1; \
 	fi
+
+vendor-redismock:
+	@set -euo pipefail; \
+	$(GO) get github.com/go-redis/redismock/v9; \
+	$(GO) mod vendor; \
+	echo "Vendored github.com/go-redis/redismock/v9"
 
 ci-e2e:
 	@set -euo pipefail; \

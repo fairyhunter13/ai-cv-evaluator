@@ -83,6 +83,7 @@ func getValidator() *validator.Validate {
 	return vld
 }
 
+// NewServer constructs an HTTP server with all handlers and checks wired.
 func NewServer(cfg config.Config, uploads usecase.UploadService, eval usecase.EvaluateService, results usecase.ResultService, extractor domain.TextExtractor, dbCheck func(context.Context) error, redisCheck func(context.Context) error, qdrantCheck func(context.Context) error, tikaCheck func(context.Context) error) *Server {
 	return &Server{Cfg: cfg, Uploads: uploads, Evaluate: eval, Results: results, Extractor: extractor, DBCheck: dbCheck, RedisCheck: redisCheck, QdrantCheck: qdrantCheck, TikaCheck: tikaCheck}
 }
@@ -120,13 +121,13 @@ func (s *Server) UploadHandler() http.HandlerFunc {
 			writeError(w, r, fmt.Errorf("%w: cv file required", domain.ErrInvalidArgument), map[string]string{"field": "cv"})
 			return
 		}
-		defer cvFile.Close()
+		defer func(){ _ = cvFile.Close() }()
 		projFile, projHeader, err := r.FormFile("project")
 		if err != nil {
 			writeError(w, r, fmt.Errorf("%w: project file required", domain.ErrInvalidArgument), map[string]string{"field": "project"})
 			return
 		}
-		defer projFile.Close()
+		defer func(){ _ = projFile.Close() }()
 
 		// Read files into memory (body already capped by MaxBytesReader/ParseMultipartForm)
 		cvBytes, err := io.ReadAll(cvFile)
@@ -252,6 +253,7 @@ func (s *Server) ResultHandler() http.HandlerFunc {
 	}
 }
 
+// ReadyzHandler returns a readiness handler that probes DB, Redis, Qdrant and Tika.
 func (s *Server) ReadyzHandler() http.HandlerFunc {
 	type check struct{ Name string `json:"name"`; OK bool `json:"ok"`; Details string `json:"details"` }
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +292,7 @@ func (s *Server) ReadyzHandler() http.HandlerFunc {
 	}
 }
 
+// OpenAPIServe serves api/openapi.yaml if present (used by admin UI and clients).
 func (s *Server) OpenAPIServe() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		b, err := os.ReadFile("api/openapi.yaml")

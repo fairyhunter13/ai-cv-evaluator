@@ -1,3 +1,4 @@
+// Package qdrant provides a minimal Qdrant HTTP client used by the app.
 package qdrant
 
 import (
@@ -9,12 +10,14 @@ import (
 	"time"
 )
 
+// Client is a minimal Qdrant HTTP client used by the app.
 type Client struct {
 	baseURL    string
 	apiKey     string
 	httpClient *http.Client
 }
 
+// New constructs a Qdrant client with baseURL and optional apiKey.
 func New(baseURL, apiKey string) *Client {
 	return &Client{
 		baseURL: baseURL,
@@ -30,7 +33,7 @@ func (c *Client) EnsureCollection(ctx context.Context, name string, vectorSize i
 	c.setHeaders(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil { return err }
-	defer resp.Body.Close()
+	defer func(){ _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusOK { return nil }
 	// Create
 	payload := map[string]any{
@@ -42,7 +45,7 @@ func (c *Client) EnsureCollection(ctx context.Context, name string, vectorSize i
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = c.httpClient.Do(req)
 	if err != nil { return err }
-	defer resp.Body.Close()
+	defer func(){ _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("qdrant ensure create status %d", resp.StatusCode) }
 	return nil
 }
@@ -67,7 +70,7 @@ func (c *Client) UpsertPoints(ctx context.Context, collection string, vectors []
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil { return err }
-	defer resp.Body.Close()
+	defer func(){ _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("qdrant upsert status %d", resp.StatusCode) }
 	return nil
 }
@@ -81,7 +84,7 @@ func (c *Client) Search(ctx context.Context, collection string, vector []float32
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil { return nil, err }
-	defer resp.Body.Close()
+	defer func(){ _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 { return nil, fmt.Errorf("qdrant search status %d", resp.StatusCode) }
 	var out struct{ Result []map[string]any `json:"result"` }
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return nil, err }

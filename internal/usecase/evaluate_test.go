@@ -19,29 +19,27 @@ type stubJobRepo struct {
 	status  domain.JobStatus
 	errMsg  *string
 	createErr error
-	findErr error
-	foundJob domain.Job
 }
 
-func (s *stubJobRepo) Create(ctx domain.Context, j domain.Job) (string, error) {
+func (s *stubJobRepo) Create(_ domain.Context, j domain.Job) (string, error) {
 	s.created = j
 	if s.createErr != nil { return "", s.createErr }
 	if s.id == "" { s.id = "job-123" }
 	return s.id, nil
 }
-func (s *stubJobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobStatus, errMsg *string) error {
+func (s *stubJobRepo) UpdateStatus(_ domain.Context, _ string, status domain.JobStatus, errMsg *string) error {
 	s.status, s.errMsg = status, errMsg
 	return nil
 }
-func (s *stubJobRepo) Get(ctx domain.Context, id string) (domain.Job, error) { return domain.Job{ID: id}, nil }
-func (s *stubJobRepo) FindByIdempotencyKey(ctx domain.Context, key string) (domain.Job, error) { return domain.Job{}, domain.ErrNotFound }
+func (s *stubJobRepo) Get(_ domain.Context, id string) (domain.Job, error) { return domain.Job{ID: id}, nil }
+func (s *stubJobRepo) FindByIdempotencyKey(_ domain.Context, _ string) (domain.Job, error) { return domain.Job{}, domain.ErrNotFound }
 
 type stubQueue struct { payload domain.EvaluateTaskPayload; err error }
-func (q *stubQueue) EnqueueEvaluate(ctx domain.Context, p domain.EvaluateTaskPayload) (string, error) { q.payload = p; return "t-1", q.err }
+func (q *stubQueue) EnqueueEvaluate(_ domain.Context, p domain.EvaluateTaskPayload) (string, error) { q.payload = p; return "t-1", q.err }
 
 type stubUploadRepo struct{}
-func (r *stubUploadRepo) Create(ctx domain.Context, u domain.Upload) (string, error) { return "", nil }
-func (r *stubUploadRepo) Get(ctx domain.Context, id string) (domain.Upload, error) { return domain.Upload{ID:id}, nil }
+func (r *stubUploadRepo) Create(_ domain.Context, _ domain.Upload) (string, error) { return "", nil }
+func (r *stubUploadRepo) Get(_ domain.Context, id string) (domain.Upload, error) { return domain.Upload{ID:id}, nil }
 
 func TestEvaluate_Enqueue_Success(t *testing.T) {
 	t.Parallel()

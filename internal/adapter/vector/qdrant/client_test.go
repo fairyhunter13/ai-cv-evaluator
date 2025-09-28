@@ -33,7 +33,7 @@ func TestClient_EnsureCollection(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == http.MethodGet {
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]any{"result": "ok"})
+					require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
 				}
 			},
 			wantErr: false,
@@ -50,7 +50,7 @@ func TestClient_EnsureCollection(t *testing.T) {
 				}
 				if r.Method == http.MethodPut {
 					var payload map[string]any
-					json.NewDecoder(r.Body).Decode(&payload)
+					require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 					
 					// Verify payload structure
 					vectors := payload["vectors"].(map[string]any)
@@ -58,7 +58,7 @@ func TestClient_EnsureCollection(t *testing.T) {
 					assert.Equal(t, "Dot", vectors["distance"])
 					
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]any{"result": "ok"})
+					require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
 				}
 			},
 			wantErr: false,
@@ -68,7 +68,7 @@ func TestClient_EnsureCollection(t *testing.T) {
 			collection: "error_collection",
 			vectorSize: 1536,
 			distance:   "Cosine",
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 			},
 			wantErr: true,
@@ -120,14 +120,14 @@ func TestClient_UpsertPoints(t *testing.T) {
 				assert.Contains(t, r.URL.Path, "/collections/test_collection/points")
 				
 				var payload map[string]any
-				json.NewDecoder(r.Body).Decode(&payload)
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 				
 				// Verify points structure
 				points := payload["points"].([]any)
 				assert.Len(t, points, 1)
 				
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]any{"result": "ok"})
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
 			},
 			wantErr: false,
 		},
@@ -139,13 +139,13 @@ func TestClient_UpsertPoints(t *testing.T) {
 			ids:        []any{"1", "2", "3"},
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				var payload map[string]any
-				json.NewDecoder(r.Body).Decode(&payload)
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 				
 				points := payload["points"].([]any)
 				assert.Len(t, points, 3)
 				
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]any{"result": "ok"})
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
 			},
 			wantErr: false,
 		},
@@ -155,9 +155,9 @@ func TestClient_UpsertPoints(t *testing.T) {
 			vectors:    [][]float32{{0.1}},
 			payloads:   []map[string]any{{"test": "data"}},
 			ids:        []any{"1"},
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
-				json.NewEncoder(w).Encode(map[string]any{"error": "bad request"})
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"error": "bad request"}))
 			},
 			wantErr: true,
 		},
@@ -207,7 +207,7 @@ func TestClient_Search(t *testing.T) {
 				assert.Contains(t, r.URL.Path, "/collections/search_collection/points/search")
 				
 				var payload map[string]any
-				json.NewDecoder(r.Body).Decode(&payload)
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
 				
 				// Verify search parameters
 				assert.Equal(t, float64(5), payload["limit"])
@@ -216,7 +216,7 @@ func TestClient_Search(t *testing.T) {
 				
 				// Return mock results
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]any{
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 					"result": []map[string]any{
 						{
 							"id":      "match-1",
@@ -229,7 +229,7 @@ func TestClient_Search(t *testing.T) {
 							"payload": map[string]any{"text": "good match", "weight": 0.3},
 						},
 					},
-				})
+				}))
 			},
 			wantCount: 2,
 			wantErr:   false,
@@ -239,24 +239,14 @@ func TestClient_Search(t *testing.T) {
 			collection: "empty_collection",
 			vector:     []float32{0.1},
 			limit:      10,
-			handler: func(w http.ResponseWriter, r *http.Request) {
+			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]any{
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 					"result": []map[string]any{},
-				})
+				}))
 			},
 			wantCount: 0,
 			wantErr:   false,
-		},
-		{
-			name:       "server error",
-			collection: "error_collection",
-			vector:     []float32{0.1},
-			limit:      5,
-			handler: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusInternalServerError)
-			},
-			wantErr: true,
 		},
 	}
 

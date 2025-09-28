@@ -1,3 +1,4 @@
+// Package real implements a real AI client backed by OpenRouter and OpenAI APIs.
 package real
 
 import (
@@ -16,12 +17,14 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 )
 
+// Client implements domain.AIClient using OpenRouter (chat) and OpenAI (embeddings).
 type Client struct {
 	cfg        config.Config
 	chatHC     *http.Client
 	embedHC    *http.Client
 }
 
+// New constructs a real AI client with sensible timeouts.
 func New(cfg config.Config) *Client {
 	return &Client{
 		cfg:     cfg,
@@ -65,7 +68,7 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		observability.AIRequestsTotal.WithLabelValues("openrouter", "chat").Inc()
 		observability.AIRequestDuration.WithLabelValues("openrouter", "chat").Observe(time.Since(start).Seconds())
 		if err != nil { return err }
-		defer resp.Body.Close()
+		defer func(){ _ = resp.Body.Close() }()
 		if resp.StatusCode == 429 { return backoff.Permanent(fmt.Errorf("%w", domain.ErrUpstreamRateLimit)) }
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("chat status %d", resp.StatusCode) }
 		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return err }
@@ -101,7 +104,7 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 		observability.AIRequestsTotal.WithLabelValues("openai", "embed").Inc()
 		observability.AIRequestDuration.WithLabelValues("openai", "embed").Observe(time.Since(start).Seconds())
 		if err != nil { return err }
-		defer resp.Body.Close()
+		defer func(){ _ = resp.Body.Close() }()
 		if resp.StatusCode == 429 { return backoff.Permanent(fmt.Errorf("%w", domain.ErrUpstreamRateLimit)) }
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("embed status %d", resp.StatusCode) }
 		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return err }

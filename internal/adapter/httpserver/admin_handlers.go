@@ -1,3 +1,5 @@
+//go:build adminui
+
 package httpserver
 
 import (

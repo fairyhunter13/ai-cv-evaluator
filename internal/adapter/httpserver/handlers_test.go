@@ -20,26 +20,23 @@ import (
 
 type stubUploadRepo struct{ nextID int }
 
-func (s *stubUploadRepo) Create(ctx domain.Context, u domain.Upload) (string, error) {
+func (s *stubUploadRepo) Create(_ domain.Context, u domain.Upload) (string, error) {
 	s.nextID++
 	if u.Type == domain.UploadTypeCV {
 		return "cv-" + strings.TrimSpace(u.Filename), nil
 	}
 	return "prj-" + strings.TrimSpace(u.Filename), nil
 }
-func (s *stubUploadRepo) Get(ctx domain.Context, id string) (domain.Upload, error) { return domain.Upload{ID: id}, nil }
+func (s *stubUploadRepo) Get(_ domain.Context, id string) (domain.Upload, error) { return domain.Upload{ID: id}, nil }
 
 type noopJobRepo struct{}
-func (n *noopJobRepo) Create(ctx domain.Context, j domain.Job) (string, error) { return "job-1", nil }
-func (n *noopJobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobStatus, errMsg *string) error { return nil }
-func (n *noopJobRepo) Get(ctx domain.Context, id string) (domain.Job, error) { return domain.Job{ID: id}, nil }
-func (n *noopJobRepo) FindByIdempotencyKey(ctx domain.Context, key string) (domain.Job, error) { return domain.Job{}, domain.ErrNotFound }
+func (n *noopJobRepo) Create(_ domain.Context, _ domain.Job) (string, error) { return "job-1", nil }
+func (n *noopJobRepo) UpdateStatus(_ domain.Context, _ string, _ domain.JobStatus, _ *string) error { return nil }
+func (n *noopJobRepo) Get(_ domain.Context, id string) (domain.Job, error) { return domain.Job{ID: id}, nil }
+func (n *noopJobRepo) FindByIdempotencyKey(_ domain.Context, _ string) (domain.Job, error) { return domain.Job{}, domain.ErrNotFound }
 
 type noopQueue struct{}
-func (q *noopQueue) EnqueueEvaluate(ctx domain.Context, payload domain.EvaluateTaskPayload) (string, error) { return "t-1", nil }
-
-type noopExtractor struct{}
-func (n *noopExtractor) ExtractPath(ctx domain.Context, fileName, path string) (string, error) { return "", nil }
+func (q *noopQueue) EnqueueEvaluate(_ domain.Context, _ domain.EvaluateTaskPayload) (string, error) { return "t-1", nil }
 
 func newTestServer(t *testing.T) *httpserver.Server {
 	t.Helper()

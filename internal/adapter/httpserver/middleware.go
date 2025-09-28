@@ -67,6 +67,7 @@ func SecurityHeaders(next http.Handler) http.Handler {
 
 type loggerKey struct{}
 
+// LoggerFrom extracts the request-scoped logger from the context or returns the default logger.
 func LoggerFrom(r *http.Request) *slog.Logger {
 	if v := r.Context().Value(loggerKey{}); v != nil {
 		if lg, ok := v.(*slog.Logger); ok {

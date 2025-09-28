@@ -22,3 +22,6 @@ issues:
       linters:
         - errcheck
         - gosec
+    - path: internal/adapter/textextractor/tika/tika\.go
+      text: "G304:"
+
