@@ -10,7 +10,7 @@ Standardize repository documentation, governance, and collaboration workflows to
   - Architecture overview (Clean Architecture layers, key packages).
   - Configuration (env vars table) and `.env.example` reference.
   - API overview with link to `api/openapi.yaml`.
-  - Testing strategy and how to run unit/integration/E2E suites.
+  - Testing strategy and how to run unit/e2e/E2E suites.
   - Deployment overview (VPS steps and GitHub Actions).
 - `ARCHITECTURE.md`
   - Layered diagram, dependency rules, main flows (`/upload`, `/evaluate`, `/result/{id}`).
@@ -96,7 +96,7 @@ Option A, Option B, trade-offs.
 
 ## Test Plan
 - [ ] Unit tests
-- [ ] Integration tests
+- [ ] E2E tests
 - [ ] E2E tests
 
 ## Checklist
@@ -155,7 +155,7 @@ Option A, Option B, trade-offs.
 
 # OpenAPI Maintenance
 - Keep `api/openapi.yaml` current; add schemas for request/response and errors.
-- Validate API handlers against OpenAPI in integration tests.
+- Validate API handlers against OpenAPI in e2e tests.
 
 # Quality & Gates
 - Lint, tests, and coverage thresholds enforced in CI.

@@ -158,7 +158,7 @@ r.Group(func(admin chi.Router) {
 })
 ```
 
-# Tailwind Integration (UI)
+# Tailwind Ie2e (UI)
 - Use Tailwind for admin pages with responsive utility classes.
 - Dev: CDN for quick prototyping; Prod: prebuild Tailwind CSS and serve static.
 - Provide simple forms for upload/evaluate/result with CSRF hidden input and error/notice banners.

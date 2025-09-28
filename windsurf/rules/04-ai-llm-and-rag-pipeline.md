@@ -143,7 +143,7 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 - If `OPENAI_API_KEY` is missing, use deterministic mocks:
   - Embeddings: stable hash → vector generator.
   - Chat: load canned responses from `test/testdata/ai_fixtures/`.
-- Ensure integration and E2E tests operate in mock mode by default in CI.
+- Ensure e2e and E2E tests operate in mock mode by default in CI.
 
 # Evaluation & Quality
 - Add golden tests for prompt I/O pairs; verify schema compliance and stability.

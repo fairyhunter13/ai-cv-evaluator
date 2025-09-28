@@ -4,6 +4,8 @@ trigger: always_on
 
 Deliver high-confidence coverage focusing on Unit and E2E tests. Integration tests are retired in favor of E2E that exercise the running app directly.
 
+Terminology: The terms "E2E" and "e2e" refer to the same end-to-end tests. Prefer "E2E" in documentation and prose, while the build tag remains `e2e`.
+
 # Unit Tests
 - Table-driven tests with `t.Run(tc.name, func(t *testing.T) { ... })`; follow Arrange-Act-Assert for clarity.
 - Use `t.Parallel()` where safe; avoid shared mutable state and test order dependencies.
@@ -23,7 +25,7 @@ Deliver high-confidence coverage focusing on Unit and E2E tests. Integration tes
 - Testdata management:
   - Put fixtures under `test/testdata/` (e.g., tiny .pdf/.docx for extraction).
   - Keep assets small and license-safe.
-- Fast path: `go test -short ./...` runs pure unit tests (integration/E2E skipped via build tags).
+- Fast path: `go test -short ./...` runs pure unit tests (E2E skipped via build tags).
 - Coverage target ≥ 80% for core domain/usecase packages; ≥ 60% overall minimum.
 
 # Unit Test Placement & Naming (Strict)
@@ -53,6 +55,9 @@ Deliver high-confidence coverage focusing on Unit and E2E tests. Integration tes
 - Readiness:
   - Wait for health/readiness endpoint before assertions.
   - Use HTTP client with sensible timeouts; avoid flakiness.
+
+# UI E2E Automation Policy
+- Admin UI should be validated manually for visual consistency using a browser (e.g., via Cascade Browser). Do not invest in automated UI E2E at this stage; focus on API E2E.
 
 # Reliability
 - Deterministic seeds; bounded deadlines on IO.
