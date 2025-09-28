@@ -1,0 +1,24 @@
+run:
+  timeout: 5m
+linters:
+  enable:
+    - errcheck
+    - gosec
+    - govet
+    - staticcheck
+    - revive
+    - ineffassign
+    - typecheck
+    - misspell
+    - gocyclo
+    - unused
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gocyclo
+    - path: vendor/|mock_
+      linters:
+        - errcheck
+        - gosec

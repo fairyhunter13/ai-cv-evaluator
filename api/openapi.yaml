@@ -1,0 +1,149 @@
+openapi: 3.0.3
+info:
+  title: AI CV Evaluator API
+  version: "1.0.0"
+servers:
+  - url: http://localhost:8080
+paths:
+  /v1/upload:
+    post:
+      summary: Upload CV and Project files
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                cv:
+                  type: string
+                  format: binary
+                project:
+                  type: string
+                  format: binary
+              required: [cv, project]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cv_id: { type: string }
+                  project_id: { type: string }
+                required: [cv_id, project_id]
+        '400': { $ref: '#/components/responses/Error' }
+  /v1/evaluate:
+    post:
+      summary: Enqueue evaluation job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cv_id: { type: string }
+                project_id: { type: string }
+                job_description: { type: string }
+                study_case_brief: { type: string }
+              required: [cv_id, project_id, job_description, study_case_brief]
+      responses:
+        '200':
+          description: Queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string, enum: [queued] }
+                required: [id, status]
+        '400': { $ref: '#/components/responses/Error' }
+  /v1/result/{id}:
+    get:
+      summary: Fetch job status/result
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              description: Strong ETag for caching of the response body
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Queued'
+                  - $ref: '#/components/schemas/Processing'
+                  - $ref: '#/components/schemas/Completed'
+                  - $ref: '#/components/schemas/Failed'
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  details: { type: object }
+  schemas:
+    Queued:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [queued] }
+      required: [id, status]
+    Processing:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [processing] }
+      required: [id, status]
+    Completed:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [completed] }
+        result:
+          type: object
+          properties:
+            cv_match_rate:
+              type: number
+              minimum: 0
+              maximum: 1
+            cv_feedback: { type: string }
+            project_score:
+              type: number
+              minimum: 1
+              maximum: 10
+            project_feedback: { type: string }
+            overall_summary: { type: string }
+          required: [cv_match_rate, cv_feedback, project_score, project_feedback, overall_summary]
+      required: [id, status, result]
+
+    Failed:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [failed] }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+          required: [code, message]
+      required: [id, status, error]

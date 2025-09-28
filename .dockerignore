@@ -1,0 +1,12 @@
+**/.DS_Store
+**/.git
+**/.gitignore
+**/.gitattributes
+**/.golangci.yml
+**/.editorconfig
+**/bin
+**/coverage*
+**/*.md
+api/
+!api/openapi.yaml
+.windsurf/

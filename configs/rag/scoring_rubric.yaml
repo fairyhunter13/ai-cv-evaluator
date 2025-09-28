@@ -1,0 +1,77 @@
+# Scoring Rubric Seed (aligned to project.md L253-L273)
+texts:
+  - |-
+    CV Match Evaluation (1–5 scale per parameter)
+    Overall: Compute a weighted average then normalize to [0,1] (divide by 5).
+  - |-
+    Technical Skills Match (40%): Alignment with job requirements (backend, DB, APIs, cloud, AI/LLM).
+    Scoring Guide: 1 = Irrelevant → 5 = Excellent + AI/LLM.
+  - |-
+    Experience Level (25%): Years of experience, project complexity.
+    Scoring Guide: 1 = <1yr → 5 = 5+ yrs high-impact.
+  - |-
+    Relevant Achievements (20%): Impact of past work.
+    Scoring Guide: 1 = None → 5 = Major measurable impact.
+  - |-
+    Cultural / Collaboration Fit (15%): Communication, learning mindset, teamwork.
+    Scoring Guide: 1 = Not shown → 5 = Excellent.
+  - |-
+    Project Deliverable Evaluation (1–5 scale per parameter)
+    Overall: Compute a weighted average then scale ×2 and clamp to [1,10].
+data:
+  # CV Match parameters with weights
+  - text: |
+      Technical Skills Match (40%): Alignment with job requirements (backend, DB, APIs, cloud, AI/LLM).
+      Scoring Guide: 1 = Irrelevant → 5 = Excellent + AI/LLM.
+    type: rubric
+    section: technical_skills_match
+    weight: 0.40
+  - text: |
+      Experience Level (25%): Years of experience, project complexity.
+      Scoring Guide: 1 = <1yr → 5 = 5+ yrs high-impact.
+    type: rubric
+    section: experience_level
+    weight: 0.25
+  - text: |
+      Relevant Achievements (20%): Impact of past work.
+      Scoring Guide: 1 = None → 5 = Major measurable impact.
+    type: rubric
+    section: relevant_achievements
+    weight: 0.20
+  - text: |
+      Cultural / Collaboration Fit (15%): Communication, learning mindset, teamwork.
+      Scoring Guide: 1 = Not shown → 5 = Excellent.
+    type: rubric
+    section: cultural_collaboration_fit
+    weight: 0.15
+  # Project parameters with weights
+  - text: |
+      Correctness (30%): Implements prompt design, LLM chaining, RAG.
+      Scoring Guide: 1 = Not implemented → 5 = Fully correct.
+    type: rubric
+    section: correctness
+    weight: 0.30
+  - text: |
+      Code Quality & Structure (25%): Clean, modular, reusable, tested.
+      Scoring Guide: 1 = Poor → 5 = Excellent + strong tests.
+    type: rubric
+    section: code_quality_structure
+    weight: 0.25
+  - text: |
+      Resilience & Error Handling (20%): Handles jobs, retries, randomness, API failures.
+      Scoring Guide: 1 = Missing → 5 = Robust.
+    type: rubric
+    section: resilience_error_handling
+    weight: 0.20
+  - text: |
+      Documentation & Explanation (15%): README clarity, setup instructions, trade-offs.
+      Scoring Guide: 1 = Missing → 5 = Excellent.
+    type: rubric
+    section: documentation_explanation
+    weight: 0.15
+  - text: |
+      Creativity / Bonus (10%): Extra features beyond requirements.
+      Scoring Guide: 1 = None → 5 = Outstanding creativity.
+    type: rubric
+    section: creativity_bonus
+    weight: 0.10

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Documents - AI CV Evaluator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
+</head>
+<body class="bg-gray-50">
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center space-x-4">
+                        <a href="/admin/" class="text-xl font-semibold text-gray-900">AI CV Evaluator Admin</a>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-600">Upload</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-500">{{.Username}}</span>
+                        <form method="POST" action="/admin/logout" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="px-4 py-6 sm:px-0">
+                
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-gray-900">Upload Documents</h1>
+                    <p class="mt-2 text-gray-600">Upload CV and project files for evaluation</p>
+                </div>
+
+                <!-- Success Message -->
+                <div v-if="successMessage" class="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative">
+                    <span class="block sm:inline">{{ successMessage }}</span>
+                    <button @click="successMessage = null" class="absolute top-0 bottom-0 right-0 px-4 py-3">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Error Message -->
+                <div v-if="errorMessage" class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+                    <span class="block sm:inline">{{ errorMessage }}</span>
+                    <button @click="errorMessage = null" class="absolute top-0 bottom-0 right-0 px-4 py-3">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Upload Form -->
+                <div class="bg-white shadow rounded-lg">
+                    <form @submit.prevent="uploadFiles" class="space-y-6 p-6">
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                        
+                        <!-- CV Upload -->
+                        <div>
+                            <label for="cv" class="block text-sm font-medium text-gray-700">CV File</label>
+                            <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md" 
+                                 :class="{'border-blue-400 bg-blue-50': dragOverCV}"
+                                 @dragover.prevent="dragOverCV = true"
+                                 @dragleave.prevent="dragOverCV = false"
+                                 @drop.prevent="handleCVDrop">
+                                <div class="space-y-1 text-center">
+                                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    <div class="flex text-sm text-gray-600">
+                                        <label for="cv" class="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                            <span>Upload CV file</span>
+                                            <input id="cv" name="cv" type="file" class="sr-only" @change="handleCVSelect" accept=".txt,.pdf,.docx">
+                                        </label>
+                                        <p class="pl-1">or drag and drop</p>
+                                    </div>
+                                    <p class="text-xs text-gray-500">TXT, PDF, DOCX up to 10MB</p>
+                                </div>
+                            </div>
+                            <div v-if="cvFile" class="mt-2 text-sm text-gray-500">
+                                Selected: {{ cvFile.name }} ({{ formatFileSize(cvFile.size) }})
+                            </div>
+                        </div>
+
+                        <!-- Project Upload -->
+                        <div>
+                            <label for="project" class="block text-sm font-medium text-gray-700">Project Report</label>
+                            <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md"
+                                 :class="{'border-green-400 bg-green-50': dragOverProject}"
+                                 @dragover.prevent="dragOverProject = true"
+                                 @dragleave.prevent="dragOverProject = false"
+                                 @drop.prevent="handleProjectDrop">
+                                <div class="space-y-1 text-center">
+                                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                    <div class="flex text-sm text-gray-600">
+                                        <label for="project" class="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                            <span>Upload project file</span>
+                                            <input id="project" name="project" type="file" class="sr-only" @change="handleProjectSelect" accept=".txt,.pdf,.docx">
+                                        </label>
+                                        <p class="pl-1">or drag and drop</p>
+                                    </div>
+                                    <p class="text-xs text-gray-500">TXT, PDF, DOCX up to 10MB</p>
+                                </div>
+                            </div>
+                            <div v-if="projectFile" class="mt-2 text-sm text-gray-500">
+                                Selected: {{ projectFile.name }} ({{ formatFileSize(projectFile.size) }})
+                            </div>
+                        </div>
+
+                        <!-- Upload Button -->
+                        <div class="flex justify-end space-x-3">
+                            <a href="/admin/" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Cancel
+                            </a>
+                            <button type="submit" 
+                                    :disabled="!cvFile || !projectFile || uploading"
+                                    class="bg-indigo-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span v-if="uploading" class="flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Uploading...
+                                </span>
+                                <span v-else>Upload Files</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Upload Results -->
+                <div v-if="uploadResult" class="mt-8 bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Upload Successful</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-sm font-medium text-gray-500">CV ID</label>
+                            <div class="mt-1 text-sm font-mono text-gray-900 bg-gray-50 p-2 rounded">{{ uploadResult.cv_id }}</div>
+                        </div>
+                        <div>
+                            <label class="text-sm font-medium text-gray-500">Project ID</label>
+                            <div class="mt-1 text-sm font-mono text-gray-900 bg-gray-50 p-2 rounded">{{ uploadResult.project_id }}</div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <a :href="`/admin/evaluate?cv_id=${uploadResult.cv_id}&project_id=${uploadResult.project_id}`" 
+                           class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                            Start Evaluation
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    cvFile: null,
+                    projectFile: null,
+                    dragOverCV: false,
+                    dragOverProject: false,
+                    uploading: false,
+                    successMessage: null,
+                    errorMessage: null,
+                    uploadResult: null
+                }
+            },
+            methods: {
+                handleCVSelect(event) {
+                    this.cvFile = event.target.files[0];
+                },
+                handleProjectSelect(event) {
+                    this.projectFile = event.target.files[0];
+                },
+                handleCVDrop(event) {
+                    this.dragOverCV = false;
+                    this.cvFile = event.dataTransfer.files[0];
+                },
+                handleProjectDrop(event) {
+                    this.dragOverProject = false;
+                    this.projectFile = event.dataTransfer.files[0];
+                },
+                formatFileSize(bytes) {
+                    if (bytes === 0) return '0 Bytes';
+                    const k = 1024;
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                },
+                async uploadFiles() {
+                    if (!this.cvFile || !this.projectFile) return;
+
+                    this.uploading = true;
+                    this.errorMessage = null;
+                    this.successMessage = null;
+                    this.uploadResult = null;
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('cv', this.cvFile);
+                        formData.append('project', this.projectFile);
+
+                        const response = await fetch('/admin/api/upload', {
+                            method: 'POST',
+                            body: formData,
+                            headers: {
+                                'X-Request-ID': crypto.randomUUID()
+                            }
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error?.message || 'Upload failed');
+                        }
+
+                        const result = await response.json();
+                        this.uploadResult = result;
+                        this.successMessage = 'Files uploaded successfully!';
+                        
+                        // Clear form
+                        this.cvFile = null;
+                        this.projectFile = null;
+                        document.getElementById('cv').value = '';
+                        document.getElementById('project').value = '';
+                        
+                    } catch (error) {
+                        this.errorMessage = error.message;
+                    } finally {
+                        this.uploading = false;
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Start Evaluation - AI CV Evaluator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
+</head>
+<body class="bg-gray-50">
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center space-x-4">
+                        <a href="/admin/" class="text-xl font-semibold text-gray-900">AI CV Evaluator Admin</a>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-600">Evaluate</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-500">{{.Username}}</span>
+                        <form method="POST" action="/admin/logout" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-4xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="px-4 py-6 sm:px-0">
+                
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-gray-900">Start Evaluation</h1>
+                    <p class="mt-2 text-gray-600">Configure and start an AI-powered CV and project evaluation</p>
+                </div>
+
+                <!-- Success Message -->
+                <div v-if="successMessage" class="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative">
+                    <span class="block sm:inline">{{ successMessage }}</span>
+                    <button @click="successMessage = null" class="absolute top-0 bottom-0 right-0 px-4 py-3">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Error Message -->
+                <div v-if="errorMessage" class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+                    <span class="block sm:inline">{{ errorMessage }}</span>
+                    <button @click="errorMessage = null" class="absolute top-0 bottom-0 right-0 px-4 py-3">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Evaluation Form -->
+                <div class="bg-white shadow rounded-lg">
+                    <form @submit.prevent="startEvaluation" class="space-y-6 p-6">
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                        
+                        <!-- Document IDs -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="cv_id" class="block text-sm font-medium text-gray-700">CV ID</label>
+                                <input type="text" id="cv_id" v-model="form.cv_id" 
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                       placeholder="Enter CV upload ID" required>
+                            </div>
+                            <div>
+                                <label for="project_id" class="block text-sm font-medium text-gray-700">Project ID</label>
+                                <input type="text" id="project_id" v-model="form.project_id"
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                       placeholder="Enter project upload ID" required>
+                            </div>
+                        </div>
+
+                        <!-- Job Description -->
+                        <div>
+                            <label for="job_description" class="block text-sm font-medium text-gray-700">Job Description</label>
+                            <textarea id="job_description" v-model="form.job_description" rows="8"
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                      placeholder="Paste the job description here..." required></textarea>
+                            <p class="mt-2 text-sm text-gray-500">Provide the job description to match the CV against</p>
+                        </div>
+
+                        <!-- Study Case Brief -->
+                        <div>
+                            <label for="study_case_brief" class="block text-sm font-medium text-gray-700">Study Case Brief</label>
+                            <textarea id="study_case_brief" v-model="form.study_case_brief" rows="6"
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                      placeholder="Provide the study case brief for project evaluation..." required></textarea>
+                            <p class="mt-2 text-sm text-gray-500">Brief description of the project requirements and evaluation criteria</p>
+                        </div>
+
+                        <!-- Advanced Options -->
+                        <div class="border-t pt-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 class="text-lg font-medium text-gray-900">Advanced Options</h3>
+                                <button type="button" @click="showAdvanced = !showAdvanced" 
+                                        class="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+                                    {{ showAdvanced ? 'Hide' : 'Show' }} Advanced
+                                </button>
+                            </div>
+                            
+                            <div v-show="showAdvanced" class="space-y-4">
+                                <div>
+                                    <label for="idempotency_key" class="block text-sm font-medium text-gray-700">Idempotency Key (Optional)</label>
+                                    <input type="text" id="idempotency_key" v-model="form.idempotency_key"
+                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                           placeholder="Leave empty to generate automatically">
+                                    <p class="mt-2 text-sm text-gray-500">Use same key to prevent duplicate evaluations</p>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="checkbox" id="use_two_pass" v-model="form.use_two_pass"
+                                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                                    <label for="use_two_pass" class="ml-2 block text-sm text-gray-900">
+                                        Use two-pass LLM processing (more accurate but slower)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="flex justify-end space-x-3">
+                            <a href="/admin/" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Cancel
+                            </a>
+                            <button type="submit" 
+                                    :disabled="!isFormValid || evaluating"
+                                    class="bg-green-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <span v-if="evaluating" class="flex items-center">
+                                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Starting Evaluation...
+                                </span>
+                                <span v-else>Start Evaluation</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Evaluation Result -->
+                <div v-if="evaluationResult" class="mt-8 bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Evaluation Started</h3>
+                    <div class="bg-blue-50 border border-blue-200 rounded-md p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-blue-800">Evaluation Queued</h3>
+                                <div class="mt-2 text-sm text-blue-700">
+                                    <p>Job ID: <span class="font-mono">{{ evaluationResult.id }}</span></p>
+                                    <p>Status: <span class="font-semibold">{{ evaluationResult.status }}</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <a :href="`/admin/result?job_id=${evaluationResult.id}`" 
+                           class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out">
+                            View Results
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    form: {
+                        cv_id: '',
+                        project_id: '',
+                        job_description: '',
+                        study_case_brief: '',
+                        idempotency_key: '',
+                        use_two_pass: false
+                    },
+                    showAdvanced: false,
+                    evaluating: false,
+                    successMessage: null,
+                    errorMessage: null,
+                    evaluationResult: null
+                }
+            },
+            computed: {
+                isFormValid() {
+                    return this.form.cv_id && 
+                           this.form.project_id && 
+                           this.form.job_description && 
+                           this.form.study_case_brief;
+                }
+            },
+            mounted() {
+                // Pre-fill from URL params if available
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('cv_id')) {
+                    this.form.cv_id = urlParams.get('cv_id');
+                }
+                if (urlParams.get('project_id')) {
+                    this.form.project_id = urlParams.get('project_id');
+                }
+                
+                // Load default job description and study case brief
+                this.loadDefaults();
+            },
+            methods: {
+                loadDefaults() {
+                    // Default job description
+                    this.form.job_description = `Backend Developer - AI/LLM Integration
+
+Required Skills:
+- 3+ years backend development (Go, Python, or Node.js)
+- Experience with REST APIs and microservices
+- Database design (PostgreSQL, Redis)
+- Cloud platforms (AWS, GCP, or Azure)
+- AI/LLM integration experience preferred
+- Vector databases (Pinecone, Qdrant, or similar)
+- Container technologies (Docker, Kubernetes)
+
+Responsibilities:
+- Build scalable backend services
+- Integrate AI/LLM providers
+- Design and implement RAG systems
+- Ensure system reliability and observability
+- Collaborate with frontend and DevOps teams`;
+
+                    // Default study case brief
+                    this.form.study_case_brief = `Mini Project Requirements:
+
+Build a backend service that evaluates CVs and project reports using AI workflows.
+
+Key Requirements:
+1. API endpoints for upload, evaluation, and results
+2. Async job processing with proper error handling
+3. LLM integration with prompt design and chaining
+4. RAG implementation with vector database
+5. Comprehensive observability and monitoring
+6. Clean architecture and testing strategy
+
+Evaluation Criteria:
+- Code quality and architecture (25%)
+- AI/LLM integration effectiveness (25%)
+- RAG implementation (20%)
+- Error handling and resilience (15%)
+- Testing and documentation (15%)`;
+                },
+                async startEvaluation() {
+                    if (!this.isFormValid) return;
+
+                    this.evaluating = true;
+                    this.errorMessage = null;
+                    this.successMessage = null;
+                    this.evaluationResult = null;
+
+                    try {
+                        const payload = {
+                            cv_id: this.form.cv_id,
+                            project_id: this.form.project_id,
+                            job_description: this.form.job_description,
+                            study_case_brief: this.form.study_case_brief
+                        };
+
+                        if (this.form.idempotency_key) {
+                            payload.idempotency_key = this.form.idempotency_key;
+                        }
+
+                        const headers = {
+                            'Content-Type': 'application/json',
+                            'X-Request-ID': crypto.randomUUID()
+                        };
+
+                        if (this.form.idempotency_key) {
+                            headers['Idempotency-Key'] = this.form.idempotency_key;
+                        }
+
+                        const response = await fetch('/admin/api/evaluate', {
+                            method: 'POST',
+                            headers: headers,
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error?.message || 'Evaluation failed to start');
+                        }
+
+                        const result = await response.json();
+                        this.evaluationResult = result;
+                        this.successMessage = 'Evaluation started successfully!';
+                        
+                    } catch (error) {
+                        this.errorMessage = error.message;
+                    } finally {
+                        this.evaluating = false;
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
