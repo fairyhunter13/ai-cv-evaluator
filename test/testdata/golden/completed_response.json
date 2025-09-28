@@ -1,0 +1,11 @@
+{
+  "id": "job-123",
+  "status": "completed",
+  "result": {
+    "cv_match_rate": 0.85,
+    "cv_feedback": "Strong technical background with relevant experience in backend development and cloud technologies. Experience with Go and microservices architecture aligns well with requirements.",
+    "project_score": 8.5,
+    "project_feedback": "Well-structured project demonstrating solid understanding of Clean Architecture principles. Good implementation of async processing and observability.",
+    "overall_summary": "The candidate shows strong technical competency with relevant experience in the required technology stack. The project submission demonstrates practical application of architectural patterns and best practices. Areas for improvement include more comprehensive testing coverage and documentation. Overall, a strong candidate worthy of further consideration."
+  }
+}

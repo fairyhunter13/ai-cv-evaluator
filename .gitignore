@@ -1,2 +1,11 @@
-project.md
 .env
+.env.production
+project.md
+coverage*.out
+coverage.html
+coverage.func.txt
+coverage.core.func.txt
+dist/
+bin/
+*.log
+.DS_Store

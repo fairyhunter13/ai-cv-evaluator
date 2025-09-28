@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.24' ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Download deps
+        run: go mod download
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59.1
+          args: ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Security - Vulnerabilities
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest && $(go env GOPATH)/bin/govulncheck ./...
+      
+      - name: Security - Gosec Static Analysis
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: '-fmt sarif -out gosec-results.sarif ./...'
+        continue-on-error: true
+      
+      - name: Upload Gosec results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: gosec-results.sarif
+      
+      - name: Security - License Check
+        run: |
+          go install github.com/fossa-contrib/fossa-cli@latest
+          go mod download
+          $(go env GOPATH)/bin/fossa analyze
+        env:
+          FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+        continue-on-error: true
+      - name: Unit tests + coverage enforcement
+        run: make ci-test
+      - name: Upload unit coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ matrix.go }}
+          path: coverage.unit.out
+      - name: Validate OpenAPI
+        run: go run github.com/getkin/kin-openapi/cmd/validate@latest api/openapi.yaml
+      - name: Build docker image (smoke)
+        run: docker build -t ai-cv-evaluator:${{ github.sha }} .
+      
+      - name: Production - Multi-arch Build Test
+        if: matrix.go == '1.24'
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o dist/server-linux-amd64 ./cmd/server
+          GOOS=linux GOARCH=arm64 go build -ldflags="-w -s" -o dist/server-linux-arm64 ./cmd/server
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-w -s" -o dist/server-darwin-amd64 ./cmd/server
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-w -s" -o dist/server-darwin-arm64 ./cmd/server
+      - name: Enforce unit test placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Disallow *_test.go directly under top-level test/ except test/e2e/**
+          if git ls-files -- '*.go' | grep -E '^test/.*_test\.go$' | grep -vE '^test/e2e/' ; then
+            echo "Error: unit tests must be colocated next to code. Move tests out of top-level test/ (allowed only under test/e2e/)." >&2
+            exit 1
+          fi
+      
+      # Run E2E tests only on tag releases
+      - name: Setup environment for E2E tests
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+      
+      - name: Run E2E tests (Makefile)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: make ci-e2e

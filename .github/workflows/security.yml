@@ -1,0 +1,146 @@
+name: Security Scans
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+      
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      # CodeQL Analysis for Go
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          queries: security-extended,security-and-quality
+      
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+      
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:go"
+      
+      # Nancy - OSS vulnerability scanner
+      - name: Nancy OSS Vulnerability Check
+        run: |
+          go install github.com/sonatypecommunity/nancy@latest
+          go list -json -deps ./... | $(go env GOPATH)/bin/nancy sleuth
+        continue-on-error: true
+      
+      # Semgrep static analysis
+      - name: Semgrep Security Scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/go
+            p/docker
+            p/kubernetes
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        continue-on-error: true
+      
+      # Git secrets scan
+      - name: Git Secrets Scan
+        run: |
+          git clone https://github.com/awslabs/git-secrets.git
+          cd git-secrets && make install PREFIX=~/.local
+          export PATH=$PATH:~/.local/bin
+          git secrets --register-aws --global
+          git secrets --install
+          git secrets --scan-history
+        continue-on-error: true
+      
+      # OWASP Dependency Check
+      - name: OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: 'ai-cv-evaluator'
+          path: '.'
+          format: 'SARIF'
+          out: 'dependency-check-report.sarif'
+        continue-on-error: true
+      
+      - name: Upload OWASP Dependency Check results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: dependency-check-report.sarif
+
+  docker-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker image for scanning
+        run: docker build -t ai-cv-evaluator:security-scan .
+      
+      # Trivy comprehensive scan
+      - name: Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+        continue-on-error: true
+      
+      - name: Trivy Docker Image Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ai-cv-evaluator:security-scan'
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+        continue-on-error: true
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-fs-results.sarif'
+      
+      - name: Upload Trivy image results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+      
+      # Snyk security scan
+      - name: Snyk Security Scan
+        uses: snyk/actions/golang@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --sarif-file-output=snyk.sarif
+        continue-on-error: true
+      
+      - name: Upload Snyk results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: snyk.sarif
