@@ -1,0 +1,34 @@
+# Global ownership
+* @fairyhunter13
+
+# Core architecture and domain logic
+/internal/domain/ @fairyhunter13
+/internal/usecase/ @fairyhunter13
+
+# API and HTTP layer
+/internal/adapter/httpserver/ @fairyhunter13
+/api/ @fairyhunter13
+
+# Infrastructure and deployment
+/deploy/ @fairyhunter13
+/docker-compose.yml @fairyhunter13
+/Dockerfile @fairyhunter13
+
+# CI/CD workflows
+/.github/workflows/ @fairyhunter13
+
+# Configuration and environment
+/configs/ @fairyhunter13
+/.env.* @fairyhunter13
+
+# Documentation
+/docs/ @fairyhunter13
+/README.md @fairyhunter13
+/ARCHITECTURE.md @fairyhunter13
+/CONTRIBUTING.md @fairyhunter13
+/SECURITY.md @fairyhunter13
+
+# Dependencies and build
+/go.mod @fairyhunter13
+/go.sum @fairyhunter13
+/Makefile @fairyhunter13

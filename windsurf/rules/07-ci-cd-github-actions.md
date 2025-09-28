@@ -147,4 +147,10 @@ Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST echo ok
   - Run: go run github.com/getkin/kin-openapi/cmd/validate@latest api/openapi.yaml
   - Alternative (Node): npx @redocly/cli@latest lint api/openapi.yaml --max-problems=0
   - Alternative (Docker): docker run --rm -v $PWD:/work redocly/cli lint /work/api/openapi.yaml
-- Gate merges on a clean spec; keep contract as source of truth for handlers and tests.
+  - Gate merges on a clean spec; keep contract as source of truth for handlers and tests.
+
+## Notifications
+
+- Slack notifications are optional and disabled by default in this repository.
+- The deploy workflow intentionally omits Slack steps because `SLACK_WEBHOOK_URL` is not provisioned.
+- If notifications are needed, add a separate job gated by `if: always()` and supply the webhook secret in repository settings.

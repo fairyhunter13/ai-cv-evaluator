@@ -1,0 +1,6 @@
+Project Report: AI-backed CV and Project Evaluator
+- Implements prompt design and LLM chaining.
+- Uses RAG (Qdrant + embeddings) to retrieve job description and scoring rubric.
+- Handles long-running jobs with Redis/Asynq and retries with backoff.
+- Provides structured JSON results and concise feedback.
+- Includes tests, observability (Prometheus, OTEL), and docs.

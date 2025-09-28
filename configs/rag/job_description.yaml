@@ -1,0 +1,48 @@
+# Sample Job Description Seed (from project.md)
+texts:
+  - |-
+    ## Product Engineer (Backend) 2025
+    Our company is hiring a Product Engineer (Backend) to work on our core product.
+
+    ### About the Job
+    You'll be building new product features alongside a frontend engineer and product manager using Agile methodology.
+    You will also address issues to ensure apps are robust and codebases are clean.
+
+    As a Product Engineer, you'll:
+    - Write clean, efficient code to enhance our product.
+    - Build AI-powered systems, orchestrating how LLMs integrate into the ecosystem.
+    - Collaborate with frontend and 3rd parties to build backend solutions.
+    - Develop and maintain server-side logic for central databases.
+    - Design and fine-tune AI prompts aligned with product requirements.
+    - Build LLM chaining flows.
+    - Implement RAG (vector DB embeddings + retrieval).
+    - Handle long-running AI processes gracefully (jobs, async workers, retries).
+    - Design safeguards for uncontrolled scenarios (3rd party API failures, randomness).
+    - Leverage AI tools (AI-assisted code gen, automated QA, internal bots).
+    - Write reusable, testable, efficient code.
+    - Strengthen test coverage.
+    - Engage with users/stakeholders to translate needs into backend + AI improvements.
+
+    ### About You
+    We’re looking for candidates with strong backend experience, ideally with AI/LLM exposure or willingness to learn.
+
+    Skills / Experience:
+    - Backend languages & frameworks (e.g., Node.js, Django, Rails) and Go is a plus.
+    - Databases: MySQL, PostgreSQL, MongoDB.
+    - RESTful APIs; security compliance.
+    - Cloud technologies (AWS, Google Cloud, Azure).
+    - Server-side languages; frontend understanding.
+    - AuthN/AuthZ; scalable app design; database schema design.
+    - Automated testing.
+    - LLM APIs, embeddings, vector DBs, prompt design best practices.
+  - |-
+    **Remote Role:** Based in **Indonesia** (to ensure time zone overlap).
+  - |-
+    ## Benefits & Perks
+
+    1. Paid Time Off: 17 days vacation/personal leave.
+    2. Learning Benefits (Rp29 million/year):
+       - Rp6m/year for courses, books, resources.
+       - O’Reilly subscription (Rp8m/year).
+       - Bootcamps & Short Courses access (Rp15m/year).
+    3. Device Ownership: Rp7m/year budget for productivity equipment.

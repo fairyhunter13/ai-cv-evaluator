@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Results - AI CV Evaluator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
+</head>
+<body class="bg-gray-50">
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center space-x-4">
+                        <a href="/admin/" class="text-xl font-semibold text-gray-900">AI CV Evaluator Admin</a>
+                        <span class="text-gray-400">/</span>
+                        <span class="text-gray-600">Results</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-500">{{.Username}}</span>
+                        <form method="POST" action="/admin/logout" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-6xl mx-auto py-6 sm:px-6 lg:px-8">
+            <div class="px-4 py-6 sm:px-0">
+                
+                <!-- Header -->
+                <div class="mb-8">
+                    <h1 class="text-2xl font-bold text-gray-900">Evaluation Results</h1>
+                    <p class="mt-2 text-gray-600">View and monitor evaluation results</p>
+                </div>
+
+                <!-- Job ID Input -->
+                <div class="bg-white shadow rounded-lg mb-8">
+                    <div class="p-6">
+                        <div class="flex flex-col sm:flex-row gap-4">
+                            <div class="flex-1">
+                                <label for="job_id" class="block text-sm font-medium text-gray-700">Job ID</label>
+                                <input type="text" id="job_id" v-model="jobId" 
+                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                       placeholder="Enter evaluation job ID">
+                            </div>
+                            <div class="flex items-end">
+                                <button @click="fetchResult" :disabled="!jobId || loading"
+                                        class="bg-indigo-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span v-if="loading" class="flex items-center">
+                                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Loading...
+                                    </span>
+                                    <span v-else>Fetch Result</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div v-if="errorMessage" class="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+                    <span class="block sm:inline">{{ errorMessage }}</span>
+                    <button @click="errorMessage = null" class="absolute top-0 bottom-0 right-0 px-4 py-3">
+                        <span class="sr-only">Close</span>
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Status Display -->
+                <div v-if="result" class="mb-8">
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">Job Status</h3>
+                            <button @click="fetchResult" :disabled="loading" 
+                                    class="text-indigo-600 hover:text-indigo-500 text-sm font-medium disabled:opacity-50">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-500">Job ID</label>
+                                <div class="mt-1 text-sm font-mono text-gray-900">{{ result.id }}</div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-500">Status</label>
+                                <div class="mt-1">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                          :class="getStatusColor(result.status)">
+                                        {{ result.status }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-if="result.status === 'processing'">
+                                <label class="text-sm font-medium text-gray-500">Progress</label>
+                                <div class="mt-1">
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div class="bg-blue-600 h-2 rounded-full animate-pulse" style="width: 45%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Auto-refresh for processing jobs -->
+                        <div v-if="result.status === 'processing' || result.status === 'queued'" class="mt-4 text-sm text-gray-500">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-500 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Auto-refreshing every {{ autoRefreshInterval / 1000 }} seconds...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Completed Results -->
+                <div v-if="result && result.status === 'completed' && result.result" class="space-y-8">
+                    
+                    <!-- Summary Card -->
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Overall Summary</h3>
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <p class="text-gray-800">{{ result.result.overall_summary }}</p>
+                        </div>
+                    </div>
+
+                    <!-- CV Analysis -->
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">CV Analysis</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="text-sm font-medium text-gray-500">Match Rate</label>
+                                <div class="mt-2">
+                                    <div class="flex items-center">
+                                        <div class="flex-1 bg-gray-200 rounded-full h-3 mr-4">
+                                            <div class="bg-green-500 h-3 rounded-full transition-all duration-500"
+                                                 :style="`width: ${(result.result.cv_match_rate * 100)}%`"></div>
+                                        </div>
+                                        <span class="text-lg font-semibold text-gray-900">
+                                            {{ Math.round(result.result.cv_match_rate * 100) }}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-500">Grade</label>
+                                <div class="mt-2 text-2xl font-bold" :class="getGradeColor(result.result.cv_match_rate)">
+                                    {{ getGrade(result.result.cv_match_rate) }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="text-sm font-medium text-gray-500">Feedback</label>
+                            <div class="mt-2 bg-blue-50 rounded-lg p-4">
+                                <p class="text-blue-800">{{ result.result.cv_feedback }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Project Analysis -->
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Project Analysis</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="text-sm font-medium text-gray-500">Score</label>
+                                <div class="mt-2">
+                                    <div class="flex items-center">
+                                        <div class="flex-1 bg-gray-200 rounded-full h-3 mr-4">
+                                            <div class="bg-purple-500 h-3 rounded-full transition-all duration-500"
+                                                 :style="`width: ${(result.result.project_score / 10) * 100}%`"></div>
+                                        </div>
+                                        <span class="text-lg font-semibold text-gray-900">
+                                            {{ result.result.project_score }}/10
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-500">Grade</label>
+                                <div class="mt-2 text-2xl font-bold" :class="getProjectGradeColor(result.result.project_score)">
+                                    {{ getProjectGrade(result.result.project_score) }}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label class="text-sm font-medium text-gray-500">Feedback</label>
+                            <div class="mt-2 bg-purple-50 rounded-lg p-4">
+                                <p class="text-purple-800">{{ result.result.project_feedback }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Raw JSON -->
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-medium text-gray-900">Raw Response</h3>
+                            <button @click="copyToClipboard(JSON.stringify(result, null, 2))" 
+                                    class="text-indigo-600 hover:text-indigo-500 text-sm font-medium">
+                                Copy JSON
+                            </button>
+                        </div>
+                        <pre class="bg-gray-50 rounded-lg p-4 text-sm overflow-x-auto"><code>{{ JSON.stringify(result, null, 2) }}</code></pre>
+                    </div>
+
+                </div>
+
+                <!-- Failed Results -->
+                <div v-if="result && result.status === 'failed'" class="bg-white shadow rounded-lg p-6">
+                    <h3 class="text-lg font-medium text-red-900 mb-4">Evaluation Failed</h3>
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-red-800">Error Details</h3>
+                                <div class="mt-2 text-sm text-red-700">
+                                    <p v-if="result.error">{{ result.error.message }}</p>
+                                    <p v-else>Unknown error occurred during evaluation</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    jobId: '',
+                    result: null,
+                    loading: false,
+                    errorMessage: null,
+                    autoRefreshInterval: 5000,
+                    autoRefreshTimer: null
+                }
+            },
+            mounted() {
+                // Pre-fill from URL params if available
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('job_id')) {
+                    this.jobId = urlParams.get('job_id');
+                    this.fetchResult();
+                }
+            },
+            beforeUnmount() {
+                this.clearAutoRefresh();
+            },
+            methods: {
+                async fetchResult() {
+                    if (!this.jobId.trim()) return;
+
+                    this.loading = true;
+                    this.errorMessage = null;
+                    this.clearAutoRefresh();
+
+                    try {
+                        const response = await fetch(`/admin/api/result/${this.jobId}`, {
+                            headers: {
+                                'X-Request-ID': crypto.randomUUID()
+                            }
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error?.message || 'Failed to fetch result');
+                        }
+
+                        const result = await response.json();
+                        this.result = result;
+
+                        // Start auto-refresh for processing jobs
+                        if (result.status === 'processing' || result.status === 'queued') {
+                            this.startAutoRefresh();
+                        }
+                        
+                    } catch (error) {
+                        this.errorMessage = error.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                startAutoRefresh() {
+                    this.clearAutoRefresh();
+                    this.autoRefreshTimer = setInterval(() => {
+                        this.fetchResult();
+                    }, this.autoRefreshInterval);
+                },
+                clearAutoRefresh() {
+                    if (this.autoRefreshTimer) {
+                        clearInterval(this.autoRefreshTimer);
+                        this.autoRefreshTimer = null;
+                    }
+                },
+                getStatusColor(status) {
+                    switch (status) {
+                        case 'queued': return 'bg-yellow-100 text-yellow-800';
+                        case 'processing': return 'bg-blue-100 text-blue-800';
+                        case 'completed': return 'bg-green-100 text-green-800';
+                        case 'failed': return 'bg-red-100 text-red-800';
+                        default: return 'bg-gray-100 text-gray-800';
+                    }
+                },
+                getGrade(matchRate) {
+                    if (matchRate >= 0.9) return 'A+';
+                    if (matchRate >= 0.8) return 'A';
+                    if (matchRate >= 0.7) return 'B+';
+                    if (matchRate >= 0.6) return 'B';
+                    if (matchRate >= 0.5) return 'C+';
+                    if (matchRate >= 0.4) return 'C';
+                    return 'D';
+                },
+                getGradeColor(matchRate) {
+                    if (matchRate >= 0.8) return 'text-green-600';
+                    if (matchRate >= 0.6) return 'text-yellow-600';
+                    return 'text-red-600';
+                },
+                getProjectGrade(score) {
+                    if (score >= 9) return 'A+';
+                    if (score >= 8) return 'A';
+                    if (score >= 7) return 'B+';
+                    if (score >= 6) return 'B';
+                    if (score >= 5) return 'C+';
+                    if (score >= 4) return 'C';
+                    return 'D';
+                },
+                getProjectGradeColor(score) {
+                    if (score >= 8) return 'text-green-600';
+                    if (score >= 6) return 'text-yellow-600';
+                    return 'text-red-600';
+                },
+                async copyToClipboard(text) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        // You could add a toast notification here
+                    } catch (err) {
+                        console.error('Failed to copy: ', err);
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

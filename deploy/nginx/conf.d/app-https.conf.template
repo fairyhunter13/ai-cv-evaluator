@@ -1,0 +1,33 @@
+server {
+  listen 443 ssl http2 default_server;
+  server_name ai-cv-evaluator.web.id 43.157.225.155 localhost;
+
+  ssl_certificate /etc/letsencrypt/live/ai-cv-evaluator.web.id/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/ai-cv-evaluator.web.id/privkey.pem;
+  ssl_trusted_certificate /etc/letsencrypt/live/ai-cv-evaluator.web.id/chain.pem;
+
+  # Security headers
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+  add_header X-Content-Type-Options nosniff;
+  add_header X-Frame-Options DENY;
+  add_header Referrer-Policy no-referrer-when-downgrade;
+
+  # ACME HTTP-01 (rarely used on 443, but keep for completeness)
+  location ^~ /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+  }
+
+  # Health passthrough
+  location /healthz { proxy_pass http://app_upstream/healthz; }
+  location /readyz  { proxy_pass http://app_upstream/readyz; }
+
+  location / {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://app_upstream;
+  }
+}
+
+# Redirect HTTP to HTTPS (keep ACME on 80 in app-http.conf)

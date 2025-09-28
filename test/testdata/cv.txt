@@ -1,0 +1,6 @@
+John Doe
+Backend Engineer with 5+ years experience in Go, PostgreSQL, Redis, REST APIs, and AWS.
+- Built microservices with Go and chi; used pgx and Redis for caching and queues.
+- Implemented AI features (OpenAI/OpenRouter) integrating embeddings and RAG.
+- Experience with Docker, Kubernetes, CI/CD, observability (Prometheus, OTEL).
+- Collaborated with FE teams; wrote documentation and tests.
