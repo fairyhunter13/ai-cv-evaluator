@@ -7,8 +7,9 @@ GOTOOLCHAIN := auto
 CGO_ENABLED ?= 0
 SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 
-.PHONY: all deps fmt lint vet vuln test test-int test-e2e cover run build docker-build docker-run migrate tools generate seed-rag \
-	encrypt-env decrypt-env encrypt-env-production decrypt-env-production verify-project-sops encrypt-project decrypt-project ci-test ci-e2e
+.PHONY: all deps fmt lint vet vuln test test-e2e cover run build docker-build docker-run migrate tools generate seed-rag \
+	encrypt-env decrypt-env encrypt-env-production decrypt-env-production verify-project-sops encrypt-project decrypt-project \
+	ci-test ci-e2e
 
 all: fmt lint vet test
 
@@ -53,6 +54,7 @@ decrypt-env-production:
 	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops -d .env.production.sops.yaml > .env.production
 	@echo "Decrypted .env.production.sops.yaml -> .env.production"
 
+
 # Encrypt project.md -> project.md.sops (binary-safe)
 encrypt-project:
 	@[ -f project.md ] || (echo "Error: project.md not found." && exit 1)
@@ -80,9 +82,6 @@ verify-project-sops:
 
  test:
 	$(GO) test -race -short -coverprofile=coverage.unit.out ./...
-
- test-int:
-	$(GO) test -tags=integration -coverprofile=coverage.int.out ./...
 
  test-e2e:
 	$(GO) test -tags=e2e -v -timeout=5m ./test/e2e/...
@@ -125,8 +124,8 @@ ci-test:
 	go tool cover -func=coverage.unit.out | tee coverage.func.txt; \
 	total=$$(grep -E "^total:\\s*\\(statements\\)\\s*[0-9.]+%$$" coverage.func.txt | awk '{print $$3}' | tr -d '%'); \
 	total_int=$${total%.*}; \
-	if [ "$$total_int" -lt 60 ]; then \
-	  echo "Overall coverage $$total% is below 60% minimum" >&2; \
+	if [ "$$total_int" -lt 80 ]; then \
+	  echo "Overall coverage $$total% is below 80% minimum" >&2; \
 	  exit 1; \
 	fi; \
 	$(GO) test -race -short -coverprofile=coverage.core.out ./internal/domain ./internal/usecase; \
