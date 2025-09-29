@@ -5,6 +5,7 @@ docs/project.md
 RFC.md
 RFC-Submission.md
 docs/rfc/
+docs/rfc.backups/
 coverage*.out
 coverage.html
 coverage.func.txt

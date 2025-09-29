@@ -1,0 +1,2 @@
+Noisy PROJECT report!!! Random symbols ^^^ $$$ ### ??? and inconsistent spacing.
+Includes: HTML-ish <div>tags</div> and fake JSON: {foo: bar, baz}
