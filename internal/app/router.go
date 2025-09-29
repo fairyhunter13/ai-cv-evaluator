@@ -55,6 +55,10 @@ func BuildRouter(cfg config.Config, srv *httpserver.Server) http.Handler {
 	// Rate limit mutating endpoints
 	r.Group(func(wr chi.Router) {
 		wr.Use(httprate.LimitByIP(cfg.RateLimitPerMin, 1*time.Minute))
+		// If admin credentials are configured, require either session or Basic Auth
+		if cfg.AdminEnabled() {
+			wr.Use(srv.AdminAPIGuard())
+		}
 		wr.Post("/v1/upload", srv.UploadHandler())
 		wr.Post("/v1/evaluate", srv.EvaluateHandler())
 	})

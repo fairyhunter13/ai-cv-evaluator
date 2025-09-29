@@ -1,4 +1,4 @@
-//go:build !adminui
+//go:build never
 
 // Package httpserver provides HTTP server adapters. This file contains a stub
 // admin server used when building without the 'adminui' build tag.

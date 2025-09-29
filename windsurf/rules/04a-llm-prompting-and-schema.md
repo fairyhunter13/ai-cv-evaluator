@@ -10,9 +10,7 @@ Guide LLM prompting and JSON-schema-constrained outputs to ensure deterministic,
 - Endpoint (OpenAI-compatible): `POST ${OPENROUTER_BASE_URL}/chat/completions`
 - Headers: `Authorization: Bearer ${OPENROUTER_API_KEY}`, `Content-Type: application/json`.
 
-- Provider preference order (Chat):
-  1) OpenRouter (when `OPENROUTER_API_KEY` set)
-  2) Deterministic mock mode (CI/offline)
+- Default chat model: `openrouter/auto` when `CHAT_MODEL` is empty. E2E uses real providers only.
 
 
 # Prompting Principles
@@ -72,9 +70,8 @@ Guide LLM prompting and JSON-schema-constrained outputs to ensure deterministic,
   - Project → weighted average (30/25/20/15/10) × 2 → `project_score` in [0,10].
 - Generate concise `overall_summary` (3–5 sentences).
 
-# Mock Mode
-- Without API keys: use deterministic mock responses based on stable input hashing.
-- Store fixtures under `test/testdata/ai_fixtures/` for e2e/E2E tests.
+# Live Providers Only
+- End-to-end testing uses real providers (OpenRouter for chat). If keys are missing, skip live E2E or expect degraded behavior (e.g., RAG disabled).
 
 # Frugality & Cost Controls (Chat)
 - Minimize token usage: keep prompts compact, remove irrelevant context, and cap `max_tokens`.

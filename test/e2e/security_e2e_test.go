@@ -162,6 +162,7 @@ func TestE2E_InputValidation(t *testing.T) {
 				req, err := http.NewRequest("POST", "http://localhost:8080/v1/upload", &buf)
 				require.NoError(t, err)
 				req.Header.Set("Content-Type", writer.FormDataContentType())
+				maybeBasicAuth(req)
 
 				resp, err := client.Do(req)
 				require.NoError(t, err)
@@ -253,6 +254,7 @@ func TestE2E_ErrorHandling(t *testing.T) {
 	t.Run("Method_Not_Allowed", func(t *testing.T) {
 		req, err := http.NewRequest("PATCH", "http://localhost:8080/v1/upload", nil)
 		require.NoError(t, err)
+		maybeBasicAuth(req)
 
 		resp, err := client.Do(req)
 		require.NoError(t, err)

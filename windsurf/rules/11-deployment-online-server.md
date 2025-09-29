@@ -23,7 +23,7 @@ Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker run --rm --netwo
 
 # Post-Deploy Verification
 - Health endpoint responds 200.
-- Smoke tests for `/upload`, `/evaluate`, `/result/{id}` using mock mode when keys absent.
+- Smoke tests for `/upload`, `/evaluate`, `/result/{id}` against live providers. Ensure `OPENROUTER_API_KEY` (and `OPENAI_API_KEY` for RAG) are configured; otherwise skip live smoke tests.
 
 # Release Management
 - Tags `vX.Y.Z` trigger image publish and deploy.

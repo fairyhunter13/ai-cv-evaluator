@@ -15,7 +15,7 @@ The system requires LLM services for CV evaluation and project scoring. Key requ
 
 ## Decision
 
-We will use **OpenRouter** as our primary AI provider with **OpenAI GPT-4** as secondary fallback, plus **Mock mode** for development/testing.
+We will use **OpenRouter** as our primary AI provider for chat/completions (default model: `openrouter/auto` unless overridden), with **OpenAI** as the embeddings provider. End-to-end tests use live providers only; no mock/stub modes.
 
 ## Consequences
 
@@ -63,8 +63,8 @@ We will use **OpenRouter** as our primary AI provider with **OpenAI GPT-4** as s
 
 ## Implementation Strategy
 
-1. **Primary**: OpenRouter with GPT-4o for high-quality evaluations
-2. **Secondary**: Direct OpenAI API as backup
-3. **Development**: Mock mode with deterministic responses
-4. **Monitoring**: Track costs, latency, and error rates per provider
-5. **Circuit Breaker**: Automatic fallback on provider failures
+1. **Primary (Chat)**: OpenRouter with default `openrouter/auto`; allow overriding `CHAT_MODEL` when needed.
+2. **Embeddings**: OpenAI `text-embedding-3-small` by default (configurable via `EMBEDDINGS_MODEL`).
+3. **Testing**: E2E tests run against live providers; unit tests may mock interfaces locally.
+4. **Monitoring**: Track costs, latency, and error rates per provider.
+5. **Circuit Breaker**: Consider provider fallback strategies as future improvement.

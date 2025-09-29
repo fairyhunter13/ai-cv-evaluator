@@ -150,7 +150,7 @@ CREATE TABLE results (
 ### Worker: evaluate_job
 1) Update job to `processing` and emit metrics.
 2) Load texts for `cv_id` and `project_id` from `uploads`.
-3) Evaluate using mock AI aggregator (deterministic) for now; wire real providers behind feature flags later.
+3) Evaluate using OpenRouter (chat) and optionally RAG via OpenAI embeddings. If `OPENAI_API_KEY` is not set, RAG is skipped and the prompt uses inline context only.
 4) Upsert `results`; update job to `completed` (or `failed`) and record metrics.
 
 ### GET /v1/result/{id}
@@ -203,8 +203,8 @@ graph LR
 
 ## RAG (Scaffolding)
 - Qdrant client provides `EnsureCollection`, `UpsertPoints`, and `Search`.
-- Embeddings + provider interfaces will populate job description and rubric collections; retrieval merged into prompts.
-- In mock mode / when keys absent, deterministic mock is used.
+- Embeddings + provider interfaces populate job description and rubric collections; retrieval merged into prompts.
+- When `OPENAI_API_KEY` is absent, embeddings are unavailable and RAG is skipped gracefully.
 
 ## Data Flow
 

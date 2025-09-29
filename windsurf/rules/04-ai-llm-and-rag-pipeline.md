@@ -14,11 +14,11 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 - Environment:
   - Chat (OpenRouter):
     - `AI_PROVIDER` (default `openrouter`)
-    - `OPENROUTER_API_KEY` (required for live; if absent, use mock mode)
+    - `OPENROUTER_API_KEY` (required for live; requests will fail if unset)
     - `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
-    - `CHAT_MODEL` (default `openai/gpt-4o-mini` via OpenRouter)
+    - `CHAT_MODEL` (default `openrouter/auto` via OpenRouter)
   - Embeddings (OpenAI):
-    - `OPENAI_API_KEY` (preferred for embeddings; if absent, fallback to OpenRouter or mock)
+    - `OPENAI_API_KEY` (required for embeddings)
     - `OPENAI_BASE_URL` (default `https://api.openai.com/v1`)
     - `EMBEDDINGS_MODEL` (default `text-embedding-3-small`)
 
@@ -124,9 +124,9 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 
 # Provider Abstraction & Keys
 - Create `AIClient` interface with methods: `Embed(ctx, texts)`, `ChatJSON(ctx, prompt, schema)`.
-- Implement providers: OpenAI and Mock; design the interface to be pluggable so additional providers can be swapped in without changing usecases.
-- Configure via env: `OPENAI_API_KEY`, `EMBEDDINGS_MODEL`, `CHAT_MODEL`.
-- Pluggable via DI to swap in mocks for tests and offline mode.
+- Implement providers: OpenRouter (chat) and OpenAI (embeddings). Design remains pluggable for future providers.
+- Configure via env: `OPENROUTER_API_KEY`, `CHAT_MODEL` (optional), `OPENAI_API_KEY`, `EMBEDDINGS_MODEL`.
+- Unit tests may mock interfaces; E2E uses real providers only.
 
 # Guardrails & Validation
 - JSON schema validation for all LLM responses.
@@ -139,8 +139,8 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 - Aggregate per-request token usage metrics.
 - Fallback to cached intermediate results when possible to reduce cost.
 
-# Offline / Mock Mode
-- Mock mode is deprecated and disabled. The project uses real providers (OpenAI/OpenRouter) only.
+# Real Providers Only
+- E2E and manual testing use live providers (OpenRouter for chat, OpenAI for embeddings). No stub/mock is used for end-to-end tests.
 
 # Evaluation & Quality
 - Add golden tests for prompt I/O pairs; verify schema compliance and stability.
@@ -148,6 +148,6 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 - Log minimal prompt metadata (no PII) and token counts for analysis.
 
 # Definition of Done (AI)
-- Mock mode works offline.
-- RAG returns relevant chunks; tests assert determinism.
+- E2E validates live providers (OpenRouter for chat, OpenAI for embeddings when configured).
+- RAG returns relevant chunks; tests assert determinism of schema output.
 - LLM outputs JSON passing schema validation; retry logic verified.

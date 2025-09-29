@@ -74,6 +74,7 @@ func handleEvaluate(ctx context.Context, jobs domain.JobRepository, uploads doma
     // Mark processing
     if err := jobs.UpdateStatus(ctx, p.JobID, domain.JobProcessing, nil); err != nil { return err }
     observability.StartProcessingJob("evaluate")
+    slog.Info("job processing started", slog.String("job_id", p.JobID), slog.String("cvid", p.CVID), slog.String("project_id", p.ProjectID))
     // Load texts
     cv, err := uploads.Get(ctx, p.CVID)
     if err != nil {
@@ -111,6 +112,7 @@ func handleEvaluate(ctx context.Context, jobs domain.JobRepository, uploads doma
     if lastErr != nil {
         _ = jobs.UpdateStatus(ctx, p.JobID, domain.JobFailed, strPtr(lastErr.Error()))
         observability.FailJob("evaluate")
+        slog.Error("job failed", slog.String("job_id", p.JobID), slog.Any("error", lastErr))
         return lastErr
     }
     if twoPass {
@@ -132,6 +134,7 @@ func handleEvaluate(ctx context.Context, jobs domain.JobRepository, uploads doma
     }); err != nil {
         _ = jobs.UpdateStatus(ctx, p.JobID, domain.JobFailed, strPtr(err.Error()))
         observability.FailJob("evaluate")
+        slog.Error("job failed: result upsert", slog.String("job_id", p.JobID), slog.Any("error", err))
         return err
     }
     observability.ObserveEvaluation(res.CVMatchRate, res.ProjectScore)

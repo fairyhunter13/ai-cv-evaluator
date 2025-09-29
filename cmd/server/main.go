@@ -99,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// AI client: always use real provider; fail fast if keys missing
+	// AI client: OpenRouter-backed real provider (default model: openrouter/auto when CHAT_MODEL is empty)
 	var aicl domain.AIClient
 	aicl = realai.New(cfg)
 	// Embedding cache wrapper (safe for accuracy; caches embeddings only)

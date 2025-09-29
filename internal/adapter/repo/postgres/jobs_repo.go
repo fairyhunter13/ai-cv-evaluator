@@ -36,7 +36,10 @@ func (r *JobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobS
 	ctx, span := tracer.Start(ctx, "jobs.UpdateStatus")
 	defer span.End()
 	q := `UPDATE jobs SET status=$2, error=$3, updated_at=$4 WHERE id=$1`
-	_, err := r.Pool.Exec(ctx, q, id, status, errMsg, time.Now().UTC())
+	// Map nil errMsg to empty string to satisfy NOT NULL constraint on error column
+	errVal := ""
+	if errMsg != nil { errVal = *errMsg }
+	_, err := r.Pool.Exec(ctx, q, id, status, errVal, time.Now().UTC())
 	if err != nil { return fmt.Errorf("op=job.update_status: %w", err) }
 	return nil
 }
