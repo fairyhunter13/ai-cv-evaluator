@@ -9,7 +9,7 @@ SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 
 .PHONY: all deps fmt lint vet vuln test test-e2e cover run build docker-build docker-build-ci docker-run migrate tools generate seed-rag \
 	encrypt-env decrypt-env encrypt-env-production decrypt-env-production verify-project-sops encrypt-project decrypt-project \
-	encrypt-rfcs decrypt-rfcs \
+	encrypt-rfcs decrypt-rfcs build-admin-css \
 	ci-test ci-e2e openapi-validate build-matrix verify-test-placement vendor-redismock gosec-sarif license-scan
 
 all: fmt lint vet test
@@ -96,17 +96,19 @@ encrypt-rfcs:
 	  echo "docs/rfc not found; nothing to encrypt"; \
 	  exit 0; \
 	fi; \
-	count=0; \
-	while IFS= read -r -d '' src; do \
+	first=$$(find docs/rfc -type f -name '*.md' -print -quit); \
+	if [ -z "$$first" ]; then \
+	  echo "No *.md files found under docs/rfc"; \
+	  exit 0; \
+	fi; \
+	find docs/rfc -type f -name '*.md' | while IFS= read -r src; do \
 	  rel=$${src#docs/rfc/}; \
 	  dest_dir="secrets/rfc/$$(dirname "$$rel")"; \
 	  dest_file="secrets/rfc/$$rel.sops"; \
 	  mkdir -p "$$dest_dir"; \
 	  echo "Encrypting $$src -> $$dest_file"; \
 	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary "$$src" > "$$dest_file"; \
-	  count=$$((count+1)); \
-	done < <(find docs/rfc -type f -name "*.md" -print0); \
-	if [ "$$count" -eq 0 ]; then echo "No *.md files found under docs/rfc"; fi
+	done
 
 # Decrypt all secrets/rfc/**.sops -> docs/rfc/** (binary)
 decrypt-rfcs:
@@ -118,19 +120,20 @@ decrypt-rfcs:
 	  echo "secrets/rfc not found; nothing to decrypt"; \
 	  exit 0; \
 	fi; \
-	count=0; \
-	while IFS= read -r -d '' enc; do \
+	first=$$(find secrets/rfc -type f -name '*.sops' -print -quit); \
+	if [ -z "$$first" ]; then \
+	  echo "No *.sops files found under secrets/rfc"; \
+	  exit 0; \
+	fi; \
+	find secrets/rfc -type f -name '*.sops' | while IFS= read -r enc; do \
 	  rel=$${enc#secrets/rfc/}; \
-	  # strip trailing .sops
 	  rel_out=$${rel%.sops}; \
 	  dest_dir="docs/rfc/$$(dirname "$$rel_out")"; \
 	  dest_file="docs/rfc/$$rel_out"; \
 	  mkdir -p "$$dest_dir"; \
 	  echo "Decrypting $$enc -> $$dest_file"; \
 	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary "$$enc" > "$$dest_file"; \
-	  count=$$((count+1)); \
-	done < <(find secrets/rfc -type f -name "*.sops" -print0); \
-	if [ "$$count" -eq 0 ]; then echo "No *.sops files found under secrets/rfc"; fi
+	done
 
 # Backup docs/rfc to timestamped folder under docs/rfc.backups
 backup-rfcs:
@@ -181,6 +184,17 @@ docker-build-ci:
 	GOBIN=$(PWD)/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
 	GOBIN=$(PWD)/bin go install golang.org/x/vuln/cmd/govulncheck@latest
 	GOBIN=$(PWD)/bin go install gotest.tools/gotestsum@latest
+
+# Build Tailwind CSS for Admin UI
+build-admin-css:
+	@set -euo pipefail; \
+	if ! command -v npx >/dev/null 2>&1; then echo "Error: npx not found. Install Node.js (>=18)" >&2; exit 1; fi; \
+	mkdir -p internal/adapter/httpserver/static; \
+	# Try @tailwindcss/cli (v4+), then legacy tailwindcss (v3) as last resort
+	(npx --yes @tailwindcss/cli@latest -i assets/tailwind.css -o internal/adapter/httpserver/static/admin.css --minify) \
+	|| (npx --yes -p @tailwindcss/cli@latest tailwindcss -i assets/tailwind.css -o internal/adapter/httpserver/static/admin.css --minify) \
+	|| (npm exec --yes @tailwindcss/cli@latest -- -i assets/tailwind.css -o internal/adapter/httpserver/static/admin.css --minify) \
+	|| (npx --yes tailwindcss@latest -i assets/tailwind.css -o internal/adapter/httpserver/static/admin.css --minify)
 
 # Security scan: gosec with SARIF output
 gosec-sarif:

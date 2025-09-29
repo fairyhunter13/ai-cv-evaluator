@@ -45,6 +45,16 @@ jobs:
         run: go mod download
       - name: Tools
         run: make tools
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build admin CSS
+        run: make build-admin-css
+      - name: Verify admin.css exists
+        run: |
+          test -f internal/adapter/httpserver/static/admin.css || {
+            echo "admin.css missing after build-admin-css" >&2; exit 1; }
       - name: Lint
         run: make lint
       - name: Vet
