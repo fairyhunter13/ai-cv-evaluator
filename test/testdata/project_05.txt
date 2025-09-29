@@ -1,0 +1,1 @@
+Scaling plan: shard by tenant, background jobs with backpressure, and rate limiting to protect queues.

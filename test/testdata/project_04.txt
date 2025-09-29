@@ -1,0 +1,1 @@
+Demonstrates sanitization against <script>alert('XSS')</script> and validates content type by sniffing.

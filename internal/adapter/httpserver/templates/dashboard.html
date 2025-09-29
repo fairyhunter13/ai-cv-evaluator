@@ -4,23 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI CV Evaluator - Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
 </head>
-<body class="bg-base-200 min-h-screen">
+<body class="bg-gray-50 min-h-screen">
     <div id="app">
         <!-- Navigation -->
-        <nav class="navbar bg-base-100 shadow-sm">
-            <div class="container mx-auto px-4">
-                <div class="flex-1">
-                    <a class="btn btn-ghost normal-case text-xl" href="/admin/">AI CV Evaluator Admin</a>
-                </div>
-                <div class="flex-none gap-2">
-                    <span class="hidden md:inline text-sm opacity-70">Welcome, {{.Username}}</span>
+        <nav class="bg-white shadow-sm">
+            <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+                <a class="text-xl font-semibold text-gray-800" href="/admin/">AI CV Evaluator Admin</a>
+                <div class="flex items-center gap-3">
+                    <span class="hidden md:inline text-sm text-gray-500">Welcome, {{.Username}}</span>
                     <form method="POST" action="/admin/logout" class="inline">
                         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                        <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+                        <button type="submit" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Logout</button>
                     </form>
                 </div>
             </div>
@@ -33,8 +31,8 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     
                     <!-- Upload Card -->
-                    <div class="card bg-base-100 shadow-xl">
-                        <div class="card-body">
+                    <div class="rounded-lg border bg-white p-6 shadow">
+                        <div>
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <svg class="h-8 w-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -49,14 +47,14 @@
                                 </div>
                             </div>
                             <div class="mt-5">
-                                <a href="/admin/upload" class="btn btn-primary w-full">Upload Files</a>
+                                <a href="/admin/upload" class="inline-flex w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">Upload Files</a>
                             </div>
                         </div>
                     </div>
 
                     <!-- Evaluate Card -->
-                    <div class="bg-white overflow-hidden shadow rounded-lg">
-                        <div class="px-4 py-5 sm:p-6">
+                    <div class="rounded-lg border bg-white p-6 shadow">
+                        <div>
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <svg class="h-8 w-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +69,7 @@
                                 </div>
                             </div>
                             <div class="mt-5">
-                                <a href="/admin/evaluate" class="btn btn-success w-full">Start Evaluation</a>
+                                <a href="/admin/evaluate" class="inline-flex w-full items-center justify-center rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700">Start Evaluation</a>
                             </div>
                         </div>
                     </div>
@@ -93,32 +91,12 @@
                                 </div>
                             </div>
                             <div class="mt-5">
-                                <a href="/admin/result" class="btn btn-primary w-full">View Results</a>
+                                <a href="/admin/result" class="inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">View Results</a>
                             </div>
                         </div>
                     </div>
 
-                    <!-- RAG Management Card -->
-                    <div class="bg-white overflow-hidden shadow rounded-lg">
-                        <div class="px-4 py-5 sm:p-6">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0">
-                                    <svg class="h-8 w-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
-                                    </svg>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">RAG Management</dt>
-                                        <dd class="text-lg font-medium text-gray-900">Manage Corpora</dd>
-                                    </dl>
-                                </div>
-                            </div>
-                            <div class="mt-5">
-                                <a href="/admin/rag" class="btn btn-warning w-full">Manage RAG</a>
-                            </div>
-                        </div>
-                    </div>
+                    
 
                     <!-- System Status Card -->
                     <div class="bg-white overflow-hidden shadow rounded-lg">
@@ -137,7 +115,7 @@
                                 </div>
                             </div>
                             <div class="mt-5">
-                                <a href="/metrics" target="_blank" class="btn btn-info w-full">View Metrics</a>
+                                <a href="/metrics" target="_blank" class="inline-flex w-full items-center justify-center rounded-md bg-sky-600 px-4 py-2 text-white hover:bg-sky-700">View Metrics</a>
                             </div>
                         </div>
                     </div>
@@ -159,8 +137,8 @@
                                 </div>
                             </div>
                             <div class="mt-5 space-y-2">
-                                <a href="http://localhost:3000" target="_blank" class="btn btn-error w-full btn-sm">Grafana</a>
-                                <a href="http://localhost:16686" target="_blank" class="btn btn-neutral w-full btn-sm">Jaeger Tracing</a>
+                                <a href="http://localhost:3000" target="_blank" class="inline-flex w-full items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-white hover:bg-rose-700 text-sm">Grafana</a>
+                                <a href="http://localhost:16686" target="_blank" class="inline-flex w-full items-center justify-center rounded-md bg-gray-700 px-4 py-2 text-white hover:bg-gray-800 text-sm">Jaeger Tracing</a>
                             </div>
                         </div>
                     </div>

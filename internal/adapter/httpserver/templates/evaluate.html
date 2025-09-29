@@ -4,25 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Start Evaluation - AI CV Evaluator</title>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
  </head>
- <body class="bg-base-200 min-h-screen">
+ <body class="bg-gray-50 min-h-screen">
     <div id="app">
         <!-- Navigation -->
-        <nav class="navbar bg-base-100 shadow-sm">
-            <div class="container mx-auto px-4">
-                <div class="flex-1">
-                    <a class="btn btn-ghost normal-case text-xl" href="/admin/">AI CV Evaluator Admin</a>
-                    <span class="mx-2 opacity-50">/</span>
-                    <span class="font-medium">Evaluate</span>
+        <nav class="bg-white shadow-sm">
+            <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center">
+                    <a class="text-xl font-semibold text-gray-800" href="/admin/">AI CV Evaluator Admin</a>
+                    <span class="mx-2 text-gray-400">/</span>
+                    <span class="font-medium text-gray-700">Evaluate</span>
                 </div>
-                <div class="flex-none gap-2">
-                    <span class="hidden md:inline text-sm opacity-70">{{.Username}}</span>
+                <div class="flex items-center gap-3">
+                    <span class="hidden md:inline text-sm text-gray-500">{{.Username}}</span>
                     <form method="POST" action="/admin/logout" class="inline">
                         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                        <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+                        <button type="submit" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Logout</button>
                     </form>
                 </div>
             </div>
@@ -68,33 +68,33 @@
                         <!-- Document IDs -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label for="cv_id" class="block text-sm font-medium">CV ID</label>
+                                <label for="cv_id" class="block text-sm font-medium text-gray-700">CV ID</label>
                                 <input type="text" id="cv_id" v-model="form.cv_id"
-                                       class="input input-bordered w-full"
+                                       class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                        placeholder="Enter CV upload ID" required>
                             </div>
                             <div>
-                                <label for="project_id" class="block text-sm font-medium">Project ID</label>
+                                <label for="project_id" class="block text-sm font-medium text-gray-700">Project ID</label>
                                 <input type="text" id="project_id" v-model="form.project_id"
-                                       class="input input-bordered w-full"
+                                       class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                        placeholder="Enter project upload ID" required>
                             </div>
                         </div>
 
                         <!-- Job Description -->
                         <div>
-                            <label for="job_description" class="block text-sm font-medium">Job Description</label>
+                            <label for="job_description" class="block text-sm font-medium text-gray-700">Job Description</label>
                             <textarea id="job_description" v-model="form.job_description" rows="8"
-                                      class="textarea textarea-bordered w-full"
+                                      class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                       placeholder="Paste the job description here..." required></textarea>
                             <p class="mt-2 text-sm opacity-60">Provide the job description to match the CV against</p>
                         </div>
 
                         <!-- Study Case Brief -->
                         <div>
-                            <label for="study_case_brief" class="block text-sm font-medium">Study Case Brief</label>
+                            <label for="study_case_brief" class="block text-sm font-medium text-gray-700">Study Case Brief</label>
                             <textarea id="study_case_brief" v-model="form.study_case_brief" rows="6"
-                                      class="textarea textarea-bordered w-full"
+                                      class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                       placeholder="Provide the study case brief for project evaluation..." required></textarea>
                             <p class="mt-2 text-sm opacity-60">Brief description of the project requirements and evaluation criteria</p>
                         </div>
@@ -111,25 +111,23 @@
                             
                             <div v-show="showAdvanced" class="space-y-4">
                                 <div>
-                                    <label for="idempotency_key" class="block text-sm font-medium">Idempotency Key (Optional)</label>
+                                    <label for="idempotency_key" class="block text-sm font-medium text-gray-700">Idempotency Key (Optional)</label>
                                     <input type="text" id="idempotency_key" v-model="form.idempotency_key"
-                                           class="input input-bordered w-full"
+                                           class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                            placeholder="Leave empty to generate automatically">
                                     <p class="mt-2 text-sm opacity-60">Use same key to prevent duplicate evaluations</p>
                                 </div>
-                                <div class="form-control">
-                                    <label class="label cursor-pointer">
-                                        <span class="label-text">Use two-pass LLM processing (more accurate but slower)</span>
-                                        <input type="checkbox" id="use_two_pass" v-model="form.use_two_pass" class="toggle toggle-primary" />
-                                    </label>
+                                <div class="flex items-center justify-between">
+                                    <label for="use_two_pass" class="text-sm text-gray-700">Use two-pass LLM processing (more accurate but slower)</label>
+                                    <input type="checkbox" id="use_two_pass" v-model="form.use_two_pass" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                                 </div>
                             </div>
                         </div>
 
                         <!-- Submit Button -->
                         <div class="flex justify-end space-x-3">
-                            <a href="/admin/" class="btn btn-ghost">Cancel</a>
-                            <button type="submit" :disabled="!isFormValid || evaluating" class="btn btn-success">
+                            <a href="/admin/" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</a>
+                            <button type="submit" :disabled="!isFormValid || evaluating" class="inline-flex items-center rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:opacity-50">
                                 <span v-if="evaluating" class="flex items-center">
                                     <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

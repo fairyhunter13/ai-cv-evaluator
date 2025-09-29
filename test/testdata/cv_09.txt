@@ -1,0 +1,1 @@
+Cloud-native: Helm, Kustomize, service meshes; secrets via SOPS + age and Vault.

@@ -1,0 +1,1 @@
+Hardens configuration: least privilege, CSRF protection, content security policy, HSTS, TLS.

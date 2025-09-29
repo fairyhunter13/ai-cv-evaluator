@@ -203,23 +203,4 @@ func (a *AdminServer) ResultPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// RAGManagementPage renders the RAG management interface
-func (a *AdminServer) RAGManagementPage(w http.ResponseWriter, r *http.Request) {
-	session, _ := r.Context().Value(sessionKey{}).(*SessionData)
-	
-	data := struct {
-		Username  string
-		CSRFToken string
-	}{
-		Username:  session.Username,
-		CSRFToken: "", // Remove CSRF for now
-	}
-
-	w.Header().Set("Content-Type", "text/html")
-	if err := a.templates.ExecuteTemplate(w, "rag.html", data); err != nil {
-		http.Error(w, "Template error", http.StatusInternalServerError)
-		return
-	}
-}
-
 // API proxy and RAG management endpoints removed per requirements

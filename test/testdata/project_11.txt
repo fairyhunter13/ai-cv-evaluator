@@ -1,0 +1,1 @@
+Tiny project report focusing on configuration and robustness. Covers retries, timeouts, and graceful shutdown.

@@ -1,9 +1,34 @@
-- [x] Integration tests removed/disabled; E2E only.
-  - Evidence: `internal/usecase/integration_test.go` and `internal/integration/containers_test.go` marked `//go:build ignore`.
-### Docs Maintenance (New)
-- [x] README: Go version updated to 1.24+.
-- [x] Testing Rules: E2E terminology clarified; UI E2E policy added.
-- [x] Dev rules: Never modify local `.env`; use SOPS with `SOPS_AGE_KEY_FILE` and GitHub Secrets in CI.
+## Latest TODOs and Change Log (2025-09-29)
+
+### Completed
+
+- Remove RAG Admin functionality (UI + server):
+  - Deleted `internal/adapter/httpserver/templates/rag.html`.
+  - Removed RAG card/link in `internal/adapter/httpserver/templates/dashboard.html`.
+  - Removed unused `RAGManagementPage()` from `internal/adapter/httpserver/admin_handlers.go`.
+  - Updated `windsurf/rules/15-admin-and-observability-dashboards.md` to drop the RAG Admin section.
+- E2E tests optimized (<10s fast mode) and pruned:
+  - Deleted heavy/unused tests: `test/e2e/comprehensive_e2e_test.go`, `test/e2e/live_e2e_test.go`, `test/e2e/rag_retrieval_e2e_test.go`, `test/e2e/security_e2e_test.go`.
+  - Kept/added fast smoke tests: `test/e2e/happy_path_e2e_test.go`, `test/e2e/smoke_random_e2e_test.go` with helpers.
+  - `Makefile`: `test-e2e` runs with `E2E_FAST=1` and `-timeout=10s`.
+- Add diverse test data pairs:
+  - Added 10 CV/Project pairs under `test/testdata/` (`cv_01.txt`..`cv_10.txt`, `project_01.txt`..`project_10.txt`).
+- Enforce quality gates in Deploy workflow:
+  - Added `quality-gates` job in `.github/workflows/deploy.yml` to run `make lint` and `make ci-test` (>= 80% coverage) before `deploy`.
+- Cleanup SQL fix:
+  - `internal/adapter/repo/postgres/cleanup.go`: Use CTE `DELETE ... RETURNING 1` + `SELECT count(*) FROM del` to avoid aggregates in RETURNING.
+- Secrets docs cleanup:
+  - `docs/ops/github-optional-secrets.md`: Removed Slack and OSS Index sections; added how-to obtain Semgrep, Snyk, and FOSSA keys.
+  - `docs/ops/github-secrets.md`: Clarified required secrets; aligned to actual workflow usage.
+- Branding hygiene:
+  - `docs/project.md`: Removed company name references; generalized sections and benefits.
+
+### Next E2E Work
+
+- [ ] Validate both fast tests run via `make test-e2e` (≤10s locally).
+- [ ] Add 2–3 more negative-case inputs to `test/testdata/` (empty CV, noisy CV, malformed encoding) and include in smoke selection.
+- [ ] Document E2E env knobs in `README.md` (`E2E_FAST`, client timeout) and expected runtime.
+- [ ] Consider nightly long E2E (separate workflow) if desired.
   - Evidence: `windsurf/rules/02-go-dev-setup-and-tooling.md` updated.
 
 # AI CV Evaluator — Comprehensive TODOs
@@ -15,7 +40,7 @@ Status legend:
 
 This plan aligns with `project.md` (API and evaluation pipeline requirements) and all guidelines under `windsurf/rules/`.
 
-Last updated: 2025-09-28 09:40 +07
+Last updated: 2025-09-29 14:37 +07
 
 ---
 
