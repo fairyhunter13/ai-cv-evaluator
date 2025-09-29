@@ -1,11 +1,11 @@
-//go:build adminui
-
 package httpserver_test
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"net/url"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -42,15 +42,17 @@ func Test_Admin_Login_Flow(t *testing.T) {
 
 	// POST /admin/login wrong creds => 303
 	rw2 := httptest.NewRecorder()
-	req2 := httptest.NewRequest("POST", "/admin/login", nil)
-	req2.Form = map[string][]string{"username": {"wrong"}, "password": {"creds"}}
+	form2 := url.Values{"username": {"wrong"}, "password": {"creds"}}
+	req2 := httptest.NewRequest("POST", "/admin/login", strings.NewReader(form2.Encode()))
+	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.ServeHTTP(rw2, req2)
 	if rw2.Result().StatusCode != http.StatusSeeOther { t.Fatalf("wrong creds status: %d", rw2.Result().StatusCode) }
 
 	// POST /admin/login correct creds => 303 and sets cookie
 	rw3 := httptest.NewRecorder()
-	req3 := httptest.NewRequest("POST", "/admin/login", nil)
-	req3.Form = map[string][]string{"username": {"admin"}, "password": {"secret"}}
+	form3 := url.Values{"username": {"admin"}, "password": {"secret"}}
+	req3 := httptest.NewRequest("POST", "/admin/login", strings.NewReader(form3.Encode()))
+	req3.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.ServeHTTP(rw3, req3)
 	if rw3.Result().StatusCode != http.StatusSeeOther { t.Fatalf("correct creds status: %d", rw3.Result().StatusCode) }
 	cookies := rw3.Result().Cookies()

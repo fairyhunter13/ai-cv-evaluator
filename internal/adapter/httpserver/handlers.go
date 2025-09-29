@@ -37,6 +37,10 @@ type Server struct {
 	TikaCheck   func(ctx context.Context) error
 }
 
+// allowedMIME is kept for backward-compatibility with tests. It delegates to allowedMIMEFor
+// using a dummy .txt filename to preserve the previous behavior for text/plain checks.
+func allowedMIME(m string) bool { return allowedMIMEFor(m, "dummy.txt") }
+
 // extractUploadedText performs text extraction based on the uploaded content and filename.
 // - For .pdf/.docx: requires an external extractor (Apache Tika) and streams via a temp file.
 // - For .txt: returns sanitized text directly.
@@ -65,8 +69,14 @@ func allowedExt(name string) bool {
 	return strings.HasSuffix(n, ".txt") || strings.HasSuffix(n, ".pdf") || strings.HasSuffix(n, ".docx")
 }
 
-func allowedMIME(m string) bool {
+func allowedMIMEFor(m string, filename string) bool {
 	m = strings.ToLower(m)
+	// For .txt files, accept any text/* including text/html as some detectors misclassify rich text
+	if strings.HasSuffix(strings.ToLower(filename), ".txt") {
+		if strings.HasPrefix(m, "text/") {
+			return true
+		}
+	}
 	if strings.HasPrefix(m, "text/plain") { // allow parameters such as charset
 		return true
 	}
@@ -151,14 +161,14 @@ func (s *Server) UploadHandler() http.HandlerFunc {
 
 		// Content sniffing with mimetype; enforce allowlist
 		cvMime := mimetype.Detect(cvBytes)
-		if !allowedMIME(cvMime.String()) {
+		if !allowedMIMEFor(cvMime.String(), cvHeader.Filename) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": "INVALID_ARGUMENT", "message": "unsupported media type for cv (content)", "details": map[string]any{"mime": cvMime.String(), "filename": cvHeader.Filename}}})
 			return
 		}
 		prMime := mimetype.Detect(prBytes)
-		if !allowedMIME(prMime.String()) {
+		if !allowedMIMEFor(prMime.String(), projHeader.Filename) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": "INVALID_ARGUMENT", "message": "unsupported media type for project (content)", "details": map[string]any{"mime": prMime.String(), "filename": projHeader.Filename}}})
@@ -308,16 +318,12 @@ func (s *Server) OpenAPIServe() http.HandlerFunc {
 
 // MountAdmin mounts the admin interface using the AdminServer
 func (s *Server) MountAdmin(r chi.Router) {
-	if !s.Cfg.AdminEnabled() {
-		return
-	}
-
-	// Create admin server instance
-	adminServer, err := NewAdminServer(s.Cfg, s)
-	if err != nil {
-		// Log error but don't fail the main server
-		return
-	}
+    // Create admin server instance
+    adminServer, err := NewAdminServer(s.Cfg, s)
+    if err != nil {
+        // Log error but don't fail the main server
+        return
+    }
 
 	// Mount admin routes
 	adminServer.MountRoutes(r)

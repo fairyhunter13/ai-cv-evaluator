@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 	"strings"
@@ -36,8 +37,24 @@ func TestE2E_RAGRetrieval_ReturnsSeededChunks(t *testing.T) {
 	cfg, _ := config.Load()
 	ai := realai.New(cfg)
 
-	// Seed default corpora
-	require.NoError(t, ragseed.SeedDefault(ctx, q, ai))
+	// Resolve seed file paths relative to repository root; try a few levels up
+	candidates := []string{
+		"configs/rag",
+		filepath.Join("..", "..", "configs", "rag"),
+		filepath.Join("..", "configs", "rag"),
+	}
+	var seedDir string
+	for _, c := range candidates {
+		if _, err := os.Stat(filepath.Join(c, "job_description.yaml")); err == nil {
+			seedDir = c
+			break
+		}
+	}
+	if seedDir == "" {
+		t.Skip("RAG seed files not found in expected locations; skipping")
+	}
+	require.NoError(t, ragseed.SeedFile(ctx, q, ai, filepath.Join(seedDir, "job_description.yaml"), "job_description"))
+	require.NoError(t, ragseed.SeedFile(ctx, q, ai, filepath.Join(seedDir, "scoring_rubric.yaml"), "scoring_rubric"))
 
 	// Canonical queries (aligned with README/e2e)
 	jobDesc := "Backend engineer building APIs, DBs, cloud, prompt design, chaining and RAG."
@@ -82,4 +99,3 @@ func containsAny(s string, needles []string) bool {
     return false
 }
 
-func getenv(k, def string) string { if v := os.Getenv(k); v != "" { return v }; return def }

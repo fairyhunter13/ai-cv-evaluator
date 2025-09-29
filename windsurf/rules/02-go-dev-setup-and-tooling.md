@@ -36,10 +36,10 @@ Provide a productive Go developer experience with strict linting, formatting, an
   - `DB_URL` (Postgres/SQLite DSN)
   - `REDIS_URL` (for queue)
   - `AI_PROVIDER` (default `openrouter`)
-  - `OPENROUTER_API_KEY` (required for live chat when using OpenRouter; if absent, use mock mode)
+  - `OPENROUTER_API_KEY` (required for live chat when using OpenRouter)
   - `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
-  - `CHAT_MODEL` (default `openai/gpt-4o-mini` via OpenRouter)
-  - `OPENAI_API_KEY` (preferred for embeddings; if absent, fallback to OpenRouter or mock)
+  - `CHAT_MODEL` (default `openrouter/auto` via OpenRouter)
+  - `OPENAI_API_KEY` (required for embeddings)
   - `OPENAI_BASE_URL` (default `https://api.openai.com/v1`)
   - `EMBEDDINGS_MODEL` (default `text-embedding-3-small`)
   - `QDRANT_URL`, `QDRANT_API_KEY`

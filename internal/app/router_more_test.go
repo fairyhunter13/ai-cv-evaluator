@@ -41,8 +41,9 @@ func TestBuildRouter_Healthz_And_Readyz(t *testing.T) {
 }
 
 func TestEnsureDefaultCollections_NoPanic(t *testing.T) {
+	t.Helper()
 	// Minimal Qdrant endpoints to satisfy EnsureCollection GET calls
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()

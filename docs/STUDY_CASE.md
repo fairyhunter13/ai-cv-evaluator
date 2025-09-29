@@ -47,9 +47,9 @@ results (job_id, cv_match_rate, cv_feedback, project_score, project_feedback, ov
 ### LLM Integration
 
 #### Provider Rationale
-- **Primary**: OpenRouter for model diversity and fallback options
-- **Secondary**: OpenAI GPT-4 for high-quality evaluations
-- **Mock Mode**: Deterministic responses for testing and development
+- **Primary**: OpenRouter for chat/completions (default model: `openrouter/auto` unless overridden)
+- **Embeddings**: OpenAI (e.g., `text-embedding-3-small`) for RAG when `OPENAI_API_KEY` is set
+  - Note: E2E and live testing use real providers only; no mock/stub.
 
 #### Prompt Design
 1. **System Prompts**: Structured JSON-only outputs with clear evaluation criteria
@@ -101,7 +101,7 @@ Project Text → Extract Deliverables → Match with Rubric → Score (1-10)
 5. **Duplicate Submissions**: Idempotency keys prevent double processing
 
 #### System Scenarios
-1. **LLM Provider Outage**: Fallback to mock mode or secondary provider
+1. **LLM Provider Outage**: Degrade gracefully (retry/backoff); optionally switch models/providers within OpenRouter. No mock fallback.
 2. **Database Connection Loss**: Health checks and circuit breakers
 3. **Queue Overflow**: Rate limiting and backpressure
 4. **Memory Pressure**: Streaming for large files, bounded caches
@@ -120,8 +120,7 @@ Project Text → Extract Deliverables → Match with Rubric → Score (1-10)
 1. **Clean Architecture**: Clear boundaries made testing and maintenance easier
 2. **OpenAPI-First**: Contract-driven development prevented API drift
 3. **Observability**: Comprehensive metrics and tracing aided debugging
-4. **Mock Mode**: Enabled offline development and deterministic testing
-5. **RAG Implementation**: Improved evaluation quality with context injection
+4. **RAG Implementation**: Improved evaluation quality with context injection (when embeddings available)
 
 #### What Didn't Work
 1. **Initial Token Limits**: Had to implement chunking for large documents

@@ -62,7 +62,7 @@ See `api/openapi.yaml` for the complete schema. Examples:
 - Text extraction is out-of-process using Apache Tika container.
 - Observability: OpenTelemetry traces + Prometheus metrics.
 
-See `ARCHITECTURE.md` for diagrams and deeper details.
+See `docs/ARCHITECTURE.md` for diagrams and deeper details.
 
 ## Secrets and SOPS
 
@@ -85,7 +85,7 @@ This repository uses SOPS (with age) to encrypt sensitive files so they can be c
 ### Decrypt
 - Project brief:
   ```bash
-  sops -d --input-type binary --output-type binary project.md.sops > project.md
+  sops -d --input-type binary --output-type binary secrets/project.md.sops > docs/project.md
   ```
 - Encrypted env:
   ```bash
@@ -94,14 +94,14 @@ This repository uses SOPS (with age) to encrypt sensitive files so they can be c
   ```
 
 ### Edit and re-encrypt
-For `project.md.sops` (binary), decrypt to plaintext, edit, then re-encrypt:
+For `secrets/project.md.sops` (binary), decrypt to plaintext, edit, then re-encrypt:
 ```bash
 # decrypt to plaintext, edit it
-sops -d --input-type binary --output-type binary project.md.sops > project.md
+sops -d --input-type binary --output-type binary secrets/project.md.sops > docs/project.md
 
-# re-encrypt to .sops using your age recipient
-sops --encrypt --age "$(age-keygen -y ~/.config/sops/age/keys.txt)" \
-  --input-type binary --output-type binary project.md > project.md.sops
+# re-encrypt to .sops using your age key (or use Makefile target for .enc)
+SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
+  sops --encrypt --input-type binary --output-type binary docs/project.md > secrets/project.md.sops
 ```
 
 For `.env.sops.yaml` / `.env.production.sops.yaml` (YAML), you can edit in place and SOPS will re-encrypt on save:
@@ -175,3 +175,8 @@ Environment variables (see `.env.sample`):
 - Extractor: `TIKA_URL`
 - Observability: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`
 - Limits & CORS: `MAX_UPLOAD_MB`, `RATE_LIMIT_PER_MIN`, `CORS_ALLOW_ORIGINS`
+
+Notes:
+- Chat model default is `openrouter/auto` when `CHAT_MODEL` is unset.
+- Embeddings are performed via OpenAI; set `OPENAI_API_KEY` and `EMBEDDINGS_MODEL` (default `text-embedding-3-small`). If `OPENAI_API_KEY` is not set, embeddings and RAG are skipped.
+- E2E tests run against live providers (no stub/mock). Ensure `OPENROUTER_API_KEY` (and `OPENAI_API_KEY` for RAG) are present before running E2E.

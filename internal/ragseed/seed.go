@@ -2,6 +2,7 @@
 package ragseed
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -56,14 +57,34 @@ func SeedFile(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, path 
 		if len(ls) == 0 { return fmt.Errorf("no texts to seed in %s", path) }
 		return upsertAll(ctx, q, ai, collection, ls, nil)
 	}
-	texts := make([]string, 0, len(doc.Items)+len(doc.Texts)+len(doc.Data))
-	if len(doc.Items) > 0 { texts = append(texts, doc.Items...) }
-	if len(doc.Texts) > 0 { texts = append(texts, doc.Texts...) }
+	// Build metadata map first
 	meta := make(map[string]ragYAMLItem)
-	for _, it := range doc.Data { if s := strings.TrimSpace(it.Text); s != "" { texts = append(texts, s); meta[s] = it } }
-	if len(texts) == 0 {
-		var ls []string
-		if err := yaml.Unmarshal(b, &ls); err == nil { texts = append(texts, ls...) }
+	for _, it := range doc.Data {
+		if s := strings.TrimSpace(it.Text); s != "" { meta[s] = it }
+	}
+	// Deduplicate texts, preferring entries that have metadata
+	seen := make(map[string]struct{})
+	texts := make([]string, 0, len(doc.Items)+len(doc.Texts)+len(doc.Data))
+	// 1) Add metadata-backed texts first (preferred)
+	for _, it := range doc.Data {
+		if s := strings.TrimSpace(it.Text); s != "" {
+			if _, ok := seen[s]; !ok {
+				texts = append(texts, s)
+				seen[s] = struct{}{}
+			}
+		}
+	}
+	// 2) Add Items
+	for _, s := range doc.Items {
+		s = strings.TrimSpace(s)
+		if s == "" { continue }
+		if _, ok := seen[s]; !ok { texts = append(texts, s); seen[s] = struct{}{} }
+	}
+	// 3) Add Texts
+	for _, s := range doc.Texts {
+		s = strings.TrimSpace(s)
+		if s == "" { continue }
+		if _, ok := seen[s]; !ok { texts = append(texts, s); seen[s] = struct{}{} }
 	}
 	if len(texts) == 0 { return fmt.Errorf("no texts to seed in %s", path) }
 
@@ -91,6 +112,7 @@ func upsertAll(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, coll
 		vecs, err := ai.Embed(ctx, chunk)
 		if err != nil { return fmt.Errorf("embed: %w", err) }
 		payloads := make([]map[string]any, len(chunk))
+		ids := make([]any, len(chunk))
 		for j := range chunk {
 			p := map[string]any{"text": chunk[j], "source": collection}
 			if meta != nil {
@@ -101,8 +123,11 @@ func upsertAll(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, coll
 				}
 			}
 			payloads[j] = p
+			// Deterministic ID to avoid duplicate points on re-ingestion
+			sum := sha256.Sum256([]byte(collection + ":" + strings.TrimSpace(chunk[j])))
+			ids[j] = fmt.Sprintf("%x", sum[:])
 		}
-		if err := q.UpsertPoints(ctx, collection, vecs, payloads, nil); err != nil {
+		if err := q.UpsertPoints(ctx, collection, vecs, payloads, ids); err != nil {
 			return fmt.Errorf("qdrant upsert: %w", err)
 		}
 	}

@@ -252,3 +252,39 @@ func parseUint32(s string) (uint32, error) {
 	}
 	return uint32(x), nil
 }
+
+// AdminAPIGuard returns a middleware that protects API endpoints.
+// If admin credentials are configured (AdminEnabled), it accepts either:
+// - A valid session cookie created by the Admin UI login, or
+// - HTTP Basic Auth credentials matching ADMIN_USERNAME and ADMIN_PASSWORD.
+// If admin credentials are not configured, the middleware is a no-op.
+func (s *Server) AdminAPIGuard() func(http.Handler) http.Handler {
+    // Fast path: if admin creds are not configured, do nothing
+    if !s.Cfg.AdminEnabled() {
+        return func(next http.Handler) http.Handler { return next }
+    }
+    sm := NewSessionManager(s.Cfg)
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            // 1) Accept valid session cookie
+            if c, err := r.Cookie("session"); err == nil && c.Value != "" {
+                if _, err := sm.ValidateSession(c.Value); err == nil {
+                    next.ServeHTTP(w, r)
+                    return
+                }
+            }
+            // 2) Fallback to HTTP Basic Auth
+            if u, p, ok := r.BasicAuth(); ok {
+                // Constant-time compare
+                if subtle.ConstantTimeCompare([]byte(u), []byte(s.Cfg.AdminUsername)) == 1 &&
+                   subtle.ConstantTimeCompare([]byte(p), []byte(s.Cfg.AdminPassword)) == 1 {
+                    next.ServeHTTP(w, r)
+                    return
+                }
+            }
+            // Unauthorized
+            w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"; charset="UTF-8"`)
+            http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+        })
+    }
+}

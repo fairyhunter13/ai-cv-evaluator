@@ -1,25 +1,19 @@
 # SOPS configuration: standardize recipients and encrypted files
 creation_rules:
-  # Encrypted environment file (YAML), committed as .env.sops.yaml
-  - path_regex: '(^|.*/)\.env\.sops\.ya?ml$'
+  # Preferred location for encrypted artifacts (any filename under secrets/)
+  - path_regex: '(^|.*/)secrets/.*$'
     key_groups:
       - age:
           - age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd
 
-  # Encrypted secrets files by convention
-  - path_regex: '(^|.*/)secrets\.sops\.(ya?ml|json)$'
-    key_groups:
-      - age:
-          - age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd
-
-  # Encrypted project brief artifact
-  - path_regex: '(^|.*/)project\.md\.sops$'
-    key_groups:
-      - age:
-          - age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd
-
-  # Catch-all for other *.sops and *.sops.{yaml,json}
+  # Conventional encrypted files: *.sops or *.sops.{yaml,json}
   - path_regex: '(^|.*/).*\.sops(\.(ya?ml|json))?$'
+    key_groups:
+      - age:
+          - age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd
+
+  # Fallback: apply age recipient to any file if no rule above matched
+  - path_regex: '(^|.*/).+'
     key_groups:
       - age:
           - age1pzks4htzmqe2jacn9r076uqvdpgjj8u4cw5vsgxsxj5mlcthmcxqca2ejd
