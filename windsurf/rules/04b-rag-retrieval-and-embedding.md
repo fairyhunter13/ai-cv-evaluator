@@ -10,10 +10,8 @@ Define retrieval strategy, embeddings, chunking, and Qdrant collections for dete
 - Endpoint (OpenAI-compatible): `POST ${OPENAI_BASE_URL}/embeddings`
 - Headers: `Authorization: Bearer ${OPENAI_API_KEY}`, `Content-Type: application/json`.
 
-- Provider preference order:
-  1) OpenAI (when `OPENAI_API_KEY` set)
-  2) OpenRouter (when `OPENROUTER_API_KEY` set)
-  3) Deterministic mock mode (CI/offline)
+- Provider requirement:
+  - OpenAI must be configured via `OPENAI_API_KEY`. If not set, embeddings are unavailable and RAG will be skipped.
 
 # Frugality & Cost Controls (Embeddings)
 - De-duplicate texts before embedding (hash-based) and cache vectors by content hash.
@@ -58,5 +56,4 @@ Define retrieval strategy, embeddings, chunking, and Qdrant collections for dete
 - Merge retrieval results from static corpora with ephemeral embeddings to build the final prompt context.
 
 # Definition of Done (RAG)
-- Retrieval returns relevant chunks for both CV and project tasks in e2e tests.
-- Deterministic results in mock mode across runs.
+- Retrieval returns relevant chunks for both CV and project tasks in E2E tests using live providers.

@@ -1,6 +1,11 @@
 .env
 .env.production
-project.md
+.env.bak
+docs/project.md
+RFC.md
+RFC-Submission.md
+docs/rfc/RFC.md
+docs/rfc/RFC-Submission.md
 coverage*.out
 coverage.html
 coverage.func.txt

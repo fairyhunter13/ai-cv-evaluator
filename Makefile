@@ -9,7 +9,8 @@ SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 
 .PHONY: all deps fmt lint vet vuln test test-e2e cover run build docker-build docker-build-ci docker-run migrate tools generate seed-rag \
 	encrypt-env decrypt-env encrypt-env-production decrypt-env-production verify-project-sops encrypt-project decrypt-project \
-	ci-test ci-e2e openapi-validate build-matrix verify-test-placement vendor-redismock
+	encrypt-rfcs decrypt-rfcs \
+	ci-test ci-e2e openapi-validate build-matrix verify-test-placement vendor-redismock gosec-sarif license-scan
 
 all: fmt lint vet test
 
@@ -29,54 +30,101 @@ all: fmt lint vet test
 
 # --- Secrets (SOPS) -----------------------------------------------------------
 
-# Encrypt .env -> .env.sops.yaml using SOPS + age
+# Encrypt .env -> secrets/env.sops.yaml (YAML) using SOPS + age
 encrypt-env:
 	@[ -f .env ] || (echo "Error: .env not found. Create it first (you can copy from .env.sample)." && exit 1)
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --input-type dotenv --output-type yaml --encrypt .env > .env.sops.yaml
-	@echo "Encrypted .env -> .env.sops.yaml"
+	@mkdir -p secrets
+	cp .env secrets/env.sops.yaml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --input-type dotenv --output-type yaml --encrypt --in-place secrets/env.sops.yaml
+	@echo "Encrypted .env -> secrets/env.sops.yaml"
 
-# Decrypt .env.sops.yaml -> .env
+# Decrypt secrets/env.sops.yaml -> .env
 decrypt-env:
-	@[ -f .env.sops.yaml ] || (echo "Error: .env.sops.yaml not found." && exit 1)
+	@[ -f secrets/env.sops.yaml ] || (echo "Error: secrets/env.sops.yaml not found." && exit 1)
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops -d .env.sops.yaml > .env
-	@echo "Decrypted .env.sops.yaml -> .env"
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type yaml --output-type dotenv secrets/env.sops.yaml > .env
+	@echo "Decrypted secrets/env.sops.yaml -> .env"
 
+# Encrypt .env.production -> secrets/env.production.sops.yaml (YAML) using SOPS + age
 encrypt-env-production:
 	@[ -f .env.production ] || (echo "Error: .env.production not found. Create it first (you can copy from .env.sample and adjust for prod)." && exit 1)
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --input-type dotenv --output-type yaml --encrypt .env.production > .env.production.sops.yaml
-	@echo "Encrypted .env.production -> .env.production.sops.yaml"
+	@mkdir -p secrets
+	cp .env.production secrets/env.production.sops.yaml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --input-type dotenv --output-type yaml --encrypt --in-place secrets/env.production.sops.yaml
+	@echo "Encrypted .env.production -> secrets/env.production.sops.yaml"
 
+# Decrypt secrets/env.production.sops.yaml -> .env.production
 decrypt-env-production:
-	@[ -f .env.production.sops.yaml ] || (echo "Error: .env.production.sops.yaml not found." && exit 1)
+	@[ -f secrets/env.production.sops.yaml ] || (echo "Error: secrets/env.production.sops.yaml not found." && exit 1)
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops -d .env.production.sops.yaml > .env.production
-	@echo "Decrypted .env.production.sops.yaml -> .env.production"
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type yaml --output-type dotenv secrets/env.production.sops.yaml > .env.production
+	@echo "Decrypted secrets/env.production.sops.yaml -> .env.production"
 
-
-# Encrypt project.md -> project.md.sops (binary-safe)
+# Encrypt docs/project.md -> secrets/project.md.enc (Binary)
 encrypt-project:
-	@[ -f project.md ] || (echo "Error: project.md not found." && exit 1)
+	@[ -f docs/project.md ] || (echo "Error: docs/project.md not found." && exit 1)
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops -e project.md > project.md.sops
-	@echo "Encrypted project.md -> project.md.sops"
+	@mkdir -p secrets
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary docs/project.md > secrets/project.md.enc
+	@echo "Encrypted docs/project.md -> secrets/project.md.enc"
 
-# Decrypt project.md.sops -> project.md
+# Decrypt secrets/project.md.enc -> docs/project.md
 decrypt-project:
-	@[ -f project.md.sops ] || (echo "Error: project.md.sops not found." && exit 1)
+	@[ -f secrets/project.md.enc ] || (echo "Error: secrets/project.md.enc not found. Run 'make encrypt-project' first." && exit 1)
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops -d project.md.sops > project.md
-	@echo "Decrypted project.md.sops -> project.md"
+	@mkdir -p docs
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary secrets/project.md.enc > docs/project.md
+	@echo "Decrypted secrets/project.md.enc -> docs/project.md"
 
 # Verify decrypted project equals source file (no diff)
+# Use secrets/project.md.sops as the canonical encrypted artifact for project.md
 verify-project-sops:
-	@[ -f project.md.sops ] || (echo "Error: project.md.sops not found." && exit 1)
+	@[ -f secrets/project.md.sops ] || (echo "Error: secrets/project.md.sops not found." && exit 1)
+	@mkdir -p docs
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops -d secrets/project.md.sops > docs/project.dec.md
+	@diff -u docs/project.md docs/project.dec.md && echo "OK: decrypted matches original" || (echo "Mismatch between docs/project.md and decrypted secrets/project.md.sops" && rm -f docs/project.dec.md && exit 1)
+	@rm -f docs/project.dec.md
+
+# Encrypt RFCs (docs/rfc/RFC.md and docs/rfc/RFC-Submission.md) -> secrets/rfc/*.sops (Binary)
+encrypt-rfcs:
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops -d project.md.sops > project.md.dec
-	@diff -u project.md project.md.dec && echo "OK: decrypted matches original" || (echo "Mismatch between project.md and decrypted project.md.sops" && rm -f project.md.dec && exit 1)
-	@rm -f project.md.dec
+	@mkdir -p secrets/rfc docs/rfc
+	@set -e; \
+	RFC_SRC=""; \
+	if [ -f docs/rfc/RFC.md ]; then RFC_SRC=docs/rfc/RFC.md; elif [ -f RFC.md ]; then RFC_SRC=RFC.md; fi; \
+	if [ -n "$$RFC_SRC" ]; then \
+	  echo "Encrypting $$RFC_SRC -> secrets/rfc/RFC.md.sops"; \
+	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary "$$RFC_SRC" > secrets/rfc/RFC.md.sops; \
+	else \
+	  echo "Warning: RFC.md not found; skipping"; \
+	fi; \
+	RFC_SUB_SRC=""; \
+	if [ -f docs/rfc/RFC-Submission.md ]; then RFC_SUB_SRC=docs/rfc/RFC-Submission.md; elif [ -f RFC-Submission.md ]; then RFC_SUB_SRC=RFC-Submission.md; fi; \
+	if [ -n "$$RFC_SUB_SRC" ]; then \
+	  echo "Encrypting $$RFC_SUB_SRC -> secrets/rfc/RFC-Submission.md.sops"; \
+	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary "$$RFC_SUB_SRC" > secrets/rfc/RFC-Submission.md.sops; \
+	else \
+	  echo "Warning: RFC-Submission.md not found; skipping"; \
+	fi
+
+# Decrypt RFCs from secrets/rfc/*.sops -> docs/rfc/*.md
+decrypt-rfcs:
+	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
+	@mkdir -p docs/rfc
+	@if [ -f secrets/rfc/RFC.md.sops ]; then \
+	  echo "Decrypting secrets/rfc/RFC.md.sops -> docs/rfc/RFC.md"; \
+	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary secrets/rfc/RFC.md.sops > docs/rfc/RFC.md; \
+	else \
+	  echo "Warning: secrets/rfc/RFC.md.sops not found; skipping"; \
+	fi; \
+	if [ -f secrets/rfc/RFC-Submission.md.sops ]; then \
+	  echo "Decrypting secrets/rfc/RFC-Submission.md.sops -> docs/rfc/RFC-Submission.md"; \
+	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary secrets/rfc/RFC-Submission.md.sops > docs/rfc/RFC-Submission.md; \
+	else \
+	  echo "Warning: secrets/rfc/RFC-Submission.md.sops not found; skipping"; \
+	fi
 
  vuln:
 	govulncheck ./...
@@ -115,6 +163,18 @@ docker-build-ci:
 	GOBIN=$(PWD)/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
 	GOBIN=$(PWD)/bin go install golang.org/x/vuln/cmd/govulncheck@latest
 	GOBIN=$(PWD)/bin go install gotest.tools/gotestsum@latest
+
+# Security scan: gosec with SARIF output
+gosec-sarif:
+	@which gosec >/dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
+	$(GO) env GOPATH >/dev/null 2>&1 || true
+	$$(go env GOPATH)/bin/gosec -fmt sarif -out gosec-results.sarif ./... || true
+
+# License scanning via FOSSA CLI
+license-scan:
+	@which fossa >/dev/null 2>&1 || go install github.com/fossa-contrib/fossa-cli@latest
+	$(GO) mod download
+	$$(go env GOPATH)/bin/fossa analyze
 
  generate:
 	$(GO) generate ./...
@@ -166,21 +226,34 @@ vendor-redismock:
 
 ci-e2e:
 	@set -euo pipefail; \
-	docker compose -f docker-compose.yml up -d db redis qdrant tika; \
-	sleep 15; \
+	# Start all services including app so tests hit containerized server \
+	docker compose -f docker-compose.yml up -d --build; \
+	# Wait a bit for healthchecks to pass \
+	sleep 20; \
+	# Run migrations against local forwarded DB port \
 	DB_URL='postgres://postgres:postgres@localhost:5432/app?sslmode=disable' make migrate; \
-	# Load .env if present so local E2E runs mirror dev env; values can still be overridden below \
+	# Wait for app readiness endpoint to respond \
+	echo 'Waiting for app readiness...'; \
+	READY=0; \
+	for i in $$(seq 1 30); do \
+	  if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then \
+	    READY=1; echo 'App is ready.'; break; \
+	  fi; \
+	  echo "Attempt $$i: app not ready yet..."; \
+	  sleep 3; \
+	done; \
+	if [ "$$READY" -ne 1 ]; then \
+	  echo 'App did not become ready in time'; \
+	  docker compose -f docker-compose.yml logs --no-color --tail=200 app || true; \
+	  exit 1; \
+	fi; \
+	# Load .env for test process (ADMIN_*, OPENAI_*, OPENROUTER_*, etc.) \
 	set -a; [ -f .env ] && . ./.env || true; set +a; \
-	APP_ENV=dev \
-	DB_URL='postgres://postgres:postgres@localhost:5432/app?sslmode=disable' \
-	REDIS_URL='redis://localhost:6379' \
-	QDRANT_URL='http://localhost:6333' \
-	TIKA_URL='http://localhost:9998' \
-	$(GO) run ./cmd/server & \
-	SERVER_PID=$$!; \
-	sleep 5; \
-	timeout 300s $(GO) test -tags=e2e -v -timeout=5m ./test/e2e/... || TEST_EXIT_CODE=$$?; \
-	kill $$SERVER_PID || true; \
+	# Execute E2E tests with verbose output (Go's -timeout enforces runtime limit) \
+	$(GO) test -tags=e2e -v -timeout=5m ./test/e2e/... || TEST_EXIT_CODE=$$?; \
+	# Show recent logs to aid debugging \
+	echo '--- docker compose ps ---'; docker compose -f docker-compose.yml ps; \
+	echo '--- app logs (last 200 lines) ---'; docker compose -f docker-compose.yml logs --no-color --tail=200 app || true; \
 	if [ "$$${TEST_EXIT_CODE:-0}" -ne 0 ]; then \
 	  echo "E2E tests failed with exit code: $$TEST_EXIT_CODE"; \
 	  exit $$TEST_EXIT_CODE; \

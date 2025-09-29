@@ -1,15 +1,11 @@
-//go:build adminui
-
+// Package httpserver contains the Admin UI server (templates, routes) and HTTP adapters.
 package httpserver
 
 import (
 	"embed"
-	"encoding/json"
 	"html/template"
 	"io/fs"
 	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -34,8 +30,8 @@ type AdminServer struct {
 func NewAdminServer(cfg config.Config, server *Server) (*AdminServer, error) {
 	sessionManager := NewSessionManager(cfg)
 	
-	// Parse templates
-	templates, err := template.ParseFS(templateFiles, "templates/*.html")
+	// Parse templates with custom delimiters to avoid clashing with Vue's {{ }}
+	templates, err := template.New("admin").Delims("[[", "]]").ParseFS(templateFiles, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
@@ -50,10 +46,6 @@ func NewAdminServer(cfg config.Config, server *Server) (*AdminServer, error) {
 
 // MountRoutes mounts admin routes on the router
 func (a *AdminServer) MountRoutes(r chi.Router) {
-	if !a.cfg.AdminEnabled() {
-		return
-	}
-
 	r.Route("/admin", func(adminRouter chi.Router) {
 		// Static files
 		adminRouter.Handle("/static/*", http.StripPrefix("/admin/static/", http.FileServer(http.FS(staticFiles))))
@@ -71,15 +63,7 @@ func (a *AdminServer) MountRoutes(r chi.Router) {
 			protected.Get("/upload", a.UploadPage)
 			protected.Get("/evaluate", a.EvaluatePage)
 			protected.Get("/result", a.ResultPage)
-			protected.Get("/rag", a.RAGManagementPage)
-			
-			// API endpoints for the Vue app
-			protected.Post("/api/upload", a.APIUploadHandler)
-			protected.Post("/api/evaluate", a.APIEvaluateHandler)
-			protected.Get("/api/result/{id}", a.APIResultHandler)
-			protected.Get("/api/rag", a.APIRAGListHandler)
-			protected.Post("/api/rag/job_description", a.APIRAGUpdateJobDescHandler)
-			protected.Post("/api/rag/scoring_rubric", a.APIRAGUpdateRubricHandler)
+			// RAG management and API endpoints removed per requirements
 		})
 	})
 
@@ -145,7 +129,7 @@ func (a *AdminServer) LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 // DashboardPage renders the main dashboard
 func (a *AdminServer) DashboardPage(w http.ResponseWriter, r *http.Request) {
-	session := r.Context().Value("session").(*SessionData)
+	session, _ := r.Context().Value(sessionKey{}).(*SessionData)
 	
 	data := struct {
 		Username  string
@@ -164,7 +148,7 @@ func (a *AdminServer) DashboardPage(w http.ResponseWriter, r *http.Request) {
 
 // UploadPage renders the upload interface
 func (a *AdminServer) UploadPage(w http.ResponseWriter, r *http.Request) {
-	session := r.Context().Value("session").(*SessionData)
+	session, _ := r.Context().Value(sessionKey{}).(*SessionData)
 	
 	data := struct {
 		Username  string
@@ -183,7 +167,7 @@ func (a *AdminServer) UploadPage(w http.ResponseWriter, r *http.Request) {
 
 // EvaluatePage renders the evaluation interface
 func (a *AdminServer) EvaluatePage(w http.ResponseWriter, r *http.Request) {
-	session := r.Context().Value("session").(*SessionData)
+	session, _ := r.Context().Value(sessionKey{}).(*SessionData)
 	
 	data := struct {
 		Username  string
@@ -202,7 +186,7 @@ func (a *AdminServer) EvaluatePage(w http.ResponseWriter, r *http.Request) {
 
 // ResultPage renders the result interface
 func (a *AdminServer) ResultPage(w http.ResponseWriter, r *http.Request) {
-	session := r.Context().Value("session").(*SessionData)
+	session, _ := r.Context().Value(sessionKey{}).(*SessionData)
 	
 	data := struct {
 		Username  string
@@ -221,7 +205,7 @@ func (a *AdminServer) ResultPage(w http.ResponseWriter, r *http.Request) {
 
 // RAGManagementPage renders the RAG management interface
 func (a *AdminServer) RAGManagementPage(w http.ResponseWriter, r *http.Request) {
-	session := r.Context().Value("session").(*SessionData)
+	session, _ := r.Context().Value(sessionKey{}).(*SessionData)
 	
 	data := struct {
 		Username  string
@@ -238,78 +222,4 @@ func (a *AdminServer) RAGManagementPage(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// API handlers that proxy to the main server
-
-// APIUploadHandler proxies upload requests to the main upload handler
-func (a *AdminServer) APIUploadHandler(w http.ResponseWriter, r *http.Request) {
-	handler := a.server.UploadHandler()
-	handler(w, r)
-}
-
-// APIEvaluateHandler proxies evaluate requests to the main evaluate handler
-func (a *AdminServer) APIEvaluateHandler(w http.ResponseWriter, r *http.Request) {
-	handler := a.server.EvaluateHandler()
-	handler(w, r)
-}
-
-// APIResultHandler proxies result requests to the main result handler
-func (a *AdminServer) APIResultHandler(w http.ResponseWriter, r *http.Request) {
-	handler := a.server.ResultHandler()
-	handler(w, r)
-}
-
-// RAGStatus represents the status of RAG corpora
-type RAGStatus struct {
-	JobDescription struct {
-		Version    string    `json:"version"`
-		Source     string    `json:"source"`
-		IngestedAt time.Time `json:"ingested_at"`
-		Documents  int       `json:"documents"`
-	} `json:"job_description"`
-	ScoringRubric struct {
-		Version    string    `json:"version"`
-		Source     string    `json:"source"`
-		IngestedAt time.Time `json:"ingested_at"`
-		Documents  int       `json:"documents"`
-	} `json:"scoring_rubric"`
-}
-
-// APIRAGListHandler returns the status of RAG corpora
-func (a *AdminServer) APIRAGListHandler(w http.ResponseWriter, r *http.Request) {
-	// Mock data for now - in a real implementation, this would query Qdrant
-	status := RAGStatus{}
-	status.JobDescription.Version = "v1.0"
-	status.JobDescription.Source = "configs/rag/job_description.yaml"
-	status.JobDescription.IngestedAt = time.Now().Add(-24 * time.Hour)
-	status.JobDescription.Documents = 5
-
-	status.ScoringRubric.Version = "v1.0"
-	status.ScoringRubric.Source = "configs/rag/scoring_rubric.yaml"
-	status.ScoringRubric.IngestedAt = time.Now().Add(-24 * time.Hour)
-	status.ScoringRubric.Documents = 8
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
-}
-
-// APIRAGUpdateJobDescHandler handles job description corpus updates
-func (a *AdminServer) APIRAGUpdateJobDescHandler(w http.ResponseWriter, r *http.Request) {
-	// Mock implementation - would integrate with seeding logic
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "Job description corpus updated successfully",
-		"version": "v" + strconv.FormatInt(time.Now().Unix(), 10),
-	})
-}
-
-// APIRAGUpdateRubricHandler handles scoring rubric corpus updates  
-func (a *AdminServer) APIRAGUpdateRubricHandler(w http.ResponseWriter, r *http.Request) {
-	// Mock implementation - would integrate with seeding logic
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "Scoring rubric corpus updated successfully",
-		"version": "v" + strconv.FormatInt(time.Now().Unix(), 10),
-	})
-}
+// API proxy and RAG management endpoints removed per requirements

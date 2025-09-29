@@ -12,15 +12,15 @@ Standardize repository documentation, governance, and collaboration workflows to
   - API overview with link to `api/openapi.yaml`.
   - Testing strategy and how to run unit/e2e/E2E suites.
   - Deployment overview (VPS steps and GitHub Actions).
-- `ARCHITECTURE.md`
+- `docs/ARCHITECTURE.md`
   - Layered diagram, dependency rules, main flows (`/upload`, `/evaluate`, `/result/{id}`).
   - Data model (ERD), queues, vector DB collections.
   - Observability topology (OTEL → Collector → Jaeger; Prometheus scraping).
-- `CONTRIBUTING.md`
+- `docs/CONTRIBUTING.md`
   - Dev setup, coding standards, linters, commit conventions, branching model.
   - How to add/modify migrations; how to create/use mocks.
   - How to update OpenAPI and re-generate clients (if any).
-- `SECURITY.md`
+- `docs/SECURITY.md`
   - Vulnerability disclosure policy, secret handling, supported versions.
 - `docs/STUDY_CASE.md`
   - Follow the study case submission template with the following sections:

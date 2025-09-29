@@ -4,18 +4,6 @@ texts:
     CV Match Evaluation (1–5 scale per parameter)
     Overall: Compute a weighted average then normalize to [0,1] (divide by 5).
   - |-
-    Technical Skills Match (40%): Alignment with job requirements (backend, DB, APIs, cloud, AI/LLM).
-    Scoring Guide: 1 = Irrelevant → 5 = Excellent + AI/LLM.
-  - |-
-    Experience Level (25%): Years of experience, project complexity.
-    Scoring Guide: 1 = <1yr → 5 = 5+ yrs high-impact.
-  - |-
-    Relevant Achievements (20%): Impact of past work.
-    Scoring Guide: 1 = None → 5 = Major measurable impact.
-  - |-
-    Cultural / Collaboration Fit (15%): Communication, learning mindset, teamwork.
-    Scoring Guide: 1 = Not shown → 5 = Excellent.
-  - |-
     Project Deliverable Evaluation (1–5 scale per parameter)
     Overall: Compute a weighted average then scale ×2 and clamp to [1,10].
 data:

@@ -53,19 +53,19 @@ Last updated: 2025-09-28 09:40 +07
 
 ## P2 — AI Pipeline, Prompting, and RAG (Rules: 04, 04a, 04b)
 
-- [x] AI providers: Real-only (OpenRouter for chat, OpenAI for embeddings). Mock removed.
-  - Evidence: `internal/adapter/ai/mock.go` disabled with `//go:build ignore`;
+- [x] AI providers: Real-only (OpenRouter for chat, OpenAI for embeddings). No stub/mock for E2E.
+  - Evidence: `cmd/server/main.go` always wires real OpenRouter client; `internal/adapter/ai/stub/client.go` disabled via `//go:build ignore`.
 ## Coverage Uplift Plan (to reach ≥80% overall)
 - [x] httpserver: add tests covering more branches (Accept mismatch, size/type rejections, JSON validation paths, ETag 304).
 - [x] repo/postgres: add repository tests for error cases and happy paths.
 - [x] queue/asynq: add enqueue tests with mocks and error branches.
 - [x] config/observability: add minimal tests to lift totals.
 - [x] golden tests for prompt I/O; schema enforcement on `parseAndNormalize`.
-  - Evidence: `internal/adapter/ai/real/client.go` updated with additional tests.
+  - Evidence: `internal/adapter/ai/real/client.go` has robust JSON parsing and retry logic.
 - [x] Two-pass prompting (normalize/consistency pass) as per rules.
   - Evidence: `FEATURE_TWO_PASS_LLM` flag; `buildNormalizationSystemPrompt()` in `eval_json.go`; worker implements second pass.
 - [x] RAG stores job description and scoring rubric in Qdrant; retrieval applied in worker.
-  - Evidence: `cmd/server/main.go` seeding; worker `Search()` uses weight-aware re-ranking.
+  - Evidence: `internal/app/qdrant.go` seeding; worker `topTextsByWeight()` and `buildUserWithContext()` use weighted retrieval.
 - [x] LLM Chaining implemented (extract → evaluate-from-extracts + RAG).
 {{ ... }}
 - [x] Idempotency key support for duplicate prevention
@@ -97,8 +97,8 @@ Last updated: 2025-09-28 09:40 +07
   - Evidence: Updated implementation in `handlers.go`.
 - [x] Remove unused `pkg/textx.ExtractFromPath`; rely on Tika for PDF/DOCX.
   - Evidence: `pkg/textx/textx.go` simplified to `SanitizeText` only.
-- [x] Remove mock AI; real providers only.
-  - Evidence: mock client/tests disabled via `//go:build ignore`.
+- [x] Remove stub/mock AI for E2E; real providers only.
+  - Evidence: stub client disabled via `//go:build ignore`.
 
 ---
 
@@ -107,7 +107,7 @@ Last updated: 2025-09-28 09:40 +07
 - __Upload__: Accepts .txt/.pdf/.docx; rejects mislabeled binaries via content sniffing; <= MaxUploadMB; returns ids.
 - __Evaluate__: Validates required fields and lengths; enqueues job; idempotency works with `Idempotency-Key`.
 - __Result__: Queued/Processing/Completed/Failed shapes match OpenAPI; ETag works; 304 on If-None-Match.
-- __RAG__: Retrieval returns relevant seeds for job and rubric corpora (see existing E2E); deterministic in mock mode.
+- __RAG__: Retrieval returns relevant seeds for job and rubric corpora in E2E using live providers.
 - __AI__: JSON-only outputs; 1–3 sentence feedback fields; 3–5 sentence summary; retries on schema issues.
 - __Observability__: `/metrics` exposes HTTP, job, AI metrics; traces visible in Jaeger; logs structured with `request_id`.
 - __Security__: Rate limiting applied; strict headers; no raw prompts or secrets in logs.

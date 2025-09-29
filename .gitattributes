@@ -1,4 +1,4 @@
 # Treat SOPS artifacts as binary to avoid diffs/noise
 *.sops binary -diff
 *.sops.* binary -diff
-project.md.sops binary -diff
+secrets/project.md.sops binary -diff

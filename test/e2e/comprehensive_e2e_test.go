@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,8 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
+		maybeBasicAuth(req)
+		maybeBasicAuth(req)
 		
 		resp, err := client.Do(req)
 		require.NoError(t, err)
@@ -83,6 +86,7 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
+		maybeBasicAuth(req)
 		
 		resp, err := client.Do(req)
 		require.NoError(t, err)
@@ -106,6 +110,7 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
+		maybeBasicAuth(req)
 		
 		resp, err := client.Do(req)
 		require.NoError(t, err)
@@ -133,6 +138,7 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
+		maybeBasicAuth(req)
 		
 		resp, err := client.Do(req)
 		require.NoError(t, err)
@@ -159,6 +165,7 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req, err := http.NewRequest("POST", baseURL+"/evaluate", bytes.NewReader(body))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		maybeBasicAuth(req)
 		
 		resp, err := client.Do(req)
 		require.NoError(t, err)
@@ -180,6 +187,7 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req, err := http.NewRequest("POST", baseURL+"/evaluate", bytes.NewReader(body))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
+		maybeBasicAuth(req)
 		
 		resp, err := client.Do(req)
 		require.NoError(t, err)
@@ -207,6 +215,7 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req1, _ := http.NewRequest("POST", baseURL+"/evaluate", bytes.NewReader(body))
 		req1.Header.Set("Content-Type", "application/json")
 		req1.Header.Set("Idempotency-Key", idempotencyKey)
+		maybeBasicAuth(req1)
 		
 		resp1, err := client.Do(req1)
 		require.NoError(t, err)
@@ -219,6 +228,7 @@ func TestE2E_EdgeCases(t *testing.T) {
 		req2, _ := http.NewRequest("POST", baseURL+"/evaluate", bytes.NewReader(body))
 		req2.Header.Set("Content-Type", "application/json")
 		req2.Header.Set("Idempotency-Key", idempotencyKey)
+		maybeBasicAuth(req2)
 		
 		resp2, err := client.Do(req2)
 		require.NoError(t, err)
@@ -471,8 +481,8 @@ func TestE2E_SpecialCharacters(t *testing.T) {
 // Helper functions
 
 func uploadTestFiles(t *testing.T, client *http.Client, cvContent, projectContent string) map[string]string {
-	var buf bytes.Buffer
-	writer := multipart.NewWriter(&buf)
+    var buf bytes.Buffer
+    writer := multipart.NewWriter(&buf)
 	
 	cvWriter, err := writer.CreateFormFile("cv", "test_cv.txt")
 	require.NoError(t, err)
@@ -484,71 +494,97 @@ func uploadTestFiles(t *testing.T, client *http.Client, cvContent, projectConten
 	
 	writer.Close()
 	
-	req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	
-	var result map[string]string
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-	
-	return result
+    var lastStatus int
+    for i := 0; i < 6; i++ { // up to ~3s total wait
+        req, err := http.NewRequest("POST", baseURL+"/upload", &buf)
+        require.NoError(t, err)
+        req.Header.Set("Content-Type", writer.FormDataContentType())
+        maybeBasicAuth(req)
+        resp, err := client.Do(req)
+        require.NoError(t, err)
+        lastStatus = resp.StatusCode
+        if resp.StatusCode == http.StatusOK {
+            defer resp.Body.Close()
+            var result map[string]string
+            err = json.NewDecoder(resp.Body).Decode(&result)
+            require.NoError(t, err)
+            return result
+        }
+        resp.Body.Close()
+        if resp.StatusCode == http.StatusTooManyRequests {
+            time.Sleep(500 * time.Millisecond)
+            continue
+        }
+        break
+    }
+    require.Equal(t, http.StatusOK, lastStatus)
+    return map[string]string{}
 }
 
 func evaluateFiles(t *testing.T, client *http.Client, cvID, projectID string) map[string]interface{} {
-	payload := map[string]string{
-		"cv_id":            cvID,
-		"project_id":       projectID,
-		"job_description":  defaultJobDescription,
-		"study_case_brief": defaultStudyCaseBrief,
-	}
-	
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequest("POST", baseURL+"/evaluate", bytes.NewReader(body))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	
-	var result map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	require.NoError(t, err)
-	
-	return result
+    payload := map[string]string{
+        "cv_id":            cvID,
+        "project_id":       projectID,
+        "job_description":  defaultJobDescription,
+        "study_case_brief": defaultStudyCaseBrief,
+    }
+
+    body, _ := json.Marshal(payload)
+    var lastStatus int
+    for i := 0; i < 6; i++ { // up to ~3s total wait
+        req, err := http.NewRequest("POST", baseURL+"/evaluate", bytes.NewReader(body))
+        require.NoError(t, err)
+        req.Header.Set("Content-Type", "application/json")
+        maybeBasicAuth(req)
+        resp, err := client.Do(req)
+        require.NoError(t, err)
+        lastStatus = resp.StatusCode
+        if resp.StatusCode == http.StatusOK {
+            defer resp.Body.Close()
+            var result map[string]interface{}
+            err = json.NewDecoder(resp.Body).Decode(&result)
+            require.NoError(t, err)
+            return result
+        }
+        resp.Body.Close()
+        if resp.StatusCode == http.StatusTooManyRequests {
+            time.Sleep(500 * time.Millisecond)
+            continue
+        }
+        break
+    }
+    require.Equal(t, http.StatusOK, lastStatus)
+    return map[string]interface{}{}
 }
 
 func waitForCompletion(t *testing.T, client *http.Client, jobID string) map[string]interface{} {
-	maxRetries := 30
-	for i := 0; i < maxRetries; i++ {
-		req, err := http.NewRequest("GET", baseURL+"/result/"+jobID, nil)
-		require.NoError(t, err)
-		
-		resp, err := client.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		
-		var result map[string]interface{}
-		err = json.NewDecoder(resp.Body).Decode(&result)
-		require.NoError(t, err)
-		
-		status := result["status"].(string)
-		if status == "completed" || status == "failed" {
-			return result
-		}
-		
-		time.Sleep(2 * time.Second)
-	}
-	
-	t.Fatal("Job did not complete within timeout")
-	return nil
+    // Allow fail-fast tuning via env vars
+    maxPollsStr := getenv("E2E_MAX_POLLS", "120")
+    sleepMsStr := getenv("E2E_SLEEP_MS", "3000")
+    maxRetries, _ := strconv.Atoi(maxPollsStr)
+    if maxRetries <= 0 { maxRetries = 120 }
+    sleepMs, _ := strconv.Atoi(sleepMsStr)
+    if sleepMs <= 0 { sleepMs = 3000 }
+    for i := 0; i < maxRetries; i++ {
+        req, err := http.NewRequest("GET", baseURL+"/result/"+jobID, nil)
+        require.NoError(t, err)
+        
+        resp, err := client.Do(req)
+        require.NoError(t, err)
+        defer resp.Body.Close()
+        
+        var result map[string]interface{}
+        err = json.NewDecoder(resp.Body).Decode(&result)
+        require.NoError(t, err)
+        
+        status := result["status"].(string)
+        if status == "completed" || status == "failed" {
+            return result
+        }
+        
+        time.Sleep(time.Duration(sleepMs) * time.Millisecond)
+    }
+    
+    t.Fatal("Job did not complete within timeout")
+    return nil
 }

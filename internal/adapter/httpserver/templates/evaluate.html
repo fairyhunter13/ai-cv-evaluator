@@ -4,28 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Start Evaluation - AI CV Evaluator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
-</head>
-<body class="bg-gray-50">
+ </head>
+ <body class="bg-base-200 min-h-screen">
     <div id="app">
         <!-- Navigation -->
-        <nav class="bg-white shadow-sm">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between h-16">
-                    <div class="flex items-center space-x-4">
-                        <a href="/admin/" class="text-xl font-semibold text-gray-900">AI CV Evaluator Admin</a>
-                        <span class="text-gray-400">/</span>
-                        <span class="text-gray-600">Evaluate</span>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <span class="text-sm text-gray-500">{{.Username}}</span>
-                        <form method="POST" action="/admin/logout" class="inline">
-                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                            <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
-                        </form>
-                    </div>
+        <nav class="navbar bg-base-100 shadow-sm">
+            <div class="container mx-auto px-4">
+                <div class="flex-1">
+                    <a class="btn btn-ghost normal-case text-xl" href="/admin/">AI CV Evaluator Admin</a>
+                    <span class="mx-2 opacity-50">/</span>
+                    <span class="font-medium">Evaluate</span>
+                </div>
+                <div class="flex-none gap-2">
+                    <span class="hidden md:inline text-sm opacity-70">{{.Username}}</span>
+                    <form method="POST" action="/admin/logout" class="inline">
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                        <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+                    </form>
                 </div>
             </div>
         </nav>
@@ -70,35 +68,35 @@
                         <!-- Document IDs -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label for="cv_id" class="block text-sm font-medium text-gray-700">CV ID</label>
-                                <input type="text" id="cv_id" v-model="form.cv_id" 
-                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                <label for="cv_id" class="block text-sm font-medium">CV ID</label>
+                                <input type="text" id="cv_id" v-model="form.cv_id"
+                                       class="input input-bordered w-full"
                                        placeholder="Enter CV upload ID" required>
                             </div>
                             <div>
-                                <label for="project_id" class="block text-sm font-medium text-gray-700">Project ID</label>
+                                <label for="project_id" class="block text-sm font-medium">Project ID</label>
                                 <input type="text" id="project_id" v-model="form.project_id"
-                                       class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                       class="input input-bordered w-full"
                                        placeholder="Enter project upload ID" required>
                             </div>
                         </div>
 
                         <!-- Job Description -->
                         <div>
-                            <label for="job_description" class="block text-sm font-medium text-gray-700">Job Description</label>
+                            <label for="job_description" class="block text-sm font-medium">Job Description</label>
                             <textarea id="job_description" v-model="form.job_description" rows="8"
-                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                      class="textarea textarea-bordered w-full"
                                       placeholder="Paste the job description here..." required></textarea>
-                            <p class="mt-2 text-sm text-gray-500">Provide the job description to match the CV against</p>
+                            <p class="mt-2 text-sm opacity-60">Provide the job description to match the CV against</p>
                         </div>
 
                         <!-- Study Case Brief -->
                         <div>
-                            <label for="study_case_brief" class="block text-sm font-medium text-gray-700">Study Case Brief</label>
+                            <label for="study_case_brief" class="block text-sm font-medium">Study Case Brief</label>
                             <textarea id="study_case_brief" v-model="form.study_case_brief" rows="6"
-                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                      class="textarea textarea-bordered w-full"
                                       placeholder="Provide the study case brief for project evaluation..." required></textarea>
-                            <p class="mt-2 text-sm text-gray-500">Brief description of the project requirements and evaluation criteria</p>
+                            <p class="mt-2 text-sm opacity-60">Brief description of the project requirements and evaluation criteria</p>
                         </div>
 
                         <!-- Advanced Options -->
@@ -113,17 +111,16 @@
                             
                             <div v-show="showAdvanced" class="space-y-4">
                                 <div>
-                                    <label for="idempotency_key" class="block text-sm font-medium text-gray-700">Idempotency Key (Optional)</label>
+                                    <label for="idempotency_key" class="block text-sm font-medium">Idempotency Key (Optional)</label>
                                     <input type="text" id="idempotency_key" v-model="form.idempotency_key"
-                                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                           class="input input-bordered w-full"
                                            placeholder="Leave empty to generate automatically">
-                                    <p class="mt-2 text-sm text-gray-500">Use same key to prevent duplicate evaluations</p>
+                                    <p class="mt-2 text-sm opacity-60">Use same key to prevent duplicate evaluations</p>
                                 </div>
-                                <div class="flex items-center">
-                                    <input type="checkbox" id="use_two_pass" v-model="form.use_two_pass"
-                                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
-                                    <label for="use_two_pass" class="ml-2 block text-sm text-gray-900">
-                                        Use two-pass LLM processing (more accurate but slower)
+                                <div class="form-control">
+                                    <label class="label cursor-pointer">
+                                        <span class="label-text">Use two-pass LLM processing (more accurate but slower)</span>
+                                        <input type="checkbox" id="use_two_pass" v-model="form.use_two_pass" class="toggle toggle-primary" />
                                     </label>
                                 </div>
                             </div>
@@ -131,12 +128,8 @@
 
                         <!-- Submit Button -->
                         <div class="flex justify-end space-x-3">
-                            <a href="/admin/" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                Cancel
-                            </a>
-                            <button type="submit" 
-                                    :disabled="!isFormValid || evaluating"
-                                    class="bg-green-600 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <a href="/admin/" class="btn btn-ghost">Cancel</a>
+                            <button type="submit" :disabled="!isFormValid || evaluating" class="btn btn-success">
                                 <span v-if="evaluating" class="flex items-center">
                                     <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -170,10 +163,7 @@
                         </div>
                     </div>
                     <div class="mt-4">
-                        <a :href="`/admin/result?job_id=${evaluationResult.id}`" 
-                           class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 ease-in-out">
-                            View Results
-                        </a>
+                        <a :href="`/admin/result?job_id=${evaluationResult.id}`" class="btn btn-primary">View Results</a>
                     </div>
                 </div>
 
@@ -293,7 +283,7 @@ Evaluation Criteria:
                             headers['Idempotency-Key'] = this.form.idempotency_key;
                         }
 
-                        const response = await fetch('/admin/api/evaluate', {
+                        const response = await fetch('/v1/evaluate', {
                             method: 'POST',
                             headers: headers,
                             body: JSON.stringify(payload)

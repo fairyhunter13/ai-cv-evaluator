@@ -74,7 +74,7 @@ You are an expert Golang backend engineer applying Clean Architecture and DDD. E
   - `QDRANT_API_KEY` is optional for dev/local and may be omitted when running on an internal network.
 - Frugality is mandatory:
   - Default behavior is thrifty: keep prompts compact, cap tokens, minimize top-k, use conservative concurrency and batch sizes.
-  - Prefer mock mode when keys are absent.
+  - If keys are absent: chat calls will fail (no OpenRouter key) and embeddings/RAG will be skipped (no OpenAI key). E2E must be skipped or keys provided.
   - Cache/memoize embeddings and intermediate LLM outputs; avoid recomputation on unchanged inputs.
 
 # HTTP Server & Middleware
@@ -93,7 +93,6 @@ You are an expert Golang backend engineer applying Clean Architecture and DDD. E
 
 # Configuration & Feature Flags
 - Configuration precedence: env → `.env` (dev) → defaults in code.
-- Feature flags via env (e.g., `FEATURE_USE_MOCK_AI=true`) to toggle mock providers.
 - Validate critical config on startup; fail-fast with clear logs.
 
 # Serialization & Validation Conventions

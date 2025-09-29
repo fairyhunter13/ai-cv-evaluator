@@ -23,8 +23,8 @@ type evalEnqueueResp struct{ ID string `json:"id"`; Status string `json:"status"
 func TestLive_E2E(t *testing.T) {
 	baseURL := getenv("BASE_URL", "http://localhost:8080")
 	// Require OpenRouter chat keys for real calls
-	if os.Getenv("OPENROUTER_API_KEY") == "" || os.Getenv("CHAT_MODEL") == "" {
-		t.Skip("OPENROUTER_API_KEY/CHAT_MODEL not set; skipping live E2E")
+	if os.Getenv("OPENROUTER_API_KEY") == "" {
+		t.Skip("OPENROUTER_API_KEY not set; skipping live E2E")
 	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
