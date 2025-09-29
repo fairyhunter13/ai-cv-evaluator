@@ -4,25 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>View Results - AI CV Evaluator</title>
-    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <link rel="icon" type="image/svg+xml" href="/admin/static/favicon.svg">
 </head>
-<body class="bg-base-200 min-h-screen">
+<body class="bg-gray-50 min-h-screen">
     <div id="app">
         <!-- Navigation -->
-        <nav class="navbar bg-base-100 shadow-sm">
-            <div class="container mx-auto px-4">
-                <div class="flex-1">
-                    <a class="btn btn-ghost normal-case text-xl" href="/admin/">AI CV Evaluator Admin</a>
-                    <span class="mx-2 opacity-50">/</span>
-                    <span class="font-medium">Results</span>
+        <nav class="bg-white shadow-sm">
+            <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center">
+                    <a class="text-xl font-semibold text-gray-800" href="/admin/">AI CV Evaluator Admin</a>
+                    <span class="mx-2 text-gray-400">/</span>
+                    <span class="font-medium text-gray-700">Results</span>
                 </div>
-                <div class="flex-none gap-2">
-                    <span class="hidden md:inline text-sm opacity-70">{{.Username}}</span>
+                <div class="flex items-center gap-3">
+                    <span class="hidden md:inline text-sm text-gray-500">{{.Username}}</span>
                     <form method="POST" action="/admin/logout" class="inline">
                         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                        <button type="submit" class="btn btn-outline btn-sm">Logout</button>
+                        <button type="submit" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Logout</button>
                     </form>
                 </div>
             </div>
@@ -39,17 +39,17 @@
                 </div>
 
                 <!-- Job ID Input -->
-                <div class="card bg-base-100 shadow mb-8">
-                    <div class="card-body">
+                <div class="rounded-lg bg-white shadow mb-8">
+                    <div class="p-6">
                         <div class="flex flex-col sm:flex-row gap-4">
                             <div class="flex-1">
-                                <label for="job_id" class="block text-sm font-medium">Job ID</label>
+                                <label for="job_id" class="block text-sm font-medium text-gray-700">Job ID</label>
                                 <input type="text" id="job_id" v-model="jobId" 
-                                       class="input input-bordered w-full"
+                                       class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                        placeholder="Enter evaluation job ID">
                             </div>
                             <div class="flex items-end">
-                                <button @click="fetchResult" :disabled="!jobId || loading" class="btn btn-primary">
+                                <button @click="fetchResult" :disabled="!jobId || loading" class="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50">
                                     <span v-if="loading" class="flex items-center">
                                         <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -65,18 +65,18 @@
                 </div>
 
                 <!-- Error Message -->
-                <div v-if="errorMessage" class="alert alert-error mb-6">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    <span>{{ errorMessage }}</span>
-                    <button class="btn btn-ghost btn-sm ml-auto" @click="errorMessage = null">Close</button>
+                <div v-if="errorMessage" class="mb-6 flex items-center rounded-md border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span class="flex-1">{{ errorMessage }}</span>
+                    <button class="ml-3 inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50" @click="errorMessage = null">Close</button>
                 </div>
 
                 <!-- Status Display -->
                 <div v-if="result" class="mb-8">
-                    <div class="card bg-base-100 shadow p-6">
+                    <div class="rounded-lg bg-white shadow p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-medium">Job Status</h3>
-                            <button @click="fetchResult" :disabled="loading" class="btn btn-ghost btn-sm">
+                            <button @click="fetchResult" :disabled="loading" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                                 <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                                 </svg>
@@ -92,7 +92,7 @@
                             <div>
                                 <label class="text-sm font-medium opacity-70">Status</label>
                                 <div class="mt-1">
-                                    <div class="badge"
+                                    <div class="inline-flex px-2 py-1 rounded-md text-xs"
                                          :class="getStatusColor(result.status)">
                                         {{ result.status }}
                                     </div>
@@ -101,13 +101,13 @@
                             <div v-if="result.status === 'processing'">
                                 <label class="text-sm font-medium opacity-70">Progress</label>
                                 <div class="mt-1">
-                                    <progress class="progress progress-primary w-full" value="45" max="100"></progress>
+                                    <progress class="h-2 w-full" value="45" max="100"></progress>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Auto-refresh for processing jobs -->
-                        <div v-if="result.status === 'processing' || result.status === 'queued'" class="mt-4 text-sm opacity-70">
+                        <div v-if="result.status === 'processing' || result.status === 'queued'" class="mt-4 text-sm text-gray-500">
                             <svg class="animate-spin -ml-1 mr-2 h-4 w-4 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -121,22 +121,22 @@
                 <div v-if="result && result.status === 'completed' && result.result" class="space-y-8">
                     
                     <!-- Summary Card -->
-                    <div class="card bg-base-100 shadow p-6">
+                    <div class="rounded-lg bg-white shadow p-6">
                         <h3 class="text-lg font-medium mb-4">Overall Summary</h3>
-                        <div class="bg-base-200 rounded-lg p-4">
+                        <div class="bg-gray-100 rounded-lg p-4">
                             <p>{{ result.result.overall_summary }}</p>
                         </div>
                     </div>
 
                     <!-- CV Analysis -->
-                    <div class="card bg-base-100 shadow p-6">
+                    <div class="rounded-lg bg-white shadow p-6">
                         <h3 class="text-lg font-medium mb-4">CV Analysis</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label class="text-sm font-medium opacity-70">Match Rate</label>
                                 <div class="mt-2">
                                     <div class="flex items-center">
-                                        <progress class="progress progress-success flex-1 mr-4" :value="(result.result.cv_match_rate * 100)" max="100"></progress>
+                                        <progress class="h-2 w-full mr-4" :value="(result.result.cv_match_rate * 100)" max="100"></progress>
                                         <span class="text-lg font-semibold">
                                             {{ Math.round(result.result.cv_match_rate * 100) }}%
                                         </span>
@@ -152,21 +152,21 @@
                         </div>
                         <div class="mt-4">
                             <label class="text-sm font-medium opacity-70">Feedback</label>
-                            <div class="mt-2 bg-base-200 rounded-lg p-4">
+                            <div class="mt-2 bg-gray-100 rounded-lg p-4">
                                 <p>{{ result.result.cv_feedback }}</p>
                             </div>
                         </div>
                     </div>
 
                     <!-- Project Analysis -->
-                    <div class="card bg-base-100 shadow p-6">
+                    <div class="rounded-lg bg-white shadow p-6">
                         <h3 class="text-lg font-medium mb-4">Project Analysis</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label class="text-sm font-medium opacity-70">Score</label>
                                 <div class="mt-2">
                                     <div class="flex items-center">
-                                        <progress class="progress progress-primary flex-1 mr-4" :value="(result.result.project_score / 10) * 100" max="100"></progress>
+                                        <progress class="h-2 w-full mr-4" :value="(result.result.project_score / 10) * 100" max="100"></progress>
                                         <span class="text-lg font-semibold">
                                             {{ result.result.project_score }}/10
                                         </span>
@@ -182,30 +182,28 @@
                         </div>
                         <div class="mt-4">
                             <label class="text-sm font-medium opacity-70">Feedback</label>
-                            <div class="mt-2 bg-base-200 rounded-lg p-4">
+                            <div class="mt-2 bg-gray-100 rounded-lg p-4">
                                 <p>{{ result.result.project_feedback }}</p>
                             </div>
                         </div>
                     </div>
 
                     <!-- Raw JSON -->
-                    <div class="card bg-base-100 shadow p-6">
+                    <div class="rounded-lg bg-white shadow p-6">
                         <div class="flex items-center justify-between mb-4">
                             <h3 class="text-lg font-medium">Raw Response</h3>
-                            <button @click="copyToClipboard(JSON.stringify(result, null, 2))" class="btn btn-ghost btn-sm">
-                                Copy JSON
-                            </button>
+                            <button @click="copyToClipboard(JSON.stringify(result, null, 2))" class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Copy JSON</button>
                         </div>
-                        <pre class="bg-base-200 rounded-lg p-4 text-sm overflow-x-auto"><code>{{ JSON.stringify(result, null, 2) }}</code></pre>
+                        <pre class="bg-gray-100 rounded-lg p-4 text-sm overflow-x-auto"><code>{{ JSON.stringify(result, null, 2) }}</code></pre>
                     </div>
 
                 </div>
 
                 <!-- Failed Results -->
-                <div v-if="result && result.status === 'failed'" class="card bg-base-100 shadow p-6">
-                    <h3 class="text-lg font-medium text-error mb-4">Evaluation Failed</h3>
-                    <div class="alert alert-error">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div v-if="result && result.status === 'failed'" class="rounded-lg bg-white shadow p-6">
+                    <h3 class="text-lg font-medium text-red-600 mb-4">Evaluation Failed</h3>
+                    <div class="mb-4 flex items-start rounded-md border border-red-200 bg-red-50 px-4 py-3 text-red-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         <div>
                             <div class="font-medium">Error Details</div>
                             <div class="text-sm">
@@ -293,11 +291,11 @@
                 },
                 getStatusColor(status) {
                     switch (status) {
-                        case 'queued': return 'badge-warning';
-                        case 'processing': return 'badge-info';
-                        case 'completed': return 'badge-success';
-                        case 'failed': return 'badge-error';
-                        default: return 'badge-ghost';
+                        case 'queued': return 'bg-yellow-500 text-white';
+                        case 'processing': return 'bg-sky-600 text-white';
+                        case 'completed': return 'bg-green-600 text-white';
+                        case 'failed': return 'bg-red-600 text-white';
+                        default: return 'bg-gray-300 text-gray-800';
                     }
                 },
                 getGrade(matchRate) {

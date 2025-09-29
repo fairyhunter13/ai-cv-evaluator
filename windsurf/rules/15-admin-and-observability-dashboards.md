@@ -50,16 +50,6 @@ Define both observability dashboards and an admin UI for testing/consuming APIs.
 - Credentials: `ADMIN_USERNAME`, `ADMIN_PASSWORD`
 - Session secret: `ADMIN_SESSION_SECRET` (HMAC signing key for cookies)
 
-# Admin: RAG Data Management (Optional)
-- Routes (behind auth):
-  - `GET /admin/rag` → list current corpora with `version`, `source`, `ingested_at`.
-  - `POST /admin/rag/job_description` → upload/update job description corpus.
-  - `POST /admin/rag/scoring_rubric` → upload/update scoring rubric corpus.
-- Behavior:
-  - On upload, ingest into Qdrant and persist version metadata as payload fields.
-  - Show which corpus versions were used in recent evaluations (link to traces/logs).
-  - Allow export/download of current corpora for review.
-
 # Definition of Done (Admin & Dashboards)
 - Authenticated admin can upload, start evaluation, and view results via UI.
 - Observability dashboards show baseline metrics and traces.

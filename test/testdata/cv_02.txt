@@ -1,0 +1,1 @@
+Polyglot dev: Go, Python, Node.js. AWS (ECS, SQS), Terraform. RAG experience with Qdrant + OpenAI.

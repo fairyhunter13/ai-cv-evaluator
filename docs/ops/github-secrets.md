@@ -9,14 +9,14 @@ Each secret name is case-sensitive.
   - Purpose: Default token for authenticating to GHCR and GitHub APIs during CI/CD.
   - Used by: `.github/workflows/ci.yml` and `.github/workflows/deploy.yml` (login/push to GHCR, repo operations)
 - OPENROUTER_API_KEY
-  - Purpose: Real chat completions for live E2E on tag releases.
-  - Used by: `.github/workflows/ci.yml` (tags only), `.github/workflows/deploy.yml` (e2e-verify gate)
+  - Purpose: Real chat completions for live E2E on tag releases (pre-deploy gate).
+  - Used by: `.github/workflows/deploy.yml` (e2e-verify job only)
 - OPENAI_API_KEY
-  - Purpose: Real embeddings for RAG and evaluation pipeline.
-  - Used by: `.github/workflows/ci.yml` (tags only), `.github/workflows/deploy.yml` (e2e-verify gate)
+  - Purpose: Real embeddings for RAG/evaluation (pre-deploy gate).
+  - Used by: `.github/workflows/deploy.yml` (e2e-verify job only)
 - SOPS_AGE_KEY
   - Purpose: Age private key content for decrypting `.sops` files in CI/CD (e.g., `.env.production.sops.yaml`).
-  - Used by: `.github/workflows/deploy.yml` (materialized to `~/.config/sops/age/keys.txt`)
+  - Used by: `.github/workflows/ci.yml` (if decrypting CI env) and `.github/workflows/deploy.yml` (materialized to `~/.config/sops/age/keys.txt`)
 - SSH_PRIVATE_KEY
   - Purpose: Private key for SSH to the deployment host (VPS). Stored as a multi-line secret (PEM).
   - Used by: `.github/workflows/deploy.yml` (written to `~/.ssh/id_rsa` on runner)
@@ -32,8 +32,8 @@ Each secret name is case-sensitive.
   - Purpose: Contact email for Let's Encrypt certificate issuance/renewal.
   - Used by: `.github/workflows/deploy.yml` (cert issuance), `.github/workflows/renew-cert.yml` (renewal)
 
-## Notes
+#### Notes
 - CI steps are routed through the Makefile (lint, vet, vuln, tests, OpenAPI validation, build matrix) to keep a single source of truth for scripts.
-- E2E-on-tags only: CI runs the E2E suite exclusively on tag releases to keep PR and main branch CI fast. Live E2E requires `OPENROUTER_API_KEY` and `OPENAI_API_KEY`.
+- Live E2E runs only in the deploy workflow as a pre-deploy gate. They require `OPENROUTER_API_KEY` and `OPENAI_API_KEY`.
 - The chat model is optional; if not provided, the app defaults to `openrouter/auto`. You may set `CHAT_FALLBACK_MODELS` via runtime env to specify fallbacks.
-- Optional scanners/notifications (e.g., Snyk, Semgrep, FOSSA, Slack) are documented in `github-optional-secrets.md`.
+- Optional scanners (Snyk, Semgrep, FOSSA) are documented in `github-optional-secrets.md`.
