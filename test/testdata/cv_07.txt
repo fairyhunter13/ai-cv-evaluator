@@ -1,0 +1,1 @@
+DevOps background: CI/CD, GitHub Actions, Buildx cache, SBOM generation, and artifact uploads.

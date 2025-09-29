@@ -1,0 +1,1 @@
+Go developer with strong testing: unit, E2E, golden tests; familiar with testify and testcontainers.

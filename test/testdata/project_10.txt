@@ -1,0 +1,1 @@
+RAG seeds curated; retrieval tuned; caching to control cost; graceful fallback when embeddings absent.

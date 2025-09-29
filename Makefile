@@ -87,43 +87,61 @@ verify-project-sops:
 	@diff -u docs/project.md docs/project.dec.md && echo "OK: decrypted matches original" || (echo "Mismatch between docs/project.md and decrypted secrets/project.md.sops" && rm -f docs/project.dec.md && exit 1)
 	@rm -f docs/project.dec.md
 
-# Encrypt RFCs (docs/rfc/RFC.md and docs/rfc/RFC-Submission.md) -> secrets/rfc/*.sops (Binary)
+# Encrypt all RFC markdowns under docs/rfc/** -> secrets/rfc/** (binary .sops)
 encrypt-rfcs:
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
-	@mkdir -p secrets/rfc docs/rfc
-	@set -e; \
-	RFC_SRC=""; \
-	if [ -f docs/rfc/RFC.md ]; then RFC_SRC=docs/rfc/RFC.md; elif [ -f RFC.md ]; then RFC_SRC=RFC.md; fi; \
-	if [ -n "$$RFC_SRC" ]; then \
-	  echo "Encrypting $$RFC_SRC -> secrets/rfc/RFC.md.sops"; \
-	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary "$$RFC_SRC" > secrets/rfc/RFC.md.sops; \
-	else \
-	  echo "Warning: RFC.md not found; skipping"; \
+	@mkdir -p secrets/rfc
+	@set -euo pipefail; \
+	if [ ! -d docs/rfc ]; then \
+	  echo "docs/rfc not found; nothing to encrypt"; \
+	  exit 0; \
 	fi; \
-	RFC_SUB_SRC=""; \
-	if [ -f docs/rfc/RFC-Submission.md ]; then RFC_SUB_SRC=docs/rfc/RFC-Submission.md; elif [ -f RFC-Submission.md ]; then RFC_SUB_SRC=RFC-Submission.md; fi; \
-	if [ -n "$$RFC_SUB_SRC" ]; then \
-	  echo "Encrypting $$RFC_SUB_SRC -> secrets/rfc/RFC-Submission.md.sops"; \
-	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary "$$RFC_SUB_SRC" > secrets/rfc/RFC-Submission.md.sops; \
-	else \
-	  echo "Warning: RFC-Submission.md not found; skipping"; \
-	fi
+	count=0; \
+	while IFS= read -r -d '' src; do \
+	  rel=$${src#docs/rfc/}; \
+	  dest_dir="secrets/rfc/$$(dirname "$$rel")"; \
+	  dest_file="secrets/rfc/$$rel.sops"; \
+	  mkdir -p "$$dest_dir"; \
+	  echo "Encrypting $$src -> $$dest_file"; \
+	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary "$$src" > "$$dest_file"; \
+	  count=$$((count+1)); \
+	done < <(find docs/rfc -type f -name "*.md" -print0); \
+	if [ "$$count" -eq 0 ]; then echo "No *.md files found under docs/rfc"; fi
 
-# Decrypt RFCs from secrets/rfc/*.sops -> docs/rfc/*.md
+# Decrypt all secrets/rfc/**.sops -> docs/rfc/** (binary)
 decrypt-rfcs:
 	@[ -f "$(SOPS_AGE_KEY_FILE)" ] || (echo "Error: SOPS age key not found at $(SOPS_AGE_KEY_FILE)" && exit 1)
 	@mkdir -p docs/rfc
-	@if [ -f secrets/rfc/RFC.md.sops ]; then \
-	  echo "Decrypting secrets/rfc/RFC.md.sops -> docs/rfc/RFC.md"; \
-	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary secrets/rfc/RFC.md.sops > docs/rfc/RFC.md; \
-	else \
-	  echo "Warning: secrets/rfc/RFC.md.sops not found; skipping"; \
+	@$(MAKE) backup-rfcs || true
+	@set -euo pipefail; \
+	if [ ! -d secrets/rfc ]; then \
+	  echo "secrets/rfc not found; nothing to decrypt"; \
+	  exit 0; \
 	fi; \
-	if [ -f secrets/rfc/RFC-Submission.md.sops ]; then \
-	  echo "Decrypting secrets/rfc/RFC-Submission.md.sops -> docs/rfc/RFC-Submission.md"; \
-	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary secrets/rfc/RFC-Submission.md.sops > docs/rfc/RFC-Submission.md; \
+	count=0; \
+	while IFS= read -r -d '' enc; do \
+	  rel=$${enc#secrets/rfc/}; \
+	  # strip trailing .sops
+	  rel_out=$${rel%.sops}; \
+	  dest_dir="docs/rfc/$$(dirname "$$rel_out")"; \
+	  dest_file="docs/rfc/$$rel_out"; \
+	  mkdir -p "$$dest_dir"; \
+	  echo "Decrypting $$enc -> $$dest_file"; \
+	  SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary "$$enc" > "$$dest_file"; \
+	  count=$$((count+1)); \
+	done < <(find secrets/rfc -type f -name "*.sops" -print0); \
+	if [ "$$count" -eq 0 ]; then echo "No *.sops files found under secrets/rfc"; fi
+
+# Backup docs/rfc to timestamped folder under docs/rfc.backups
+backup-rfcs:
+	@set -euo pipefail; \
+	if [ -d docs/rfc ]; then \
+	  ts=$$(date +%Y%m%d%H%M%S); \
+	  mkdir -p docs/rfc.backups; \
+	  cp -R docs/rfc "docs/rfc.backups/rfc_$$ts"; \
+	  echo "Backed up docs/rfc -> docs/rfc.backups/rfc_$$ts"; \
 	else \
-	  echo "Warning: secrets/rfc/RFC-Submission.md.sops not found; skipping"; \
+	  echo "docs/rfc not found; skipping backup"; \
 	fi
 
  vuln:
@@ -134,7 +152,7 @@ decrypt-rfcs:
 	$(GO) test -race -short -coverprofile=coverage.unit.out $$pkgs
 
  test-e2e:
-	$(GO) test -tags=e2e -v -timeout=5m ./test/e2e/...
+	E2E_FAST=1 $(GO) test -tags=e2e -v -timeout=10s ./test/e2e/...
 
  cover:
 	go tool cover -html=coverage.unit.out -o coverage.html

@@ -1,0 +1,1 @@
+Implemented microservices with graceful shutdown, retries, and observability (Prometheus + OTEL).

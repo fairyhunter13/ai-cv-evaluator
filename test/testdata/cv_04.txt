@@ -1,0 +1,1 @@
+Security-focused engineer. Avoids SQL injection: never trust user input; uses parameters and scanners.

@@ -50,11 +50,14 @@ func (s *CleanupService) CleanupOldData(ctx context.Context) error {
 	// Delete old results (cascade from jobs)
 	var deletedResults int64
 	err = tx.QueryRow(ctx, `
-		DELETE FROM results 
-		WHERE job_id IN (
-			SELECT id FROM jobs WHERE created_at < $1
+		WITH del AS (
+			DELETE FROM results 
+			WHERE job_id IN (
+				SELECT id FROM jobs WHERE created_at < $1
+			)
+			RETURNING 1
 		)
-		RETURNING count(*)
+		SELECT count(*) FROM del
 	`, cutoff).Scan(&deletedResults)
 	if err != nil {
 		slog.Debug("no results to delete", slog.Any("error", err))
@@ -63,9 +66,12 @@ func (s *CleanupService) CleanupOldData(ctx context.Context) error {
 	// Delete old jobs
 	var deletedJobs int64
 	err = tx.QueryRow(ctx, `
-		DELETE FROM jobs 
-		WHERE created_at < $1
-		RETURNING count(*)
+		WITH del AS (
+			DELETE FROM jobs 
+			WHERE created_at < $1
+			RETURNING 1
+		)
+		SELECT count(*) FROM del
 	`, cutoff).Scan(&deletedJobs)
 	if err != nil {
 		slog.Debug("no jobs to delete", slog.Any("error", err))
@@ -74,14 +80,17 @@ func (s *CleanupService) CleanupOldData(ctx context.Context) error {
 	// Delete orphaned uploads (not referenced by any job)
 	var deletedUploads int64
 	err = tx.QueryRow(ctx, `
-		DELETE FROM uploads 
-		WHERE created_at < $1 
-		AND id NOT IN (
-			SELECT cv_id FROM jobs 
-			UNION 
-			SELECT project_id FROM jobs
+		WITH del AS (
+			DELETE FROM uploads 
+			WHERE created_at < $1 
+			AND id NOT IN (
+				SELECT cv_id FROM jobs 
+				UNION 
+				SELECT project_id FROM jobs
+			)
+			RETURNING 1
 		)
-		RETURNING count(*)
+		SELECT count(*) FROM del
 	`, cutoff).Scan(&deletedUploads)
 	if err != nil {
 		slog.Debug("no uploads to delete", slog.Any("error", err))

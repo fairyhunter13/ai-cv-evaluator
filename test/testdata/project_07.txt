@@ -1,0 +1,1 @@
+Deploys to VPS via SSH; idempotent migrations; non-blocking compose; health checks via /healthz.
