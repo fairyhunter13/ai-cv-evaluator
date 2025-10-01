@@ -7,16 +7,18 @@ import (
 )
 
 func TestHTTPMetricsMiddleware_Basic(t *testing.T) {
-    t.Helper()
-    rec := httptest.NewRecorder()
+	t.Helper()
+	rec := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/x", nil)
 	mw := HTTPMetricsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
 	mw.ServeHTTP(rec, r)
-	if rec.Result().StatusCode != 204 { t.Fatalf("want 204") }
+	if rec.Result().StatusCode != 204 {
+		t.Fatalf("want 204")
+	}
 }
 
 func TestJobMetricsHelpers(t *testing.T) {
-    t.Helper()
+	t.Helper()
 	InitMetrics()
 	EnqueueJob("eval")
 	StartProcessingJob("eval")

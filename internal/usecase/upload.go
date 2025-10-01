@@ -25,9 +25,13 @@ func (s UploadService) Ingest(ctx domain.Context, cvText, projText, cvName, proj
 		return "", "", fmt.Errorf("%w: empty extracted text", domain.ErrInvalidArgument)
 	}
 	cvID, err := s.Repo.Create(ctx, domain.Upload{Type: domain.UploadTypeCV, Text: cvText, Filename: cvName, MIME: mimeFromName(cvName), Size: int64(len(cvText)), CreatedAt: time.Now().UTC()})
-	if err != nil { return "", "", err }
+	if err != nil {
+		return "", "", err
+	}
 	prjID, err := s.Repo.Create(ctx, domain.Upload{Type: domain.UploadTypeProject, Text: projText, Filename: projName, MIME: mimeFromName(projName), Size: int64(len(projText)), CreatedAt: time.Now().UTC()})
-	if err != nil { return "", "", err }
+	if err != nil {
+		return "", "", err
+	}
 	return cvID, prjID, nil
 }
 
@@ -43,4 +47,14 @@ func mimeFromName(n string) string {
 	default:
 		return "text/plain"
 	}
+}
+
+// Count returns the total number of uploads.
+func (s UploadService) Count(ctx domain.Context) (int64, error) {
+	return s.Repo.Count(ctx)
+}
+
+// CountByType returns the number of uploads by type.
+func (s UploadService) CountByType(ctx domain.Context, uploadType string) (int64, error) {
+	return s.Repo.CountByType(ctx, uploadType)
 }

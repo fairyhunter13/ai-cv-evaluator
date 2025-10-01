@@ -57,7 +57,7 @@ You are an expert Golang backend engineer applying Clean Architecture and DDD. E
 - JSON: stdlib `encoding/json` (or `jsoniter` if needed, benchmark first).
 - Config: `caarlos0/env/v10` to parse envs into a typed struct under `internal/config`.
 - DB: `pgx` (Postgres) with `sqlc` or `sqlx`; favor prepared statements and context-aware queries.
-- Queue: `hibiken/asynq` (Redis) for background evaluation jobs.
+- Queue: Redpanda (Kafka-compatible) for background evaluation jobs.
 - Vector DB: Qdrant HTTP client; build a thin adapter interface.
 - Text extraction: Apache Tika (HTTP server) for PDF/DOCX; raw read for TXT.
 - Validation: `go-playground/validator/v10` for DTO validation.

@@ -1,0 +1,41 @@
+AI CV Evaluator – Project Report (Repository-Based)
+
+Overview
+- This project implements an AI-assisted CV and project evaluator with an HTTP API and an Admin UI.
+- It demonstrates prompt design, lightweight chaining, and optional RAG configuration.
+- It focuses on pragmatic reliability: short timeouts, clear error handling, and concise, structured responses.
+
+Key Capabilities
+- Upload CV and Project text via /v1/upload. Returns IDs for later evaluation.
+- Enqueue Evaluation via /v1/evaluate. Returns a job id and a status.
+- Fetch Result via /v1/result/{id}. Returns status and, when completed, JSON with scores and feedback.
+- Admin frontend is a separate Vue 3 + Vite app in `admin-frontend/` (HMR in dev; Nginx-served static files in prod).
+
+Architecture & Code Structure
+- cmd/server/main.go: Entry point for the server.
+- internal/adapter/httpserver/: HTTP routes and admin auth/API endpoints (no embedded templates or static assets).
+  - admin_handlers.go: Admin API routes (login, logout, status).
+- admin-frontend/: Standalone Vue 3 + Vite admin dashboard (HMR in dev, Nginx in prod).
+  - src/: Views, stores, and components; Tailwind CSS built via Vite.
+- internal/app/: App glue (readiness checks, Qdrant integration stub, etc.).
+- internal/config/: Configuration loaders and tests.
+- internal/domain/: Core domain entities for evaluation payloads and results.
+- pkg/textx/: Text utilities and sanitization helpers.
+- test/e2e/: End-to-end tests driving upload → evaluate → result.
+- configs/rag/: Optional RAG configs (job description and scoring rubric YAMLs).
+- secrets/: SOPS-managed encrypted files and utilities (envs, RFCs backup/encrypt/decrypt flows).
+
+Dev & Tooling
+- Makefile: 
+  - test (unit), test-e2e (E2E), frontend-install/dev/build/clean, sops encrypt/decrypt, etc.
+- Tailwind CSS: Integrated via Vite; frontend build outputs optimized assets in `admin-frontend/dist/`.
+- CI: GitHub Actions runs lint, unit tests, security checks, and builds the frontend.
+- Docker & Compose: Local stack for server/worker and dependencies; frontend runs via Vite in dev and Nginx in prod.
+
+How This Project Satisfies the Study Case Brief
+- Provides end-to-end evaluation flow using HTTP endpoints and logs concise JSON for both /evaluate (job id + status) and /result (final evaluation when available).
+- Uses pragmatic retries with short timeouts for a fast developer feedback loop.
+- Includes tests, basic observability wiring, and clear operational scripts (SOPS, migrations, build).
+
+Notes
+- Real LLM integration is expected via configured providers and secrets. In fast tests, the system remains robust even when providers are not set, returning meaningful statuses and errors.

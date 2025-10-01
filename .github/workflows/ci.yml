@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ '1.24' ]
+        go: ["1.24"]
     steps:
       - uses: actions/checkout@v4
       - name: Install SOPS and AGE
@@ -48,30 +48,36 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - name: Build admin CSS
-        run: make build-admin-css
-      - name: Verify admin.css exists
+          node-version: "20"
+      - name: Install frontend dependencies
         run: |
-          test -f internal/adapter/httpserver/static/admin.css || {
-            echo "admin.css missing after build-admin-css" >&2; exit 1; }
+          cd admin-frontend
+          npm ci
+      - name: Build frontend
+        run: |
+          cd admin-frontend
+          npm run build
+      - name: Verify frontend build
+        run: |
+          test -d admin-frontend/dist || {
+            echo "Frontend build missing" >&2; exit 1; }
       - name: Lint
         run: make lint
       - name: Vet
         run: make vet
       - name: Security - Vulnerabilities
         run: make vuln
-      
+
       - name: Security - Gosec (SARIF)
         run: make gosec-sarif
         continue-on-error: true
-      
+
       - name: Upload Gosec results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: gosec-results.sarif
-      
+
       - name: Security - License Check
         run: make license-scan
         env:
@@ -83,12 +89,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-unit-${{ matrix.go }}
-          path: coverage.unit.out
+          path: coverage/coverage.unit.out
       - name: Validate OpenAPI
         run: make openapi-validate
-      - name: Build docker image (smoke)
-        run: make docker-build-ci TAG=${{ github.sha }}
-      
+      - name: Build docker images (smoke)
+        run: |
+          docker build -f Dockerfile.server -t ${{ github.repository }}-server:${{ github.sha }} .
+          docker build -f Dockerfile.worker -t ${{ github.repository }}-worker:${{ github.sha }} .
+          docker build -f admin-frontend/Dockerfile.prod -t ${{ github.repository }}-frontend:${{ github.sha }} ./admin-frontend
+
       - name: Production - Multi-arch Build Test
         if: matrix.go == '1.24'
         run: make build-matrix

@@ -20,8 +20,8 @@ type Client struct {
 // New constructs a Qdrant client with baseURL and optional apiKey.
 func New(baseURL, apiKey string) *Client {
 	return &Client{
-		baseURL: baseURL,
-		apiKey:  apiKey,
+		baseURL:    baseURL,
+		apiKey:     apiKey,
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 	}
 }
@@ -32,9 +32,13 @@ func (c *Client) EnsureCollection(ctx context.Context, name string, vectorSize i
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/collections/%s", c.baseURL, name), nil)
 	c.setHeaders(req)
 	resp, err := c.httpClient.Do(req)
-	if err != nil { return err }
-	defer func(){ _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusOK { return nil }
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
 	// Create
 	payload := map[string]any{
 		"vectors": map[string]any{"size": vectorSize, "distance": distance},
@@ -44,23 +48,31 @@ func (c *Client) EnsureCollection(ctx context.Context, name string, vectorSize i
 	c.setHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = c.httpClient.Do(req)
-	if err != nil { return err }
-	defer func(){ _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("qdrant ensure create status %d", resp.StatusCode) }
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("qdrant ensure create status %d", resp.StatusCode)
+	}
 	return nil
 }
 
 // UpsertPoints inserts or updates points in a collection.
 // vectors: list of float32 slices; payloads: matching metadata per point; ids: optional custom ids (len must match if provided)
 func (c *Client) UpsertPoints(ctx context.Context, collection string, vectors [][]float32, payloads []map[string]any, ids []any) error {
-	if len(vectors) != len(payloads) { return fmt.Errorf("vectors and payloads length mismatch") }
+	if len(vectors) != len(payloads) {
+		return fmt.Errorf("vectors and payloads length mismatch")
+	}
 	points := make([]map[string]any, 0, len(vectors))
 	for i := range vectors {
 		pt := map[string]any{
-			"vector": vectors[i],
+			"vector":  vectors[i],
 			"payload": payloads[i],
 		}
-		if ids != nil && len(ids) == len(vectors) { pt["id"] = ids[i] }
+		if ids != nil && len(ids) == len(vectors) {
+			pt["id"] = ids[i]
+		}
 		points = append(points, pt)
 	}
 	body := map[string]any{"points": points}
@@ -69,9 +81,13 @@ func (c *Client) UpsertPoints(ctx context.Context, collection string, vectors []
 	c.setHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	if err != nil { return err }
-	defer func(){ _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 { return fmt.Errorf("qdrant upsert status %d", resp.StatusCode) }
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("qdrant upsert status %d", resp.StatusCode)
+	}
 	return nil
 }
 
@@ -83,14 +99,24 @@ func (c *Client) Search(ctx context.Context, collection string, vector []float32
 	c.setHeaders(req)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
-	if err != nil { return nil, err }
-	defer func(){ _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 { return nil, fmt.Errorf("qdrant search status %d", resp.StatusCode) }
-	var out struct{ Result []map[string]any `json:"result"` }
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("qdrant search status %d", resp.StatusCode)
+	}
+	var out struct {
+		Result []map[string]any `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
 	return out.Result, nil
 }
 
 func (c *Client) setHeaders(req *http.Request) {
-	if c.apiKey != "" { req.Header.Set("api-key", c.apiKey) }
+	if c.apiKey != "" {
+		req.Header.Set("api-key", c.apiKey)
+	}
 }

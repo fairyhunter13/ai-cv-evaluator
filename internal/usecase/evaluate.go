@@ -13,12 +13,16 @@ import (
 // EvaluateService orchestrates job creation and queueing for evaluation.
 type EvaluateService struct {
 	Jobs    domain.JobRepository
-	Queue  domain.Queue
+	Queue   domain.Queue
 	Uploads domain.UploadRepository
 }
 
 // ReadinessCheck represents a single readiness probe result used by handlers.
-type ReadinessCheck struct { Name string `json:"name"`; OK bool `json:"ok"`; Details string `json:"details"` }
+type ReadinessCheck struct {
+	Name    string `json:"name"`
+	OK      bool   `json:"ok"`
+	Details string `json:"details"`
+}
 
 // NewEvaluateService constructs an EvaluateService with its dependencies.
 func NewEvaluateService(j domain.JobRepository, q domain.Queue, u domain.UploadRepository) EvaluateService {
@@ -26,8 +30,10 @@ func NewEvaluateService(j domain.JobRepository, q domain.Queue, u domain.UploadR
 }
 
 // Enqueue validates inputs, creates a job, and enqueues the evaluation task.
-func (s EvaluateService) Enqueue(ctx domain.Context, cvID, projectID, jobDesc, studyCase, idemKey string) (string, error) {
-	if cvID == "" || projectID == "" { return "", fmt.Errorf("%w: ids required", domain.ErrInvalidArgument) }
+func (s EvaluateService) Enqueue(ctx domain.Context, cvID, projectID, jobDesc, studyCase, scoringRubric, idemKey string) (string, error) {
+	if cvID == "" || projectID == "" {
+		return "", fmt.Errorf("%w: ids required", domain.ErrInvalidArgument)
+	}
 	// Idempotency: if provided, try to find an existing job
 	if idemKey != "" {
 		if j, err := s.Jobs.FindByIdempotencyKey(ctx, idemKey); err == nil && j.ID != "" {
@@ -36,11 +42,15 @@ func (s EvaluateService) Enqueue(ctx domain.Context, cvID, projectID, jobDesc, s
 	}
 	// Create job
 	j := domain.Job{Status: domain.JobQueued, CVID: cvID, ProjectID: projectID, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if idemKey != "" { j.IdemKey = &idemKey }
+	if idemKey != "" {
+		j.IdemKey = &idemKey
+	}
 	jobID, err := s.Jobs.Create(ctx, j)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	// Enqueue
-	payload := domain.EvaluateTaskPayload{JobID: jobID, CVID: cvID, ProjectID: projectID, JobDescription: jobDesc, StudyCaseBrief: studyCase}
+	payload := domain.EvaluateTaskPayload{JobID: jobID, CVID: cvID, ProjectID: projectID, JobDescription: jobDesc, StudyCaseBrief: studyCase, ScoringRubric: scoringRubric}
 	if _, err := s.Queue.EnqueueEvaluate(ctx, payload); err != nil {
 		_ = s.Jobs.UpdateStatus(ctx, jobID, domain.JobFailed, ptr("enqueue failed"))
 		return "", err
@@ -50,8 +60,8 @@ func (s EvaluateService) Enqueue(ctx domain.Context, cvID, projectID, jobDesc, s
 
 // Readiness returns static readiness checks; actual external checks are in internal/app.
 func (s EvaluateService) Readiness(_ domain.Context) []ReadinessCheck {
-	// Placeholder: In real impl, ping DB/Redis/Qdrant
-	return []ReadinessCheck{{Name: "db", OK: true}, {Name: "redis", OK: true}, {Name: "qdrant", OK: true}}
+	// Placeholder: In real impl, ping DB/Qdrant
+	return []ReadinessCheck{{Name: "db", OK: true}, {Name: "qdrant", OK: true}}
 }
 
 func hash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }

@@ -1,0 +1,38 @@
+# Study Case Brief Seed
+texts:
+  - |-
+    Mini Project: Evaluate CV and project via AI workflow with retries and observability.
+    
+    ## Project Overview
+    Build a backend service that evaluates candidates' CVs and project reports against job requirements using AI/LLM workflows. The system should follow Clean Architecture principles with clear separation of concerns.
+    
+    ## Key Requirements
+    - RESTful API endpoints for document upload, evaluation triggering, and result retrieval
+    - Asynchronous job processing with queue-based architecture
+    - RAG (Retrieval-Augmented Generation) for context-aware evaluation
+    - Multi-provider AI support with fallback mechanisms
+    - Comprehensive observability with metrics, tracing, and logging
+    - Robust error handling and retry mechanisms
+    
+    ## Technical Stack
+    - Backend: Go with Clean Architecture
+    - Database: PostgreSQL
+    - Queue: Redpanda (Kafka-compatible)
+    - Vector DB: Qdrant for embeddings
+    - AI: OpenRouter/OpenAI with free models support
+    - Observability: OpenTelemetry, Prometheus, Grafana
+    
+    ## Evaluation Criteria
+    The system should demonstrate:
+    1. Correctness: Implements prompt design, LLM chaining, RAG
+    2. Code Quality: Clean, modular, reusable, tested code
+    3. Resilience: Handles jobs, retries, randomness, API failures
+    4. Documentation: Clear README, setup instructions, trade-offs
+    5. Creativity: Extra features beyond requirements
+    
+    ## Scoring Methodology
+    Evaluation follows a structured scoring rubric with weighted parameters:
+    - CV Match Evaluation: Technical skills (40%), Experience (25%), Achievements (20%), Cultural fit (15%)
+    - Project Deliverable Evaluation: Correctness (30%), Code quality (25%), Resilience (20%), Documentation (15%), Creativity (10%)
+    
+    Each parameter is scored on a 1-5 scale, then weighted and normalized for final scoring.

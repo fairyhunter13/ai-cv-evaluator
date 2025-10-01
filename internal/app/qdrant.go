@@ -12,7 +12,9 @@ import (
 
 // EnsureDefaultCollections ensures collections exist and seeds them using ragseed.
 func EnsureDefaultCollections(ctx context.Context, qcli *qdrantcli.Client, aicl domain.AIClient) {
-	if qcli == nil { return }
+	if qcli == nil {
+		return
+	}
 	if err := qcli.EnsureCollection(ctx, "job_description", 1536, "Cosine"); err != nil {
 		slog.Warn("qdrant ensure job_description failed", slog.Any("error", err))
 	}

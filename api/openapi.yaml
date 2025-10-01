@@ -48,7 +48,7 @@ paths:
                 project_id: { type: string }
                 job_description: { type: string }
                 study_case_brief: { type: string }
-              required: [cv_id, project_id, job_description, study_case_brief]
+              required: [cv_id, project_id]
       responses:
         '200':
           description: Queued
@@ -84,6 +84,109 @@ paths:
                   - $ref: '#/components/schemas/Processing'
                   - $ref: '#/components/schemas/Completed'
                   - $ref: '#/components/schemas/Failed'
+        '404': { $ref: '#/components/responses/Error' }
+  /admin/api/stats:
+    get:
+      summary: Get dashboard statistics
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uploads: { type: integer }
+                  evaluations: { type: integer }
+                  completed: { type: integer }
+                  avg_time: { type: number }
+                  failed: { type: integer }
+        '401': { $ref: '#/components/responses/Error' }
+  /admin/api/jobs:
+    get:
+      summary: Get paginated job list
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100 }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [queued, processing, completed, failed] }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        status: { type: string }
+                        created_at: { type: string, format: date-time }
+                        updated_at: { type: string, format: date-time }
+                        cv_id: { type: string }
+                        project_id: { type: string }
+                        error:
+                          type: object
+                          properties:
+                            code: { type: string }
+                            message: { type: string }
+                  pagination:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      limit: { type: integer }
+                      total: { type: integer }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /admin/api/jobs/{id}:
+    get:
+      summary: Get job details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string }
+                  created_at: { type: string, format: date-time }
+                  updated_at: { type: string, format: date-time }
+                  cv_id: { type: string }
+                  project_id: { type: string }
+                  error:
+                    type: object
+                    properties:
+                      code: { type: string }
+                      message: { type: string }
+                  result:
+                    type: object
+                    properties:
+                      cv_match_rate: { type: number }
+                      cv_feedback: { type: string }
+                      project_score: { type: number }
+                      project_feedback: { type: string }
+                      overall_summary: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 components:
   responses:

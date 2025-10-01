@@ -1,0 +1,289 @@
+---
+alwaysApply: true
+---
+# Documentation Organization Rule
+
+## Core Principle
+All documentation files MUST be placed inside the `docs/` directory, with ONLY `README.md` allowed in the root directory.
+
+## Documentation Structure
+```
+docs/
+├── README.md                    # Main documentation index
+├── architecture/               # System architecture docs
+├── implementation/             # Implementation details
+├── development/               # Development guides
+├── adr/                      # Architecture Decision Records
+├── contributing/             # Contribution guidelines
+├── ops/                      # Operations and deployment
+├── security/                 # Security documentation
+├── planning/                 # Project planning docs
+└── migration/                # Migration guides
+```
+
+## File Naming Conventions
+- Use UPPERCASE for main documentation files (e.g., `ARCHITECTURE.md`)
+- Use lowercase with underscores for subdirectory files
+- Be descriptive and consistent with naming
+
+## Documentation Quality Standards
+- Well-structured with clear headings
+- Include table of contents for longer documents
+- Use consistent markdown formatting
+- Include relevant links and cross-references
+- Keep documentation up-to-date with code changes
+
+## Enforcement Rules
+
+### When Creating New Documentation
+1. **ALWAYS** place new documentation in the `docs/` directory
+2. Choose the appropriate subdirectory based on content type
+3. Follow the established naming conventions
+4. Update the main `docs/README.md` if adding new major sections
+
+### When Moving Existing Documentation
+1. If any `.md` files exist in the root directory (except `README.md`), they MUST be moved to `docs/`
+2. Choose the most appropriate subdirectory for the content
+3. Update any internal links that reference the moved files
+4. Update the main `docs/README.md` to include references to moved files
+
+### Documentation Maintenance
+1. Regularly review documentation structure
+2. Ensure all links are working and up-to-date
+3. Remove or archive outdated documentation
+4. Keep the `docs/README.md` as the central navigation hub
+
+## Examples
+
+### ✅ Correct Structure
+```
+project/
+├── README.md                    # ✅ Allowed in root
+├── docs/
+│   ├── README.md               # ✅ Main docs index
+│   ├── architecture/
+│   │   └── ARCHITECTURE.md     # ✅ Properly organized
+│   └── development/
+│       └── FRONTEND_DEVELOPMENT.md
+```
+
+### ❌ Incorrect Structure
+```
+project/
+├── README.md                    # ✅ Allowed
+├── CONTAINER_POOL_IMPROVEMENTS.md  # ❌ Should be in docs/
+├── docs/
+│   └── README.md
+```
+
+## Change Tracking and Synchronization
+
+### Automatic Documentation Updates
+**CRITICAL**: Documentation MUST be automatically updated whenever code changes occur to maintain synchronization between docs and repository state.
+
+### Change Detection Protocol
+1. **Code Changes**: When any `.go`, `.yaml`, `.yml`, `.json`, `.dockerfile`, or configuration files are modified
+2. **API Changes**: When OpenAPI specifications, endpoints, or data models change
+3. **Architecture Changes**: When new services, components, or integrations are added
+4. **Configuration Changes**: When environment variables, deployment configs, or infrastructure changes
+5. **Dependency Changes**: When new dependencies are added or versions updated
+
+### Mandatory Documentation Updates
+When ANY of the following changes occur, documentation MUST be updated:
+
+#### 1. Code Structure Changes
+- **New packages/modules**: Update `docs/architecture/ARCHITECTURE.md`
+- **New services**: Update service documentation in `docs/architecture/`
+- **API changes**: Update `api/openapi.yaml` and related API docs
+- **Database changes**: Update migration docs in `docs/migration/`
+
+#### 2. Configuration Changes
+- **Environment variables**: Update configuration documentation
+- **Docker changes**: Update deployment docs in `docs/ops/`
+- **Infrastructure changes**: Update architecture and deployment docs
+
+#### 3. Feature Changes
+- **New features**: Create or update feature documentation
+- **Removed features**: Update or archive related documentation
+- **Modified workflows**: Update process documentation
+
+### Documentation Synchronization Rules
+
+#### 1. Real-time Updates
+- Documentation updates MUST happen in the SAME commit as code changes
+- No code changes should be merged without corresponding documentation updates
+- Use commit messages to reference documentation changes
+
+#### 2. Change Impact Assessment
+For each code change, assess and update:
+- **Architecture docs**: If structural changes affect system design
+- **API docs**: If endpoints, schemas, or contracts change
+- **Development docs**: If development workflow or setup changes
+- **Deployment docs**: If infrastructure or deployment process changes
+- **Migration docs**: If database or data structure changes
+
+#### 3. Documentation Validation
+- **Link validation**: Ensure all internal links work after changes
+- **Cross-reference updates**: Update related documentation sections
+- **Version consistency**: Ensure version numbers match across docs
+- **Example updates**: Update code examples to reflect current implementation
+
+## Anti-Redundancy and Anti-Duplication Rules
+
+### Documentation Quality Control
+
+#### 1. **Duplicate Content Detection**
+**CRITICAL**: Before creating any new documentation, you MUST:
+- Search existing documentation for similar content
+- Identify overlapping or duplicate information
+- Consolidate related content instead of creating new files
+- Update existing documentation rather than duplicating
+
+#### 2. **Content Consolidation Rules**
+- **Single Source of Truth**: Each topic should have exactly ONE authoritative document
+- **Cross-References**: Use links to reference related content instead of duplicating
+- **Modular Structure**: Break large documents into focused, single-purpose files
+- **Eliminate Redundancy**: Remove duplicate explanations, examples, or procedures
+
+#### 3. **Documentation Bloat Prevention**
+- **Concise Content**: Write clear, focused content without unnecessary verbosity
+- **Remove Outdated Information**: Delete obsolete content immediately
+- **Avoid Repetition**: Don't repeat the same information in multiple places
+- **Streamline Structure**: Use consistent, minimal formatting
+
+#### 4. **Automatic Duplicate Detection**
+When creating or modifying documentation, automatically:
+- **Scan for Similar Content**: Check if similar information exists elsewhere
+- **Identify Overlaps**: Detect content that covers the same topics
+- **Suggest Consolidation**: Recommend merging or linking instead of duplicating
+- **Flag Redundancy**: Alert when content appears in multiple locations
+
+### Documentation Cleanup Protocols
+
+#### 1. **Pre-Creation Validation**
+Before creating ANY new documentation file:
+1. **Search Existing Content**: Use semantic search to find similar documentation
+2. **Check for Overlaps**: Identify if content already exists in different files
+3. **Assess Consolidation**: Determine if new content should be added to existing files
+4. **Validate Necessity**: Ensure the new file is truly needed and not redundant
+
+#### 2. **Content Audit Requirements**
+- **Monthly Reviews**: Audit all documentation for redundancy and bloat
+- **Duplicate Detection**: Identify files with overlapping content
+- **Consolidation Opportunities**: Find content that can be merged
+- **Outdated Content**: Remove or archive obsolete information
+
+#### 3. **Documentation Consolidation Rules**
+When duplicate or overlapping content is found:
+1. **Identify Primary Source**: Determine the most authoritative document
+2. **Merge Content**: Combine related information into single, comprehensive document
+3. **Update References**: Fix all links and cross-references
+4. **Remove Duplicates**: Delete redundant files after consolidation
+5. **Update Index**: Modify main documentation index to reflect changes
+
+### Anti-Redundancy Enforcement
+
+#### 1. **Content Similarity Detection**
+- **Semantic Analysis**: Use content analysis to detect similar topics
+- **Keyword Overlap**: Identify documents covering the same subjects
+- **Structure Comparison**: Compare document structures for redundancy
+- **Cross-Reference Validation**: Ensure links point to correct, non-duplicate content
+
+#### 2. **Documentation Consolidation Triggers**
+Automatically trigger consolidation when:
+- **>70% Content Overlap**: Two documents have significant content overlap
+- **Same Topic Coverage**: Multiple documents cover identical topics
+- **Redundant Examples**: Same examples appear in multiple files
+- **Duplicate Procedures**: Identical procedures documented multiple times
+
+#### 3. **Bloat Detection and Prevention**
+- **Length Thresholds**: Flag documents exceeding reasonable length limits
+- **Content Density**: Identify documents with low information density
+- **Outdated Sections**: Detect and remove obsolete content
+- **Verbose Explanations**: Identify unnecessarily long explanations
+
+### Documentation Maintenance Automation
+
+#### 1. **Automated Cleanup Tasks**
+- **Duplicate Detection**: Automatically scan for duplicate content
+- **Link Validation**: Verify all internal links are working
+- **Content Freshness**: Check for outdated information
+- **Structure Optimization**: Suggest improvements to document organization
+
+#### 2. **Quality Metrics**
+- **Redundancy Score**: Measure content overlap between documents
+- **Bloat Index**: Calculate content density and relevance
+- **Link Health**: Monitor internal link integrity
+- **Update Frequency**: Track documentation freshness
+
+#### 3. **Maintenance Schedule**
+- **Daily**: Check for new duplicate content
+- **Weekly**: Validate all internal links
+- **Monthly**: Comprehensive content audit
+- **Quarterly**: Full documentation restructure review
+
+### Documentation Consolidation Examples
+
+#### ✅ Correct Approach
+```
+docs/
+├── implementation/
+│   └── FREE_MODELS_IMPLEMENTATION.md  # Single comprehensive guide
+└── README.md                          # References implementation guide
+```
+
+#### ❌ Incorrect Approach
+```
+docs/
+├── FREE_MODELS_IMPLEMENTATION.md      # ❌ Duplicate content
+├── implementation/
+│   └── FREE_MODELS_IMPLEMENTATION.md  # ❌ Same content, different location
+└── README.md                          # ❌ References both files
+```
+
+### Content Consolidation Strategies
+
+#### 1. **Merge Related Documents**
+- Combine documents covering similar topics
+- Create comprehensive guides instead of fragmented information
+- Maintain single source of truth for each topic
+
+#### 2. **Eliminate Redundant Sections**
+- Remove duplicate explanations
+- Consolidate similar examples
+- Merge overlapping procedures
+
+#### 3. **Optimize Document Structure**
+- Use clear, focused headings
+- Implement consistent formatting
+- Create logical content flow
+
+### Documentation Quality Standards
+
+#### 1. **Content Requirements**
+- **Unique Value**: Each document must provide unique, non-redundant information
+- **Focused Scope**: Documents should cover single, well-defined topics
+- **Current Information**: All content must be up-to-date and relevant
+- **Clear Purpose**: Each document must have a clear, distinct purpose
+
+#### 2. **Structure Requirements**
+- **Logical Organization**: Content must be logically organized
+- **Consistent Formatting**: Use consistent markdown formatting
+- **Appropriate Length**: Documents should be appropriately sized for their content
+- **Clear Navigation**: Include clear navigation and cross-references
+
+#### 3. **Maintenance Requirements**
+- **Regular Updates**: Keep content current with code changes
+- **Link Integrity**: Maintain working internal and external links
+- **Content Relevance**: Remove outdated or irrelevant information
+- **Structure Optimization**: Continuously improve document organization
+
+## Action Items
+- Immediately move any `.md` files from root to appropriate `docs/` subdirectories
+- Update internal documentation links
+- Ensure `docs/README.md` serves as the central navigation hub
+- Maintain consistent documentation structure across the project
+- Implement automated documentation cleanup and validation
+- Establish content consolidation protocols
+- Create automated documentation cleanup systems
+- Implement documentation quality metrics and monitoring

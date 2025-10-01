@@ -2,8 +2,8 @@ package app
 
 import (
 	"net/http"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -19,15 +19,23 @@ import (
 // If the input is empty, returns ["*"].
 func ParseOrigins(s string) []string {
 	s = strings.TrimSpace(s)
-	if s == "" { return []string{"*"} }
-	if s == "*" { return []string{"*"} }
+	if s == "" {
+		return []string{"*"}
+	}
+	if s == "*" {
+		return []string{"*"}
+	}
 	parts := strings.Split(s, ",")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
-		if p != "" { out = append(out, p) }
+		if p != "" {
+			out = append(out, p)
+		}
 	}
-	if len(out) == 0 { return []string{"*"} }
+	if len(out) == 0 {
+		return []string{"*"}
+	}
 	return out
 }
 
@@ -42,13 +50,13 @@ func BuildRouter(cfg config.Config, srv *httpserver.Server) http.Handler {
 	r.Use(httpserver.AccessLog())
 	r.Use(observability.HTTPMetricsMiddleware)
 
-	// CORS
+	// CORS - Updated for frontend separation
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   ParseOrigins(cfg.CORSAllowOrigins),
+		AllowedOrigins:   append(ParseOrigins(cfg.CORSAllowOrigins), "http://localhost:3001"),
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
 		ExposedHeaders:   []string{"X-Request-Id"},
-		AllowCredentials: false,
+		AllowCredentials: true, // Enable credentials for session management
 		MaxAge:           300,
 	}))
 
@@ -73,9 +81,17 @@ func BuildRouter(cfg config.Config, srv *httpserver.Server) http.Handler {
 	// OpenAPI if present
 	r.Get("/openapi.yaml", srv.OpenAPIServe())
 
-	// Admin UI
+	// Admin API endpoints for frontend authentication
 	if cfg.AdminEnabled() {
-		srv.MountAdmin(r)
+		admin, err := httpserver.NewAdminServer(cfg, srv)
+		if err == nil {
+			r.Post("/admin/login", admin.AdminLoginHandler())
+			r.Post("/admin/logout", admin.AdminLogoutHandler())
+			r.Get("/admin/api/status", admin.AdminStatusHandler())
+			r.Get("/admin/api/stats", admin.AdminStatsHandler())
+			r.Get("/admin/api/jobs", admin.AdminJobsHandler())
+			r.Get("/admin/api/jobs/{id}", admin.AdminJobDetailsHandler())
+		}
 	}
 
 	return httpserver.SecurityHeaders(r)

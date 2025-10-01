@@ -15,12 +15,17 @@ import (
 )
 
 type errAI struct{}
+
 func (s errAI) Embed(_ domain.Context, texts []string) ([][]float32, error) {
 	vecs := make([][]float32, len(texts))
-	for i := range texts { vecs[i] = []float32{1,2,3} }
+	for i := range texts {
+		vecs[i] = []float32{1, 2, 3}
+	}
 	return vecs, nil
 }
-func (s errAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, error) { return "{}", nil }
+func (s errAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, error) {
+	return "{}", nil
+}
 
 func TestSeedFile_UpsertError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

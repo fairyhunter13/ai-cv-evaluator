@@ -17,7 +17,7 @@ import (
 func TestUploadHandler_413_PayloadTooLarge(t *testing.T) {
 	// Set MaxUploadMB=1; handler caps body to 2MB for multipart
 	cfg := config.Config{Port: 8080, MaxUploadMB: 1}
-	s := httpserver.NewServer(cfg, usecase.NewUploadService(nil), usecase.NewEvaluateService(nil, nil, nil), usecase.NewResultService(nil, nil), nil, nil, nil, nil, nil)
+	s := httpserver.NewServer(cfg, usecase.NewUploadService(nil), usecase.NewEvaluateService(nil, nil, nil), usecase.NewResultService(nil, nil), nil, nil, nil, nil)
 	// Build multipart > 2MB
 	big1 := bytes.Repeat([]byte("A"), 1536*1024) // 1.5MB
 	big2 := bytes.Repeat([]byte("B"), 800*1024)  // 0.78MB => total ~2.28MB

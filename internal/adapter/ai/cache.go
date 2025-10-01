@@ -16,11 +16,11 @@ import (
 // Cache is a simple LRU-ish with FIFO eviction for simplicity.
 
 type embedCacheClient struct {
-	base domain.AIClient
-	capacity  int
-	mu   sync.RWMutex
-	m    map[string][]float32
-	ord  []string
+	base     domain.AIClient
+	capacity int
+	mu       sync.RWMutex
+	m        map[string][]float32
+	ord      []string
 }
 
 // NewEmbedCache wraps base with an embedding cache of given capacity (number of entries).

@@ -3,7 +3,7 @@
 package e2e_test
 
 import (
-    "os"
+	"os"
 )
 
 func osReadFileImpl(p string) ([]byte, error) { return os.ReadFile(p) }

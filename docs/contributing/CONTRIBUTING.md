@@ -6,6 +6,7 @@ Thank you for your interest in contributing to the AI CV Evaluator project!
 
 ### Prerequisites
 - Go 1.24+
+- Node.js 18+ (for frontend development)
 - Docker and Docker Compose
 - Make
 - SOPS (for secrets management)
@@ -24,12 +25,17 @@ cp .env.sample .env
 # Edit .env with your configuration (or decrypt .env.sops.yaml)
 ```
 
-3. Start dependencies:
+3. Start the full stack with frontend (recommended):
 ```bash
-docker compose up -d db redis qdrant tika
+make dev-full  # Starts backend + frontend with HMR
 ```
 
-4. Run migrations:
+Or start backend only:
+```bash
+docker compose up -d --build
+```
+
+4. Migrations run automatically when starting services, but you can run them manually:
 ```bash
 make migrate
 ```
@@ -39,18 +45,35 @@ make migrate
 make seed-rag
 ```
 
-6. Run the application:
+6. The system will start with:
+   - 1 migration container (runs database migrations automatically)
+   - 1 server container (API-only HTTP requests)
+   - 1 frontend container (Vue 3 + Vite with HMR)
+   - 8 worker containers (processes AI tasks)
+   - All supporting services (PostgreSQL, Redpanda, Qdrant, Tika)
+   - Observability stack (Prometheus, Grafana, Jaeger)
+
+7. For development, you can also run locally:
 ```bash
-make run
+make run  # Runs only the server
+make frontend-dev  # Runs only the frontend
 ```
 
 ## Code Standards
 
-### Architecture
+### Backend Architecture
 - Follow Clean Architecture principles
 - Keep domain layer pure (no external dependencies)
 - Place business logic in usecase layer
 - Use adapters for external integrations
+
+### Frontend Architecture
+- Use Vue 3 Composition API
+- Follow component-based architecture
+- Use Pinia for state management
+- Implement proper TypeScript types
+- Use Tailwind CSS for styling
+- Follow Vue 3 best practices
 
 ### Testing
 - Colocate unit tests with code (`*_test.go` next to implementation)
@@ -63,6 +86,7 @@ make run
 - Run `make lint` to check for issues
 - Run `make vet` for Go vet checks
 - Run `make vuln` for vulnerability scanning
+- For frontend: Run `npm run lint` in `admin-frontend/`
 
 ## Making Changes
 
@@ -98,13 +122,53 @@ make all  # fmt, lint, vet, test
    - Test results
    - Screenshots if UI changes
 
+## Frontend Development
+
+### Development Workflow
+1. Start the development environment:
+   ```bash
+   make dev-full  # Backend + frontend with HMR
+   ```
+
+2. Make changes to Vue components in `admin-frontend/src/`
+3. Changes are automatically reflected with HMR
+4. Test API integration with the backend
+
+### Frontend Structure
+- `admin-frontend/src/views/` - Page components
+- `admin-frontend/src/stores/` - Pinia state management
+- `admin-frontend/src/App.vue` - Root component
+- `admin-frontend/src/main.ts` - Application entry point
+
+### Frontend Commands
+```bash
+# Install dependencies
+make frontend-install
+
+# Start development server
+make frontend-dev
+
+# Build for production
+make frontend-build
+
+# Clean build artifacts
+make frontend-clean
+```
+
+### Frontend Testing
+- Use browser dev tools for debugging
+- Test API integration with backend
+- Verify responsive design with different screen sizes
+- Test authentication flow
+
 ## API Changes
 
 When modifying API endpoints:
 1. Update `api/openapi.yaml`
 2. Validate with `make validate-openapi`
-3. Update integration tests
-4. Document breaking changes
+3. Update E2E tests
+4. Update frontend API calls if needed
+5. Document breaking changes
 
 ## Adding Dependencies
 
@@ -132,15 +196,15 @@ func TestFunctionName_Scenario(t *testing.T) {
 }
 ```
 
-### Integration Tests
-```bash
-go test -tags=integration ./...
-```
 
 ### E2E Tests
 ```bash
-make test-e2e
+make ci-e2e  # Full E2E with Docker Compose setup
+# or
+make test-e2e  # Assumes services are already running
 ```
+
+**Note**: E2E tests require the full stack running with 8 worker replicas for optimal performance.
 
 ## Documentation
 
