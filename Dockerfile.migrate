@@ -1,0 +1,46 @@
+# Migration container for database migrations
+FROM golang:1.24-alpine AS builder
+
+# Install goose and other dependencies
+RUN apk add --no-cache git ca-certificates tzdata
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+
+# Create final image
+FROM alpine:3.19
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata postgresql-client
+
+# Copy goose binary from builder
+COPY --from=builder /go/bin/goose /usr/local/bin/goose
+
+# Create working directory
+WORKDIR /migrations
+
+# Copy migration files
+COPY deploy/migrations/ /migrations/
+
+# Create entrypoint script
+RUN echo '#!/bin/sh' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo 'echo "==> Running database migrations..."' >> /entrypoint.sh && \
+    echo 'if [ -z "$DB_URL" ]; then' >> /entrypoint.sh && \
+    echo '  echo "ERROR: DB_URL environment variable is required"' >> /entrypoint.sh && \
+    echo '  exit 1' >> /entrypoint.sh && \
+    echo 'fi' >> /entrypoint.sh && \
+    echo 'echo "==> Waiting for database to be ready..."' >> /entrypoint.sh && \
+    echo 'until pg_isready -d "$DB_URL" >/dev/null 2>&1; do' >> /entrypoint.sh && \
+    echo '  echo "  Waiting for database..."' >> /entrypoint.sh && \
+    echo '  sleep 2' >> /entrypoint.sh && \
+    echo 'done' >> /entrypoint.sh && \
+    echo 'echo "==> Database is ready, running migrations..."' >> /entrypoint.sh && \
+    echo 'goose -dir /migrations postgres "$DB_URL" up' >> /entrypoint.sh && \
+    echo 'if [ $? -ne 0 ]; then' >> /entrypoint.sh && \
+    echo '  echo "==> Migration failed, retrying in 5s..."' >> /entrypoint.sh && \
+    echo '  sleep 5' >> /entrypoint.sh && \
+    echo '  goose -dir /migrations postgres "$DB_URL" up' >> /entrypoint.sh && \
+    echo 'fi' >> /entrypoint.sh && \
+    echo 'echo "==> Migrations completed successfully"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

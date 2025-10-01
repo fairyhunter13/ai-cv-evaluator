@@ -30,11 +30,13 @@ const (
 
 // Upload represents stored text and metadata for CV or Project
 // Invariants: Type in {cv, project}; Size <= Max; Text sanitized and non-empty
-//go:generate mockery --name=UploadRepository --with-expecter --filename=upload_repository_mock.go
-//go:generate mockery --name=JobRepository --with-expecter --filename=job_repository_mock.go
-//go:generate mockery --name=ResultRepository --with-expecter --filename=result_repository_mock.go
-//go:generate mockery --name=Queue --with-expecter --filename=queue_mock.go
-//go:generate mockery --name=AIClient --with-expecter --filename=aiclient_mock.go
+//
+//go:generate mockery --name=UploadRepository --with-expecter --filename=upload_repository_mock.go --dir=mocks
+//go:generate mockery --name=JobRepository --with-expecter --filename=job_repository_mock.go --dir=mocks
+//go:generate mockery --name=ResultRepository --with-expecter --filename=result_repository_mock.go --dir=mocks
+//go:generate mockery --name=Queue --with-expecter --filename=queue_mock.go --dir=mocks
+//go:generate mockery --name=AIClient --with-expecter --filename=aiclient_mock.go --dir=mocks
+//go:generate mockery --name=TextExtractor --with-expecter --filename=text_extractor_mock.go --dir=mocks
 type Upload struct {
 	// ID is the unique identifier for the upload.
 	ID string
@@ -114,6 +116,10 @@ type UploadRepository interface {
 	Create(ctx Context, u Upload) (string, error)
 	// Get retrieves an upload by ID.
 	Get(ctx Context, id string) (Upload, error)
+	// Count returns the total number of uploads.
+	Count(ctx Context) (int64, error)
+	// CountByType returns the number of uploads by type.
+	CountByType(ctx Context, uploadType string) (int64, error)
 }
 
 // JobRepository is responsible for managing jobs.
@@ -126,6 +132,14 @@ type JobRepository interface {
 	Get(ctx Context, id string) (Job, error)
 	// FindByIdempotencyKey finds a job by idempotency key.
 	FindByIdempotencyKey(ctx Context, key string) (Job, error)
+	// Count returns the total number of jobs.
+	Count(ctx Context) (int64, error)
+	// CountByStatus returns the number of jobs by status.
+	CountByStatus(ctx Context, status JobStatus) (int64, error)
+	// List returns a paginated list of jobs.
+	List(ctx Context, offset, limit int) ([]Job, error)
+	// GetAverageProcessingTime returns the average processing time for completed jobs.
+	GetAverageProcessingTime(ctx Context) (float64, error)
 }
 
 // ResultRepository is responsible for managing results.
@@ -164,11 +178,12 @@ type TextExtractor interface {
 
 // EvaluateTaskPayload is the payload for the evaluate job enqueued to the background worker.
 type EvaluateTaskPayload struct {
-	JobID           string
-	CVID            string
-	ProjectID       string
-	JobDescription  string
-	StudyCaseBrief  string
+	JobID          string
+	CVID           string
+	ProjectID      string
+	JobDescription string
+	StudyCaseBrief string
+	ScoringRubric  string
 }
 
 // Context is an alias to allow decoupling from std context in domain

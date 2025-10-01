@@ -1,0 +1,69 @@
+---
+alwaysApply: true
+---
+# Go Code Changes - Unit Test Requirements
+
+## Mandatory Unit Test Rule
+
+**CRITICAL**: Whenever any Go code file is modified (except files in `test/e2e/` and `cmd/` directories), you MUST add or update corresponding unit tests for those changes.
+
+## Scope of Required Testing
+
+### Files Requiring Unit Tests
+- All `.go` files in `internal/` directory
+- All `.go` files in `pkg/` directory  
+- Any other `.go` files in the project (except excluded directories)
+
+### Excluded Directories
+- `test/e2e/` - End-to-end tests are separate from unit tests
+- `cmd/` - Main application entry points typically don't need unit tests
+
+## Unit Test Requirements
+
+### 1. Test Coverage
+- **New Functions**: Every new function must have corresponding unit tests
+- **Modified Functions**: Existing functions that are modified must have their unit tests updated
+- **New Methods**: All new methods on structs must be tested
+- **Modified Methods**: Modified methods must have their tests updated
+
+### 2. Test Quality Standards
+- Tests must cover both success and failure scenarios
+- Edge cases and boundary conditions must be tested
+- Error handling paths must be tested
+- Tests should be independent and not rely on external state
+
+### 3. Test File Naming
+- Test files must follow Go conventions: `*_test.go`
+- Test files should be in the same package as the code being tested
+- Use descriptive test function names: `TestFunctionName_Scenario_ExpectedResult`
+
+### 4. Test Implementation
+- Use table-driven tests for multiple scenarios
+- Use subtests for complex test cases
+- Mock external dependencies appropriately
+- Follow the project's existing test patterns
+
+## Enforcement
+
+This rule is automatically applied to all Go code changes. When you modify Go code:
+
+1. **Immediately** create or update unit tests
+2. **Verify** tests pass with the required flags: `go test -v -race -timeout=60s -failfast -parallel=4`
+3. **Ensure** adequate test coverage for the changes
+4. **Document** any complex test scenarios
+
+## Example Workflow
+
+```bash
+# 1. Make changes to Go code
+# 2. Create/update unit tests
+# 3. Run tests to verify
+go test -v -race -timeout=60s -failfast -parallel=4 ./path/to/package
+
+# 4. Run all tests to ensure no regressions
+go test -v -race -timeout=60s -failfast -parallel=4 ./...
+```
+
+## Failure to Comply
+
+If unit tests are not added for Go code changes, the changes are considered incomplete and must be supplemented with appropriate test coverage before the code can be considered ready for review or deployment.

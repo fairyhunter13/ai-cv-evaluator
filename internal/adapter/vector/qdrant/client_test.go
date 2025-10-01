@@ -51,12 +51,12 @@ func TestClient_EnsureCollection(t *testing.T) {
 				if r.Method == http.MethodPut {
 					var payload map[string]any
 					require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-					
+
 					// Verify payload structure
 					vectors := payload["vectors"].(map[string]any)
 					assert.Equal(t, float64(768), vectors["size"])
 					assert.Equal(t, "Dot", vectors["distance"])
-					
+
 					w.WriteHeader(http.StatusOK)
 					require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
 				}
@@ -79,15 +79,15 @@ func TestClient_EnsureCollection(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			server := httptest.NewServer(tt.handler)
 			defer server.Close()
-			
+
 			client := qdrant.New(server.URL, "test-api-key")
 			ctx := context.Background()
-			
+
 			err := client.EnsureCollection(ctx, tt.collection, tt.vectorSize, tt.distance)
-			
+
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -118,14 +118,14 @@ func TestClient_UpsertPoints(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, http.MethodPut, r.Method)
 				assert.Contains(t, r.URL.Path, "/collections/test_collection/points")
-				
+
 				var payload map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-				
+
 				// Verify points structure
 				points := payload["points"].([]any)
 				assert.Len(t, points, 1)
-				
+
 				w.WriteHeader(http.StatusOK)
 				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
 			},
@@ -140,10 +140,10 @@ func TestClient_UpsertPoints(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				var payload map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-				
+
 				points := payload["points"].([]any)
 				assert.Len(t, points, 3)
-				
+
 				w.WriteHeader(http.StatusOK)
 				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
 			},
@@ -167,15 +167,15 @@ func TestClient_UpsertPoints(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			server := httptest.NewServer(tt.handler)
 			defer server.Close()
-			
+
 			client := qdrant.New(server.URL, "test-api-key")
 			ctx := context.Background()
-			
+
 			err := client.UpsertPoints(ctx, tt.collection, tt.vectors, tt.payloads, tt.ids)
-			
+
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -205,15 +205,15 @@ func TestClient_Search(t *testing.T) {
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, http.MethodPost, r.Method)
 				assert.Contains(t, r.URL.Path, "/collections/search_collection/points/search")
-				
+
 				var payload map[string]any
 				require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
-				
+
 				// Verify search parameters
 				assert.Equal(t, float64(5), payload["limit"])
 				assert.NotNil(t, payload["vector"])
 				assert.Equal(t, true, payload["with_payload"])
-				
+
 				// Return mock results
 				w.WriteHeader(http.StatusOK)
 				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
@@ -254,21 +254,21 @@ func TestClient_Search(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			server := httptest.NewServer(tt.handler)
 			defer server.Close()
-			
+
 			client := qdrant.New(server.URL, "test-api-key")
 			ctx := context.Background()
-			
+
 			results, err := client.Search(ctx, tt.collection, tt.vector, tt.limit)
-			
+
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				assert.Len(t, results, tt.wantCount)
-				
+
 				// Verify result structure
 				for _, result := range results {
 					assert.NotEmpty(t, result["id"])

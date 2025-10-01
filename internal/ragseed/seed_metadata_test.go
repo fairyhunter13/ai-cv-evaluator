@@ -30,11 +30,13 @@ func (s metaAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, e
 }
 
 func TestSeedFile_MetadataMapping(t *testing.T) {
-    t.Setenv("RAGSEED_ALLOW_ABSPATHS", "1")
-    var captured []map[string]any
+	t.Setenv("RAGSEED_ALLOW_ABSPATHS", "1")
+	var captured []map[string]any
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut && r.URL.Path == "/collections/coll/points" {
-			var payload struct{ Points []map[string]any `json:"points"` }
+			var payload struct {
+				Points []map[string]any `json:"points"`
+			}
 			_ = json.NewDecoder(r.Body).Decode(&payload)
 			captured = payload.Points
 			w.WriteHeader(200)
@@ -73,5 +75,7 @@ data:
 	if _, ok := pl["weight"]; !ok {
 		t.Fatalf("missing weight")
 	}
-	if _, ok := pl["weight"]; !ok { t.Fatalf("missing weight") }
+	if _, ok := pl["weight"]; !ok {
+		t.Fatalf("missing weight")
+	}
 }

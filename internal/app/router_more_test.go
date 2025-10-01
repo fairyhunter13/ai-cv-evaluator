@@ -1,4 +1,4 @@
-package app_test
+package app
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	httpserver "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/httpserver"
 	qdrantcli "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/vector/qdrant"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/app"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
@@ -23,9 +22,8 @@ func TestBuildRouter_Healthz_And_Readyz(t *testing.T) {
 		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
-		func(_ context.Context) error { return nil },
 	)
-	h := app.BuildRouter(cfg, srv)
+	h := BuildRouter(cfg, srv)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
@@ -48,5 +46,5 @@ func TestEnsureDefaultCollections_NoPanic(t *testing.T) {
 	}))
 	defer ts.Close()
 	q := qdrantcli.New(ts.URL, "")
-	app.EnsureDefaultCollections(context.Background(), q, nil)
+	EnsureDefaultCollections(context.Background(), q, nil)
 }

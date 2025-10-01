@@ -9,7 +9,7 @@ import (
 )
 
 // ResultRepo persists and loads evaluation results from PostgreSQL.
-type ResultRepo struct { Pool PgxPool }
+type ResultRepo struct{ Pool PgxPool }
 
 // NewResultRepo constructs a ResultRepo with the given pool.
 func NewResultRepo(p PgxPool) *ResultRepo { return &ResultRepo{Pool: p} }
@@ -24,7 +24,9 @@ func (r *ResultRepo) Upsert(ctx domain.Context, res domain.Result) error {
 	ON CONFLICT (job_id)
 	DO UPDATE SET cv_match_rate=EXCLUDED.cv_match_rate, cv_feedback=EXCLUDED.cv_feedback, project_score=EXCLUDED.project_score, project_feedback=EXCLUDED.project_feedback, overall_summary=EXCLUDED.overall_summary`
 	_, err := r.Pool.Exec(ctx, q, res.JobID, res.CVMatchRate, res.CVFeedback, res.ProjectScore, res.ProjectFeedback, res.OverallSummary, time.Now().UTC())
-	if err != nil { return fmt.Errorf("op=result.upsert: %w", err) }
+	if err != nil {
+		return fmt.Errorf("op=result.upsert: %w", err)
+	}
 	return nil
 }
 

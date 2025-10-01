@@ -9,14 +9,18 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
 
-type respErr struct{ Error struct{ Code string `json:"code"` } `json:"error"` }
+type respErr struct {
+	Error struct {
+		Code string `json:"code"`
+	} `json:"error"`
+}
 
 func Test_writeError_Mapping(t *testing.T) {
-	cases := []struct{
-		name string
-		err  error
+	cases := []struct {
+		name       string
+		err        error
 		wantStatus int
-		wantCode string
+		wantCode   string
 	}{
 		{"invalid", domain.ErrInvalidArgument, http.StatusBadRequest, "INVALID_ARGUMENT"},
 		{"notfound", domain.ErrNotFound, http.StatusNotFound, "NOT_FOUND"},
@@ -47,4 +51,5 @@ func Test_writeError_Mapping(t *testing.T) {
 }
 
 type assertError string
+
 func (a assertError) Error() string { return string(a) }

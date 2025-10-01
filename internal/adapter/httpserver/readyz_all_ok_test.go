@@ -17,9 +17,10 @@ func TestReadyzHandler_AllOK(t *testing.T) {
 		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
-		func(_ context.Context) error { return nil },
 	)
 	rw := httptest.NewRecorder()
 	s.ReadyzHandler()(rw, httptest.NewRequest("GET", "/readyz", nil))
-	if rw.Result().StatusCode != 200 { t.Fatalf("want 200, got %d", rw.Result().StatusCode) }
+	if rw.Result().StatusCode != 200 {
+		t.Fatalf("want 200, got %d", rw.Result().StatusCode)
+	}
 }

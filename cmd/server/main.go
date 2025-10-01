@@ -12,22 +12,20 @@ import (
 	"syscall"
 	"time"
 
-	redis "github.com/redis/go-redis/v9"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
-	httpserver "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/httpserver"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/repo/postgres"
-	realai "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/real"
 	ai "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/freemodels"
+	httpserver "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/httpserver"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/queue/redpanda"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/repo/postgres"
 	tikaext "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/textextractor/tika"
-	qasynq "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/queue/asynq"
 	qdrantcli "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/vector/qdrant"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/app"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
 // poolAdapter adapts *pgxpool.Pool to postgres.Beginner for CleanupService
@@ -46,12 +44,7 @@ func (t txAdapter) QueryRow(ctx context.Context, sql string, args ...any) pgx.Ro
 	return t.Tx.QueryRow(ctx, sql, args...)
 }
 
-// redisAdapter adapts *redis.Client to app.RedisClient
-type redisAdapter struct{ c *redis.Client }
-type statusAdapter struct{ s *redis.StatusCmd }
-
-func (r redisAdapter) Ping(ctx context.Context) app.RedisPingResult { return statusAdapter{r.c.Ping(ctx)} }
-func (s statusAdapter) Err() error { return s.s.Err() }
+// Removed Redis adapter - no longer needed with Redpanda
 
 func main() {
 	cfg, err := config.Load()
@@ -92,33 +85,33 @@ func main() {
 		slog.Info("cleanup service started", slog.Int("retention_days", cfg.DataRetentionDays), slog.Duration("interval", cfg.CleanupInterval))
 	}
 
-	// Queue client and worker
-	qClient, err := qasynq.New(cfg.RedisURL)
+	// Queue client (Redpanda producer)
+	qClient, err := redpanda.NewProducer(cfg.KafkaBrokers)
 	if err != nil {
-		slog.Error("queue connect failed", slog.Any("error", err))
+		slog.Error("redpanda producer connect failed", slog.Any("error", err))
 		os.Exit(1)
 	}
+	defer func() {
+		if err := qClient.Close(); err != nil {
+			slog.Error("failed to close queue client", slog.Any("error", err))
+		}
+	}()
 
-	// AI client: OpenRouter-backed real provider (default model: openrouter/auto when CHAT_MODEL is empty)
-	var aicl domain.AIClient
-	aicl = realai.New(cfg)
+	// AI client: always use free models for cost-effective operation
+	freeModelWrapper := freemodels.NewFreeModelWrapper(cfg)
+	slog.Info("AI client initialized with free models support")
+
+	// AI client is ready for use
+	slog.Info("AI client initialized successfully")
 	// Embedding cache wrapper (safe for accuracy; caches embeddings only)
-	aicl = ai.NewEmbedCache(aicl, cfg.EmbedCacheSize)
+	aicl := ai.NewEmbedCache(freeModelWrapper, cfg.EmbedCacheSize)
 	// Qdrant client (shared)
 	var qcli *qdrantcli.Client
 	if cfg.QdrantURL != "" {
 		qcli = qdrantcli.New(cfg.QdrantURL, cfg.QdrantAPIKey)
 	}
-	worker, err := qasynq.NewWorker(cfg.RedisURL, jobRepo, upRepo, resRepo, aicl, qcli, true, true)
-	if err != nil {
-		slog.Error("worker init failed", slog.Any("error", err))
-		os.Exit(1)
-	}
-	go func() {
-		if err := worker.Start(context.Background()); err != nil {
-			slog.Error("worker stopped", slog.Any("error", err))
-		}
-	}()
+	// Note: Worker is now running in a separate container
+	slog.Info("server-only mode - worker runs in separate container")
 
 	// Usecases
 	uploadSvc := usecase.NewUploadService(upRepo)
@@ -128,20 +121,16 @@ func main() {
 	// Bootstrap Qdrant collections (idempotent) and optional seeding
 	app.EnsureDefaultCollections(ctx, qcli, aicl)
 
-	// Readiness checks
-	var rdb *redis.Client
-	if opt, err := redis.ParseURL(cfg.RedisURL); err == nil && opt != nil {
-		rdb = redis.NewClient(opt)
-	}
-	var rcli app.RedisClient
-	if rdb != nil { rcli = redisAdapter{rdb} }
-	dbCheck, redisCheck, qdrantCheck, tikaCheck := app.BuildReadinessChecks(cfg, pool, rcli)
+	// Readiness checks (removed Redis check - using Redpanda now)
+	dbCheck, qdrantCheck, tikaCheck := app.BuildReadinessChecks(cfg, pool)
 
 	// External text extractor (Apache Tika)
 	ext := tikaext.New(cfg.TikaURL)
 
 	// HTTP server
-	srv := httpserver.NewServer(cfg, uploadSvc, evalSvc, resultSvc, ext, dbCheck, redisCheck, qdrantCheck, tikaCheck)
+	srv := httpserver.NewServer(cfg, uploadSvc, evalSvc, resultSvc, ext, dbCheck, qdrantCheck, tikaCheck)
+
+	// Build router with API endpoints and admin authentication
 	handler := app.BuildRouter(cfg, srv)
 
 	srvHTTP := &http.Server{
@@ -172,8 +161,7 @@ func main() {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.ServerShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ServerShutdownTimeout)
 	defer cancel()
-	worker.Stop()
-	_ = srvHTTP.Shutdown(ctx)
+	_ = srvHTTP.Shutdown(shutdownCtx)
 }

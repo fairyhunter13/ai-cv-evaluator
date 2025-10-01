@@ -1,7 +1,7 @@
 # ADR-0001: Queue System Choice
 
 **Date:** 2025-09-28  
-**Status:** Accepted  
+**Status:** Superseded by Redpanda Migration  
 
 ## Context
 
@@ -16,6 +16,8 @@ The system requires a reliable job queue for handling asynchronous CV evaluation
 ## Decision
 
 We will use **Asynq** (Redis-backed job queue) for our queuing system.
+
+**UPDATE (2025-01-30):** This decision has been superseded. The system has been migrated to **Redpanda** (Kafka-compatible) for better performance and scalability. See `docs/architecture/QUEUE_MIGRATION.md` for details.
 
 ## Consequences
 

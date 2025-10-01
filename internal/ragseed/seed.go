@@ -32,9 +32,13 @@ type ragYAMLItem struct {
 func SeedFile(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, path string, collection string) error {
 	// Mitigate file inclusion issues by constraining to current working directory.
 	abs, err := filepath.Abs(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	wd, err := os.Getwd()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	abs = filepath.Clean(abs)
 	wd = filepath.Clean(wd)
 	if os.Getenv("RAGSEED_ALLOW_ABSPATHS") != "1" {
@@ -44,7 +48,9 @@ func SeedFile(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, path 
 	}
 	b, err := os.ReadFile(abs)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) { return fmt.Errorf("seed file not found: %s", path) }
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("seed file not found: %s", path)
+		}
 		return err
 	}
 	var doc ragYAML
@@ -54,13 +60,17 @@ func SeedFile(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, path 
 		if err2 := yaml.Unmarshal(b, &ls); err2 != nil {
 			return fmt.Errorf("yaml parse: %w", err)
 		}
-		if len(ls) == 0 { return fmt.Errorf("no texts to seed in %s", path) }
+		if len(ls) == 0 {
+			return fmt.Errorf("no texts to seed in %s", path)
+		}
 		return upsertAll(ctx, q, ai, collection, ls, nil)
 	}
 	// Build metadata map first
 	meta := make(map[string]ragYAMLItem)
 	for _, it := range doc.Data {
-		if s := strings.TrimSpace(it.Text); s != "" { meta[s] = it }
+		if s := strings.TrimSpace(it.Text); s != "" {
+			meta[s] = it
+		}
 	}
 	// Deduplicate texts, preferring entries that have metadata
 	seen := make(map[string]struct{})
@@ -77,16 +87,28 @@ func SeedFile(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, path 
 	// 2) Add Items
 	for _, s := range doc.Items {
 		s = strings.TrimSpace(s)
-		if s == "" { continue }
-		if _, ok := seen[s]; !ok { texts = append(texts, s); seen[s] = struct{}{} }
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; !ok {
+			texts = append(texts, s)
+			seen[s] = struct{}{}
+		}
 	}
 	// 3) Add Texts
 	for _, s := range doc.Texts {
 		s = strings.TrimSpace(s)
-		if s == "" { continue }
-		if _, ok := seen[s]; !ok { texts = append(texts, s); seen[s] = struct{}{} }
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; !ok {
+			texts = append(texts, s)
+			seen[s] = struct{}{}
+		}
 	}
-	if len(texts) == 0 { return fmt.Errorf("no texts to seed in %s", path) }
+	if len(texts) == 0 {
+		return fmt.Errorf("no texts to seed in %s", path)
+	}
 
 	return upsertAll(ctx, q, ai, collection, texts, meta)
 }
@@ -107,19 +129,29 @@ func upsertAll(ctx domain.Context, q *qdrantcli.Client, ai domain.AIClient, coll
 	const batch = 16
 	for i := 0; i < len(texts); i += batch {
 		end := i + batch
-		if end > len(texts) { end = len(texts) }
+		if end > len(texts) {
+			end = len(texts)
+		}
 		chunk := texts[i:end]
 		vecs, err := ai.Embed(ctx, chunk)
-		if err != nil { return fmt.Errorf("embed: %w", err) }
+		if err != nil {
+			return fmt.Errorf("embed: %w", err)
+		}
 		payloads := make([]map[string]any, len(chunk))
 		ids := make([]any, len(chunk))
 		for j := range chunk {
 			p := map[string]any{"text": chunk[j], "source": collection}
 			if meta != nil {
 				if it, ok := meta[strings.TrimSpace(chunk[j])]; ok {
-					if it.Type != "" { p["type"] = it.Type }
-					if it.Section != "" { p["section"] = it.Section }
-					if it.Weight > 0 { p["weight"] = it.Weight }
+					if it.Type != "" {
+						p["type"] = it.Type
+					}
+					if it.Section != "" {
+						p["section"] = it.Section
+					}
+					if it.Weight > 0 {
+						p["weight"] = it.Weight
+					}
 				}
 			}
 			payloads[j] = p

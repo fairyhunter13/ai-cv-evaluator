@@ -6,12 +6,28 @@ RFC.md
 RFC-Submission.md
 docs/rfc/
 docs/rfc.backups/
+# Generated files and directories
+coverage/
+logs/
+build/
+dist/
+bin/
+*.log
 coverage*.out
 coverage.html
 coverage.func.txt
 coverage.core.func.txt
-dist/
-bin/
-*.log
+
+# E2E test JSON dumps
+test/testdata/golden/*_response.json
 .DS_Store
 vendor
+cv/
+test/dump
+
+
+# openrouter v1/models
+models.response.json
+
+# artifacts
+artifacts/

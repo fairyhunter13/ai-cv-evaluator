@@ -1,106 +1,435 @@
 package postgres_test
 
 import (
-    "context"
-    "testing"
-    "time"
+	"context"
+	"testing"
+	"time"
 
-    "github.com/jackc/pgx/v5"
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
-    "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/repo/postgres"
-    "github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/repo/postgres"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/repo/postgres/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
 
-func TestJobRepo_Create_UpdateStatus_Get_FindIdem(t *testing.T) {
-    t.Parallel()
-    m := &poolStub{}
-    repo := postgres.NewJobRepo(m)
-    ctx := context.Background()
+func TestJobRepo_Create(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
 
-    // Create
-    m.execErr = nil
-    id, err := repo.Create(ctx, domain.Job{Status: domain.JobQueued, CVID: "cv1", ProjectID: "pr1"})
-    require.NoError(t, err)
-    assert.NotEmpty(t, id)
+	job := domain.Job{
+		ID:        "job-1",
+		Status:    domain.JobQueued,
+		CVID:      "cv-1",
+		ProjectID: "proj-1",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
 
-    // UpdateStatus
-    m.execErr = nil
-    require.NoError(t, repo.UpdateStatus(ctx, id, domain.JobProcessing, nil))
+	// Test successful creation
+	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	id, err := repo.Create(ctx, job)
+	require.NoError(t, err)
+	assert.Equal(t, "job-1", id)
 
-    // Get ok
-    fixed := time.Now().UTC()
-    m.row = rowStub{scan: func(dest ...any) error {
-        *(dest[0].(*string)) = id
-        *(dest[1].(*domain.JobStatus)) = domain.JobProcessing
-        *(dest[2].(*string)) = ""
-        *(dest[3].(*time.Time)) = fixed
-        *(dest[4].(*time.Time)) = fixed
-        *(dest[5].(*string)) = "cv1"
-        *(dest[6].(*string)) = "pr1"
-        // last is *string pointer (idempotency)
-        *(dest[7].(**string)) = nil
-        return nil
-    }}
-    j, err := repo.Get(ctx, id)
-    require.NoError(t, err)
-    assert.Equal(t, id, j.ID)
-
-    // Get not found
-    m.row = rowStub{scan: func(_ ...any) error { return pgx.ErrNoRows }}
-    _, err = repo.Get(ctx, "missing")
-    require.Error(t, err)
-    assert.Contains(t, err.Error(), "op=job.get")
-
-    // FindByIdempotencyKey ok
-    m.row = rowStub{scan: func(dest ...any) error {
-        *(dest[0].(*string)) = id
-        *(dest[1].(*domain.JobStatus)) = domain.JobQueued
-        *(dest[2].(*string)) = ""
-        *(dest[3].(*time.Time)) = fixed
-        *(dest[4].(*time.Time)) = fixed
-        *(dest[5].(*string)) = "cv1"
-        *(dest[6].(*string)) = "pr1"
-        *(dest[7].(**string)) = nil
-        return nil
-    }}
-    j2, err := repo.FindByIdempotencyKey(ctx, "idem1")
-    require.NoError(t, err)
-    assert.Equal(t, id, j2.ID)
-
-    // FindByIdempotencyKey not found
-    m.row = rowStub{scan: func(_ ...any) error { return pgx.ErrNoRows }}
-    _, err = repo.FindByIdempotencyKey(ctx, "idem-miss")
-    require.Error(t, err)
-    assert.Contains(t, err.Error(), "op=job.find_idem")
-
-    // UpdateStatus DB error
-    m.execErr = assert.AnError
-    require.Error(t, repo.UpdateStatus(ctx, id, domain.JobFailed, nil))
+	// Test database error
+	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, assert.AnError).Once()
+	_, err = repo.Create(ctx, job)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.create")
 }
 
-func TestJobRepo_Create_And_GetFind_OtherErrors(t *testing.T) {
-    t.Parallel()
-    m := &poolStub{}
-    repo := postgres.NewJobRepo(m)
-    ctx := context.Background()
+func TestJobRepo_UpdateStatus(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
 
-    // Create DB error
-    m.execErr = assert.AnError
-    _, err := repo.Create(ctx, domain.Job{Status: domain.JobQueued, CVID: "cv", ProjectID: "pr"})
-    require.Error(t, err)
-    assert.Contains(t, err.Error(), "op=job.create")
+	// Test successful update
+	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	err := repo.UpdateStatus(ctx, "job-1", domain.JobCompleted, nil)
+	require.NoError(t, err)
 
-    // Get other error (not pgx.ErrNoRows)
-    m.row = rowStub{scan: func(_ ...any) error { return assert.AnError }}
-    _, err = repo.Get(ctx, "id-1")
-    require.Error(t, err)
-    assert.Contains(t, err.Error(), "op=job.get")
+	// Test with error message
+	errorMsg := "test error"
+	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	err = repo.UpdateStatus(ctx, "job-1", domain.JobFailed, &errorMsg)
+	require.NoError(t, err)
 
-    // FindByIdempotencyKey other error
-    m.row = rowStub{scan: func(_ ...any) error { return assert.AnError }}
-    _, err = repo.FindByIdempotencyKey(ctx, "k1")
-    require.Error(t, err)
-    assert.Contains(t, err.Error(), "op=job.find_idem")
+	// Test database error
+	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, assert.AnError).Once()
+	err = repo.UpdateStatus(ctx, "job-1", domain.JobCompleted, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.update_status")
+}
+
+func TestJobRepo_Get(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful get
+	mockRow := mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*string)) = "job-1"
+		*(dest[1].(*domain.JobStatus)) = domain.JobCompleted
+		*(dest[2].(*string)) = ""
+		*(dest[3].(*time.Time)) = time.Now().UTC()
+		*(dest[4].(*time.Time)) = time.Now().UTC()
+		*(dest[5].(*string)) = "cv-1"
+		*(dest[6].(*string)) = "proj-1"
+		*(dest[7].(**string)) = nil
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.MatchedBy(func(interface{}) bool { return true }), mock.Anything, mock.Anything).Return(mockRow).Once()
+
+	job, err := repo.Get(ctx, "job-1")
+	require.NoError(t, err)
+	assert.Equal(t, "job-1", job.ID)
+	assert.Equal(t, domain.JobCompleted, job.Status)
+
+	// Test database error
+	mockRowErr := mocks.NewMockRow(t)
+	mockRowErr.On("Scan", mock.Anything).Return(assert.AnError).Once()
+	pool.EXPECT().QueryRow(mock.MatchedBy(func(interface{}) bool { return true }), mock.Anything, mock.Anything).Return(mockRowErr).Once()
+	_, err = repo.Get(ctx, "job-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.get")
+}
+
+func TestJobRepo_FindByIdempotencyKey(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful find
+	mockRow := mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*string)) = "job-1"
+		*(dest[1].(*domain.JobStatus)) = domain.JobCompleted
+		*(dest[2].(*string)) = ""
+		*(dest[3].(*time.Time)) = time.Now().UTC()
+		*(dest[4].(*time.Time)) = time.Now().UTC()
+		*(dest[5].(*string)) = "cv-1"
+		*(dest[6].(*string)) = "proj-1"
+		*(dest[7].(**string)) = nil
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything).Return(mockRow).Once()
+
+	job, err := repo.FindByIdempotencyKey(ctx, "key-1")
+	require.NoError(t, err)
+	assert.Equal(t, "job-1", job.ID)
+
+	// Test not found
+	mockRowNotFound := mocks.NewMockRow(t)
+	mockRowNotFound.On("Scan", mock.Anything).Return(domain.ErrNotFound).Once()
+	pool.EXPECT().QueryRow(mock.MatchedBy(func(interface{}) bool { return true }), mock.Anything, mock.Anything).Return(mockRowNotFound).Once()
+	_, err = repo.FindByIdempotencyKey(ctx, "key-1")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.find_idem")
+}
+
+func TestJobRepo_Count_Success(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful count
+	mockRow := mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*int64)) = int64(5)
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything).Return(mockRow).Once()
+
+	count, err := repo.Count(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), count)
+}
+
+func TestJobRepo_Count_Error(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test database error
+	mockRowErr := mocks.NewMockRow(t)
+	mockRowErr.On("Scan", mock.Anything).Return(assert.AnError).Once()
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything).Return(mockRowErr).Once()
+	_, err := repo.Count(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.count")
+}
+
+func TestJobRepo_CountByStatus_Success(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful count by status
+	mockRow := mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*int64)) = int64(3)
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything).Return(mockRow).Once()
+
+	count, err := repo.CountByStatus(ctx, domain.JobCompleted)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), count)
+}
+
+func TestJobRepo_CountByStatus_Error(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test database error
+	mockRowErr := mocks.NewMockRow(t)
+	mockRowErr.On("Scan", mock.Anything).Return(assert.AnError).Once()
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything).Return(mockRowErr).Once()
+	_, err := repo.CountByStatus(ctx, domain.JobCompleted)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.count_by_status")
+}
+
+func TestJobRepo_List(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful list with multiple jobs
+	mockRows := mocks.NewMockRows(t)
+	jobCount := 0
+	mockRows.On("Next").Return(func() bool {
+		jobCount++
+		return jobCount <= 2 // Return 2 jobs
+	}).Times(3) // Called 3 times: twice for jobs, once to return false
+
+	mockRows.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		jobID := "job-" + string(rune('0'+jobCount))
+		*(dest[0].(*string)) = jobID
+		*(dest[1].(*domain.JobStatus)) = domain.JobCompleted
+		*(dest[2].(*string)) = ""
+		*(dest[3].(*time.Time)) = time.Now().UTC()
+		*(dest[4].(*time.Time)) = time.Now().UTC()
+		*(dest[5].(*string)) = "cv-" + string(rune('0'+jobCount))
+		*(dest[6].(*string)) = "proj-" + string(rune('0'+jobCount))
+		*(dest[7].(**string)) = nil
+	}).Return(nil).Times(2)
+
+	mockRows.On("Close").Return().Once()
+	mockRows.On("Err").Return(nil).Once()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+
+	jobs, err := repo.List(ctx, 0, 10)
+	require.NoError(t, err)
+	assert.Len(t, jobs, 2)
+	assert.Equal(t, "job-1", jobs[0].ID)
+	assert.Equal(t, "job-2", jobs[1].ID)
+}
+
+func TestJobRepo_List_WithIdempotencyKey(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test list with idempotency key
+	mockRows := mocks.NewMockRows(t)
+	jobCount := 0
+	mockRows.On("Next").Return(func() bool {
+		jobCount++
+		return jobCount <= 1 // Return 1 job
+	}).Times(2) // Called twice: once for job, once to return false
+
+	mockRows.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*string)) = "job-1"
+		*(dest[1].(*domain.JobStatus)) = domain.JobCompleted
+		*(dest[2].(*string)) = ""
+		*(dest[3].(*time.Time)) = time.Now().UTC()
+		*(dest[4].(*time.Time)) = time.Now().UTC()
+		*(dest[5].(*string)) = "cv-1"
+		*(dest[6].(*string)) = "proj-1"
+		idemKey := "idem-key-1"
+		*(dest[7].(**string)) = &idemKey
+	}).Return(nil).Once()
+
+	mockRows.On("Close").Return().Once()
+	mockRows.On("Err").Return(nil).Once()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+
+	jobs, err := repo.List(ctx, 0, 10)
+	require.NoError(t, err)
+	assert.Len(t, jobs, 1)
+	assert.Equal(t, "job-1", jobs[0].ID)
+	assert.NotNil(t, jobs[0].IdemKey)
+	assert.Equal(t, "idem-key-1", *jobs[0].IdemKey)
+}
+
+func TestJobRepo_List_WithError(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test list with error in job
+	mockRows := mocks.NewMockRows(t)
+	jobCount := 0
+	mockRows.On("Next").Return(func() bool {
+		jobCount++
+		return jobCount <= 1 // Return 1 job
+	}).Times(2) // Called twice: once for job, once to return false
+
+	mockRows.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*string)) = "job-1"
+		*(dest[1].(*domain.JobStatus)) = domain.JobFailed
+		*(dest[2].(*string)) = "test error"
+		*(dest[3].(*time.Time)) = time.Now().UTC()
+		*(dest[4].(*time.Time)) = time.Now().UTC()
+		*(dest[5].(*string)) = "cv-1"
+		*(dest[6].(*string)) = "proj-1"
+		*(dest[7].(**string)) = nil
+	}).Return(nil).Once()
+
+	mockRows.On("Close").Return().Once()
+	mockRows.On("Err").Return(nil).Once()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+
+	jobs, err := repo.List(ctx, 0, 10)
+	require.NoError(t, err)
+	assert.Len(t, jobs, 1)
+	assert.Equal(t, "job-1", jobs[0].ID)
+	assert.Equal(t, domain.JobFailed, jobs[0].Status)
+	assert.Equal(t, "test error", jobs[0].Error)
+}
+
+func TestJobRepo_List_QueryError(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test query error
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, assert.AnError).Once()
+	jobs, err := repo.List(ctx, 0, 10)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.list")
+	assert.Nil(t, jobs)
+}
+
+func TestJobRepo_List_ScanError(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test scan error
+	mockRows := mocks.NewMockRows(t)
+	jobCount := 0
+	mockRows.On("Next").Return(func() bool {
+		jobCount++
+		return jobCount <= 1 // Return 1 job
+	}).Once() // Called once for the job
+
+	mockRows.On("Scan", mock.Anything).Return(assert.AnError).Once()
+	mockRows.On("Close").Return().Once()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+
+	jobs, err := repo.List(ctx, 0, 10)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.list_scan")
+	assert.Nil(t, jobs)
+}
+
+func TestJobRepo_List_RowsError(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test rows error
+	mockRows := mocks.NewMockRows(t)
+	jobCount := 0
+	mockRows.On("Next").Return(func() bool {
+		jobCount++
+		return jobCount <= 1 // Return 1 job
+	}).Times(2) // Called twice: once for job, once to return false
+
+	mockRows.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*string)) = "job-1"
+		*(dest[1].(*domain.JobStatus)) = domain.JobCompleted
+		*(dest[2].(*string)) = ""
+		*(dest[3].(*time.Time)) = time.Now().UTC()
+		*(dest[4].(*time.Time)) = time.Now().UTC()
+		*(dest[5].(*string)) = "cv-1"
+		*(dest[6].(*string)) = "proj-1"
+		*(dest[7].(**string)) = nil
+	}).Return(nil).Once()
+
+	mockRows.On("Close").Return().Once()
+	mockRows.On("Err").Return(assert.AnError).Once()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+
+	jobs, err := repo.List(ctx, 0, 10)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.list_rows")
+	assert.Nil(t, jobs)
+}
+
+func TestJobRepo_List_EmptyResult(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test empty result
+	mockRows := mocks.NewMockRows(t)
+	mockRows.On("Next").Return(false).Once()
+	mockRows.On("Close").Return().Once()
+	mockRows.On("Err").Return(nil).Once()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+
+	jobs, err := repo.List(ctx, 0, 10)
+	require.NoError(t, err)
+	assert.Len(t, jobs, 0)
+}
+
+func TestJobRepo_GetAverageProcessingTime(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful get average processing time
+	mockRow := mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		avg := 1.5
+		*(dest[0].(**float64)) = &avg
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything).Return(mockRow).Once()
+
+	avg, err := repo.GetAverageProcessingTime(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1.5, avg)
+
+	// Test database error
+	mockRowErr := mocks.NewMockRow(t)
+	mockRowErr.On("Scan", mock.Anything).Return(assert.AnError).Once()
+	pool.EXPECT().QueryRow(mock.MatchedBy(func(interface{}) bool { return true }), mock.Anything, mock.Anything).Return(mockRowErr).Once()
+	_, err = repo.GetAverageProcessingTime(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.avg_processing_time")
 }

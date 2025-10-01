@@ -25,9 +25,9 @@
 
 ### Next E2E Work
 
-- [ ] Validate both fast tests run via `make test-e2e` (≤10s locally).
+- [ ] Validate both tests run via `make test-e2e` (≤10s locally).
 - [ ] Add 2–3 more negative-case inputs to `test/testdata/` (empty CV, noisy CV, malformed encoding) and include in smoke selection.
-- [ ] Document E2E env knobs in `README.md` (`E2E_FAST`, client timeout) and expected runtime.
+- [ ] Document client timeout behavior and expected runtime in `README.md`.
 - [ ] Consider nightly long E2E (separate workflow) if desired.
   - Evidence: `windsurf/rules/02-go-dev-setup-and-tooling.md` updated.
 
@@ -70,8 +70,8 @@ Last updated: 2025-09-29 14:37 +07
   - Evidence: `deploy/migrations/20250927122000_init.sql`.
 - [x] Repositories for uploads, jobs, results using `pgxpool`.
   - Evidence: `internal/adapter/repo/postgres/*.go`.
-- [x] Queueing with Redis/Asynq, worker executing evaluation pipeline.
-  - Evidence: `internal/adapter/queue/asynq/{queue,worker}.go`.
+- [x] Queueing with Redpanda (Kafka-compatible), worker executing evaluation pipeline.
+  - Evidence: `internal/adapter/queue/redpanda/{producer,consumer}.go`.
 - [x] Idempotency key support on `/evaluate` (store on job; return existing on duplicates).
   - Evidence: `EvaluateService.Enqueue()` + `jobs.idempotency_key` column.
   - Evidence: `internal/adapter/repo/postgres/cleanup.go` with `RunPeriodic()`; config flags `DATA_RETENTION_DAYS`, `CLEANUP_INTERVAL`.
@@ -83,7 +83,7 @@ Last updated: 2025-09-29 14:37 +07
 ## Coverage Uplift Plan (to reach ≥80% overall)
 - [x] httpserver: add tests covering more branches (Accept mismatch, size/type rejections, JSON validation paths, ETag 304).
 - [x] repo/postgres: add repository tests for error cases and happy paths.
-- [x] queue/asynq: add enqueue tests with mocks and error branches.
+- [x] queue/redpanda: add enqueue tests with mocks and error branches.
 - [x] config/observability: add minimal tests to lift totals.
 - [x] golden tests for prompt I/O; schema enforcement on `parseAndNormalize`.
   - Evidence: `internal/adapter/ai/real/client.go` has robust JSON parsing and retry logic.
@@ -104,7 +104,7 @@ Last updated: 2025-09-29 14:37 +07
 - API Handlers: `internal/adapter/httpserver/handlers.go`, `responses.go`, `middleware.go`
 - Usecases: `internal/usecase/{upload,evaluate,result}.go`
 - Domain model & errors: `internal/domain/entities.go`
-- Queue & Worker: `internal/adapter/queue/asynq/{queue,worker,eval_json}.go`
+- Queue & Worker: `internal/adapter/queue/redpanda/{producer,consumer}.go`, `internal/adapter/queue/shared/handler.go`
 - AI Clients: `internal/adapter/ai/real/client.go`
 - Vector DB (Qdrant): `internal/adapter/vector/qdrant/client.go`
 - Text Extractor (Tika): `internal/adapter/textextractor/tika/tika.go`

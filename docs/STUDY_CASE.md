@@ -109,7 +109,7 @@ Project Text → Extract Deliverables → Match with Rubric → Score (1-10)
 
 #### Testing Approach
 - Unit tests with mocked dependencies
-- Integration tests with testcontainers
+- E2E tests with testcontainers
 - E2E tests with real services
 - Load testing with k6 scripts
 - Chaos engineering with failure injection

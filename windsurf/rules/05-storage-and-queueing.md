@@ -10,7 +10,7 @@ Implement persistence for uploads, jobs, and results, and a robust queue for bac
   - `uploads` (id, type=cv|project, text, filename, mime, size, created_at)
   - `jobs` (id, status=queued|processing|completed|failed, error, created_at, updated_at, cv_id, project_id)
   - `results` (job_id, cv_match_rate, cv_feedback, project_score, project_feedback, overall_summary, created_at)
-- Migrations with `pressly/goose` or `golang-migrate`; store under `deploy/migrations/`.
+- Migrations with containerized `goose` tool; store under `deploy/migrations/`.
 
 # Vector DB (Qdrant)
 - Collections: `job_description`, `scoring_rubric`.
@@ -22,7 +22,7 @@ Implement persistence for uploads, jobs, and results, and a robust queue for bac
   - Do not use external vendor for vector DB.
 
 # Queue
-- Redis-backed `hibiken/asynq` recommended.
+- Redpanda (Kafka-compatible) for high-performance message queuing.
   - Task type: `evaluate_job` with payload { job_id, cv_id, project_id }.
   - Retries with backoff; DLQ after max retries.
 - Optional in-memory queue with same interface for local/dev.
@@ -32,10 +32,10 @@ Implement persistence for uploads, jobs, and results, and a robust queue for bac
 - Persist failure reasons for observability.
 
 # Schema & Migrations
-- Use a dedicated migrations tool (`goose` or `golang-migrate`) and keep migrations idempotent.
+- Use containerized migration system with dedicated `Dockerfile.migrate` container.
 - Migration files under `deploy/migrations/` with timestamped names and clear up/down.
-- Add a `schema_version` table to track current DB state if the tool doesn't.
-- Gate application startup on successful migration in non-dev envs.
+- Migrations run automatically via Docker Compose service dependencies.
+- Application services wait for successful migration completion before starting.
 
 # Connection Pooling & Performance
 - Use `pgxpool` with tuned limits: max connections, min idle, and connection lifetime.

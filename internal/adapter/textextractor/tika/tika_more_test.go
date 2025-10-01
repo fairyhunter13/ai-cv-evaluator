@@ -2,12 +2,12 @@ package tika
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
-	"github.com/stretchr/testify/require"
 )
 
 func TestExtractPath_Success(t *testing.T) {
@@ -25,8 +25,12 @@ func TestExtractPath_Success(t *testing.T) {
 	p := filepath.Join(dir, "doc.txt")
 	require.NoError(t, os.WriteFile(p, []byte("hi"), 0o600))
 	out, err := cli.ExtractPath(context.Background(), "doc.txt", p)
-	if err != nil { t.Fatalf("extract: %v", err) }
-	if out == "" { t.Fatalf("want non-empty text") }
+	if err != nil {
+		t.Fatalf("extract: %v", err)
+	}
+	if out == "" {
+		t.Fatalf("want non-empty text")
+	}
 }
 
 func TestExtractPath_ServerError(t *testing.T) {
@@ -37,11 +41,19 @@ func TestExtractPath_ServerError(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "doc.pdf")
 	require.NoError(t, os.WriteFile(p, []byte("%PDF-1.4\n"), 0o600))
-	if _, err := cli.ExtractPath(context.Background(), "doc.pdf", p); err == nil { t.Fatalf("expected error") }
+	if _, err := cli.ExtractPath(context.Background(), "doc.pdf", p); err == nil {
+		t.Fatalf("expected error")
+	}
 }
 
 func Test_contentTypeFromExt(t *testing.T) {
-	if ct := contentTypeFromExt(".pdf"); ct != "application/pdf" { t.Fatalf("ct: %s", ct) }
-	if ct := contentTypeFromExt(".docx"); ct != "application/vnd.openxmlformats-officedocument.wordprocessingml.document" { t.Fatalf("ct: %s", ct) }
-	if ct := contentTypeFromExt(".txt"); ct != "text/plain" { t.Fatalf("ct: %s", ct) }
+	if ct := contentTypeFromExt(".pdf"); ct != "application/pdf" {
+		t.Fatalf("ct: %s", ct)
+	}
+	if ct := contentTypeFromExt(".docx"); ct != "application/vnd.openxmlformats-officedocument.wordprocessingml.document" {
+		t.Fatalf("ct: %s", ct)
+	}
+	if ct := contentTypeFromExt(".txt"); ct != "text/plain" {
+		t.Fatalf("ct: %s", ct)
+	}
 }
