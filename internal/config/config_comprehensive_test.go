@@ -22,9 +22,8 @@ func TestConfig_Load_DefaultValues(t *testing.T) {
 	assert.Equal(t, 8080, cfg.Port)
 	assert.Equal(t, "postgres://postgres:postgres@localhost:5432/app?sslmode=disable", cfg.DBURL)
 	assert.Equal(t, []string{"localhost:19092"}, cfg.KafkaBrokers)
-	assert.Equal(t, "openrouter", cfg.AIProvider)
 	assert.Equal(t, "https://openrouter.ai/api/v1", cfg.OpenRouterBaseURL)
-	assert.Equal(t, "", cfg.ChatModel)
+	// ChatModel field removed from config
 	assert.Equal(t, 1*time.Hour, cfg.FreeModelsRefresh)
 	assert.Equal(t, "https://api.openai.com/v1", cfg.OpenAIBaseURL)
 	assert.Equal(t, "text-embedding-3-small", cfg.EmbeddingsModel)
@@ -51,7 +50,6 @@ func TestConfig_Load_CustomValues(t *testing.T) {
 	t.Setenv("PORT", "9090")
 	t.Setenv("DB_URL", "postgres://user:pass@localhost:5432/test")
 	t.Setenv("KAFKA_BROKERS", "broker1:9092,broker2:9092")
-	t.Setenv("AI_PROVIDER", "openai")
 	t.Setenv("OPENROUTER_API_KEY", "test-key")
 	t.Setenv("OPENROUTER_BASE_URL", "https://custom.openrouter.ai/api/v1")
 	t.Setenv("CHAT_MODEL", "gpt-4")
@@ -88,11 +86,9 @@ func TestConfig_Load_CustomValues(t *testing.T) {
 	assert.Equal(t, 9090, cfg.Port)
 	assert.Equal(t, "postgres://user:pass@localhost:5432/test", cfg.DBURL)
 	assert.Equal(t, []string{"broker1:9092", "broker2:9092"}, cfg.KafkaBrokers)
-	assert.Equal(t, "openai", cfg.AIProvider)
 	assert.Equal(t, "test-key", cfg.OpenRouterAPIKey)
 	assert.Equal(t, "https://custom.openrouter.ai/api/v1", cfg.OpenRouterBaseURL)
-	assert.Equal(t, "gpt-4", cfg.ChatModel)
-	assert.Equal(t, []string{"gpt-3.5-turbo", "claude-3"}, cfg.ChatFallbackModels)
+	// ChatModel and ChatFallbackModels fields removed from config
 	assert.Equal(t, 2*time.Hour, cfg.FreeModelsRefresh)
 	assert.Equal(t, "openai-key", cfg.OpenAIAPIKey)
 	assert.Equal(t, "https://custom.openai.com/v1", cfg.OpenAIBaseURL)
@@ -378,7 +374,7 @@ func TestConfig_Load_StringArrays(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"broker1:9092", "broker2:9092", "broker3:9092"}, cfg.KafkaBrokers)
-	assert.Equal(t, []string{"model1", "model2", "model3"}, cfg.ChatFallbackModels)
+	// ChatFallbackModels field removed from config
 }
 
 func TestConfig_Load_EmptyStringArrays(t *testing.T) {
@@ -391,13 +387,13 @@ func TestConfig_Load_EmptyStringArrays(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"localhost:19092"}, cfg.KafkaBrokers) // default value
-	assert.Nil(t, cfg.ChatFallbackModels)
+	// ChatFallbackModels field removed from config
 }
 
 // Helper function to clear environment variables
 func clearEnvVars(t *testing.T) {
 	envVars := []string{
-		"APP_ENV", "PORT", "DB_URL", "KAFKA_BROKERS", "AI_PROVIDER",
+		"APP_ENV", "PORT", "DB_URL", "KAFKA_BROKERS",
 		"OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "CHAT_MODEL",
 		"CHAT_FALLBACK_MODELS", "FREE_MODELS_REFRESH", "OPENAI_API_KEY",
 		"OPENAI_BASE_URL", "EMBEDDINGS_MODEL", "QDRANT_URL", "QDRANT_API_KEY",

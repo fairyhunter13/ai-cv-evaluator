@@ -181,3 +181,55 @@ func (_c *AIClient_Embed_Call) RunAndReturn(run func(ctx domain.Context, texts [
 	_c.Call.Return(run)
 	return _c
 }
+
+// CleanCoTResponse provides a mock function for the type AIClient
+func (_mock *AIClient) CleanCoTResponse(ctx domain.Context, response string) (string, error) {
+	ret := _mock.Called(ctx, response)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CleanCoTResponse")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(domain.Context, string) (string, error)); ok {
+		return returnFunc(ctx, response)
+	}
+	if ret.Get(0) != nil {
+		r0 = ret.Get(0).(string)
+	}
+	if ret.Get(1) != nil {
+		r1 = ret.Get(1).(error)
+	}
+
+	return r0, r1
+}
+
+// AIClient_CleanCoTResponse_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CleanCoTResponse'
+type AIClient_CleanCoTResponse_Call struct {
+	*mock.Call
+}
+
+// CleanCoTResponse is a helper method to define mock.On call
+// - ctx domain.Context
+// - response string
+func (_e *AIClient_Expecter) CleanCoTResponse(ctx interface{}, response interface{}) *AIClient_CleanCoTResponse_Call {
+	return &AIClient_CleanCoTResponse_Call{Call: _e.mock.On("CleanCoTResponse", ctx, response)}
+}
+
+func (_c *AIClient_CleanCoTResponse_Call) Run(run func(ctx domain.Context, response string)) *AIClient_CleanCoTResponse_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(domain.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *AIClient_CleanCoTResponse_Call) Return(_a0 string, _a1 error) *AIClient_CleanCoTResponse_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *AIClient_CleanCoTResponse_Call) RunAndReturn(run func(ctx domain.Context, response string) (string, error)) *AIClient_CleanCoTResponse_Call {
+	_c.Call.Return(run)
+	return _c
+}

@@ -1,69 +1,279 @@
 ---
 alwaysApply: true
 ---
-# Go Code Changes - Unit Test Requirements
+# Code Changes - Comprehensive Impact Analysis & Automatic Propagation
 
-## Mandatory Unit Test Rule
+## Core Principle
 
-**CRITICAL**: Whenever any Go code file is modified (except files in `test/e2e/` and `cmd/` directories), you MUST add or update corresponding unit tests for those changes.
+**CRITICAL**: Every code change MUST automatically propagate across the entire codebase. This includes updating all references, dependencies, configurations, tests, documentation, and related components to ensure comprehensive consistency.
 
-## Scope of Required Testing
+## Universal Change Propagation Rules
 
-### Files Requiring Unit Tests
-- All `.go` files in `internal/` directory
-- All `.go` files in `pkg/` directory  
-- Any other `.go` files in the project (except excluded directories)
+### 1. Pre-Change Comprehensive Analysis (MANDATORY)
+Before ANY code change, you MUST:
 
-### Excluded Directories
-- `test/e2e/` - End-to-end tests are separate from unit tests
-- `cmd/` - Main application entry points typically don't need unit tests
-
-## Unit Test Requirements
-
-### 1. Test Coverage
-- **New Functions**: Every new function must have corresponding unit tests
-- **Modified Functions**: Existing functions that are modified must have their unit tests updated
-- **New Methods**: All new methods on structs must be tested
-- **Modified Methods**: Modified methods must have their tests updated
-
-### 2. Test Quality Standards
-- Tests must cover both success and failure scenarios
-- Edge cases and boundary conditions must be tested
-- Error handling paths must be tested
-- Tests should be independent and not rely on external state
-
-### 3. Test File Naming
-- Test files must follow Go conventions: `*_test.go`
-- Test files should be in the same package as the code being tested
-- Use descriptive test function names: `TestFunctionName_Scenario_ExpectedResult`
-
-### 4. Test Implementation
-- Use table-driven tests for multiple scenarios
-- Use subtests for complex test cases
-- Mock external dependencies appropriately
-- Follow the project's existing test patterns
-
-## Enforcement
-
-This rule is automatically applied to all Go code changes. When you modify Go code:
-
-1. **Immediately** create or update unit tests
-2. **Verify** tests pass with the required flags: `go test -v -race -timeout=60s -failfast -parallel=4`
-3. **Ensure** adequate test coverage for the changes
-4. **Document** any complex test scenarios
-
-## Example Workflow
-
+#### A. Complete Reference Discovery
 ```bash
-# 1. Make changes to Go code
-# 2. Create/update unit tests
-# 3. Run tests to verify
-go test -v -race -timeout=60s -failfast -parallel=4 ./path/to/package
+# For Go code - find ALL references
+grep -r "function_name\|TypeName\|package_name\|interface_name\|struct_name" --include="*.go" .
+grep -r "import.*package_name" --include="*.go" .
+grep -r "package_name\." --include="*.go" .
 
-# 4. Run all tests to ensure no regressions
-go test -v -race -timeout=60s -failfast -parallel=4 ./...
+# For TypeScript/JavaScript - find ALL references
+grep -r "function_name\|interface_name\|type_name\|class_name\|const_name" --include="*.ts" --include="*.js" --include="*.vue" .
+grep -r "import.*from.*module" --include="*.ts" --include="*.js" --include="*.vue" .
+
+# For configuration files - find ALL references
+grep -r "config_name\|env_var\|service_name\|endpoint_name" --include="*.yaml" --include="*.yml" --include="*.json" --include="*.env" .
+grep -r "config_name\|env_var" --include="*.go" --include="*.ts" --include="*.js" .
+
+# For API changes - find ALL references
+grep -r "endpoint_name\|api_path\|route_name" --include="*.go" --include="*.ts" --include="*.js" --include="*.yaml" .
 ```
+
+#### B. Dependency Chain Analysis
+- **Direct Dependencies**: Find all files importing/exporting the changed code
+- **Transitive Dependencies**: Find all files that depend on the direct dependencies
+- **API Dependencies**: Check all API endpoints, frontend calls, and OpenAPI specifications
+- **Configuration Dependencies**: Verify environment variables, config files, and deployment scripts
+- **Test Dependencies**: Find all test files that reference the changed code
+- **Documentation Dependencies**: Locate all documentation that references the changed code
+
+#### C. Cross-Component Impact Assessment
+- **Frontend ↔ Backend**: Ensure API changes propagate to frontend types and calls
+- **Database**: Check migration scripts, ORM models, and schema definitions
+- **Docker**: Verify containerization, Dockerfiles, and docker-compose configurations
+- **CI/CD**: Ensure GitHub Actions, build scripts, and deployment configurations
+- **Documentation**: Update all relevant documentation files
+- **Tests**: Update all unit, integration, and E2E tests
+
+### 2. Automatic Change Propagation (MANDATORY)
+
+#### A. Code Reference Updates
+When changing any code element, you MUST:
+
+1. **Function/Method Changes**:
+   - Update all callers across the codebase
+   - Update all test files that test the function
+   - Update all documentation that references the function
+   - Update all API endpoints that use the function
+   - Update all frontend code that calls the function
+
+2. **Type/Interface Changes**:
+   - Update all implementations of the interface
+   - Update all usages of the type
+   - Update all test files that use the type
+   - Update all API specifications that reference the type
+   - Update all frontend TypeScript types that correspond to the backend type
+
+3. **Package/Module Changes**:
+   - Update all import statements across the codebase
+   - Update all references to the package
+   - Update all configuration files that reference the package
+   - Update all Docker files that use the package
+   - Update all documentation that references the package
+
+4. **API Endpoint Changes**:
+   - Update OpenAPI specification
+   - Update all frontend API calls
+   - Update all test files that test the endpoint
+   - Update all documentation that references the endpoint
+   - Update all configuration files that reference the endpoint
+
+#### B. Configuration Propagation
+When changing configurations, you MUST:
+
+1. **Environment Variable Changes**:
+   - Update all `.env` files
+   - Update all Docker compose files
+   - Update all deployment configurations
+   - Update all documentation that references the variable
+   - Update all code that uses the variable
+
+2. **Service Configuration Changes**:
+   - Update all service definitions
+   - Update all Docker configurations
+   - Update all deployment scripts
+   - Update all monitoring configurations
+   - Update all documentation
+
+#### C. Test Propagation
+When changing code, you MUST:
+
+1. **Unit Test Updates**:
+   - Update all existing unit tests for the changed code
+   - Add new unit tests for new functionality
+   - Update all test data and fixtures
+   - Update all test utilities and helpers
+
+2. **Integration Test Updates**:
+   - Update all integration tests that use the changed code
+   - Update all API integration tests
+   - Update all database integration tests
+   - Update all frontend integration tests
+
+3. **E2E Test Updates**:
+   - Update all E2E tests that use the changed functionality
+   - Update all test scenarios and data
+   - Update all test utilities and helpers
+
+#### D. Documentation Propagation
+When changing code, you MUST:
+
+1. **API Documentation**:
+   - Update OpenAPI specification
+   - Update all API documentation
+   - Update all endpoint documentation
+   - Update all request/response examples
+
+2. **Code Documentation**:
+   - Update all code comments
+   - Update all function documentation
+   - Update all type documentation
+   - Update all package documentation
+
+3. **User Documentation**:
+   - Update all user guides
+   - Update all setup instructions
+   - Update all configuration guides
+   - Update all troubleshooting guides
+
+### 3. Comprehensive Validation (MANDATORY)
+
+#### A. Build Validation
+```bash
+# Go builds - comprehensive validation
+go build ./...
+go test -v -race -timeout=60s -failfast -parallel=4 ./...
+
+# Frontend builds - comprehensive validation
+cd admin-frontend && npm run build
+cd admin-frontend && npm run test
+
+# Docker builds - comprehensive validation
+docker-compose config
+docker-compose build
+docker-compose up --build -d
+```
+
+#### B. Configuration Validation
+```bash
+# Validate all YAML files
+yamllint configs/ deploy/ .github/
+
+# Validate Docker compose
+docker-compose config
+
+# Validate OpenAPI spec
+swagger validate api/openapi.yaml
+
+# Validate environment files
+envsubst < .env.template > .env.test && diff .env .env.test
+```
+
+#### C. Integration Testing
+```bash
+# E2E Tests - comprehensive validation
+go test -tags=e2e -v -race -failfast -count=1 -timeout=300s -parallel=4 ./test/e2e/...
+
+# API Tests - comprehensive validation
+go test -v -race -timeout=60s -failfast -parallel=4 ./internal/adapter/...
+
+# Frontend Tests - comprehensive validation
+cd admin-frontend && npm run test:unit
+cd admin-frontend && npm run test:e2e
+```
+
+### 4. Change Propagation Checklist
+
+#### Before Making Changes
+- [ ] **Complete Reference Discovery**: Find ALL references to the code being changed
+- [ ] **Dependency Chain Analysis**: Map all direct and transitive dependencies
+- [ ] **Cross-Component Impact**: Assess impact on all system components
+- [ ] **Test Impact Analysis**: Identify all tests that need updates
+- [ ] **Documentation Impact**: Identify all documentation that needs updates
+- [ ] **Configuration Impact**: Identify all configurations that need updates
+- [ ] **Rollback Strategy**: Plan comprehensive rollback strategy
+
+#### During Changes
+- [ ] **Incremental Updates**: Make changes incrementally with validation
+- [ ] **Reference Updates**: Update ALL references immediately
+- [ ] **Test Updates**: Update ALL tests as changes are made
+- [ ] **Documentation Updates**: Update ALL documentation immediately
+- [ ] **Configuration Updates**: Update ALL configurations immediately
+- [ ] **Validation**: Test after each significant change
+- [ ] **Cross-Component Sync**: Ensure all components remain synchronized
+
+#### After Changes
+- [ ] **Comprehensive Build Validation**: Run all build commands
+- [ ] **Comprehensive Test Validation**: Run all test suites
+- [ ] **Configuration Validation**: Validate all configuration files
+- [ ] **Integration Testing**: Run all integration tests
+- [ ] **E2E Testing**: Run all E2E tests
+- [ ] **Documentation Validation**: Verify all documentation is updated
+- [ ] **Cross-Component Validation**: Verify all components work together
+- [ ] **Regression Testing**: Verify no regressions in existing functionality
+
+### 5. Automatic Propagation Rules
+
+#### A. Code Change Propagation
+- **Function Changes**: Automatically update all callers, tests, and documentation
+- **Type Changes**: Automatically update all usages, implementations, and tests
+- **Package Changes**: Automatically update all imports, references, and configurations
+- **API Changes**: Automatically update OpenAPI spec, frontend calls, and tests
+
+#### B. Configuration Change Propagation
+- **Environment Changes**: Automatically update all environment files and references
+- **Service Changes**: Automatically update all service definitions and deployments
+- **Docker Changes**: Automatically update all Docker configurations and builds
+
+#### C. Test Change Propagation
+- **Unit Test Updates**: Automatically update all unit tests for changed code
+- **Integration Test Updates**: Automatically update all integration tests
+- **E2E Test Updates**: Automatically update all E2E tests
+
+#### D. Documentation Change Propagation
+- **API Documentation**: Automatically update all API documentation
+- **Code Documentation**: Automatically update all code documentation
+- **User Documentation**: Automatically update all user documentation
+
+### 6. Quality Gates
+
+#### A. Comprehensive Validation
+- **No Broken References**: All references must be updated and working
+- **No Broken Tests**: All tests must pass after changes
+- **No Broken Builds**: All builds must succeed after changes
+- **No Broken Configurations**: All configurations must be valid
+- **No Broken Documentation**: All documentation must be accurate and up-to-date
+
+#### B. Consistency Requirements
+- **Code Consistency**: All code must be consistent across the codebase
+- **Configuration Consistency**: All configurations must be consistent
+- **Test Consistency**: All tests must be consistent and comprehensive
+- **Documentation Consistency**: All documentation must be consistent and accurate
+
+#### C. Integration Requirements
+- **Frontend-Backend Integration**: Frontend and backend must be fully integrated
+- **Database Integration**: Database changes must be properly integrated
+- **Docker Integration**: All Docker configurations must be properly integrated
+- **CI/CD Integration**: All CI/CD configurations must be properly integrated
+
+## Enforcement Rules
+
+### Mandatory Requirements
+1. **Comprehensive Impact Analysis**: MUST be performed before ANY changes
+2. **Automatic Propagation**: ALL related code MUST be updated automatically
+3. **Comprehensive Validation**: ALL builds, tests, and configurations MUST pass
+4. **Documentation Sync**: ALL documentation MUST be updated immediately
+5. **Cross-Component Sync**: ALL components MUST remain synchronized
+
+### Quality Gates
+- **No Breaking Changes**: Changes MUST not break any existing functionality
+- **Complete Propagation**: Changes MUST propagate to all related components
+- **Comprehensive Testing**: All changes MUST be thoroughly tested
+- **Complete Documentation**: All changes MUST be completely documented
+- **Full Integration**: All components MUST be fully integrated
 
 ## Failure to Comply
 
-If unit tests are not added for Go code changes, the changes are considered incomplete and must be supplemented with appropriate test coverage before the code can be considered ready for review or deployment.
+If any requirements are not met, changes are considered incomplete and must be supplemented with appropriate analysis, testing, and documentation before being ready for review or deployment. All related code, tests, configurations, and documentation must be updated before the change is considered complete.

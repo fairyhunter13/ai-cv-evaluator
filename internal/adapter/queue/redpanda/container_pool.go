@@ -1,8 +1,16 @@
+// Package redpanda provides Redpanda/Kafka queue integration.
+//
+// It handles message publishing and consumption for job processing.
+// The package provides reliable message delivery with exactly-once
+// semantics and supports horizontal scaling of workers.
 package redpanda
 
 import (
 	"context"
 	"fmt"
+	"net"
+	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -20,13 +28,12 @@ type ContainerInfo struct {
 	ID        int
 }
 
-// ContainerPool manages a pool of Redpanda containers
+// ContainerPool manages a single Redpanda container shared across all tests
 type ContainerPool struct {
-	containers chan ContainerInfo
-	poolSize   int
-	created    bool
-	once       sync.Once
-	mu         sync.RWMutex
+	container ContainerInfo
+	created   chan struct{} // Channel to signal container is ready
+	once      sync.Once
+	mu        sync.RWMutex // Protect container access
 }
 
 var (
@@ -34,112 +41,119 @@ var (
 	poolOnce   sync.Once
 )
 
+// detectSystemResources determines optimal container configuration based on system resources
+func detectSystemResources() (poolSize int, memoryLimit int64) {
+	// Single container approach - much more efficient
+	poolSize = 1 // Single container for all tests
+
+	// Get system information
+	numCPU := runtime.NumCPU()
+
+	// Allocate more memory to single container based on system resources
+	if numCPU >= 8 {
+		memoryLimit = 1024 * 1024 * 1024 // 1GB for high-end systems
+	} else if numCPU >= 4 {
+		memoryLimit = 768 * 1024 * 1024 // 768MB for mid-range systems
+	} else {
+		memoryLimit = 512 * 1024 * 1024 // 512MB for low-end systems
+	}
+
+	// Check for Docker resource constraints
+	if os.Getenv("DOCKER_RESOURCE_LIMITS") == "true" {
+		memoryLimit = 512 * 1024 * 1024 // 512MB minimum
+	}
+
+	return poolSize, memoryLimit
+}
+
 // GetContainerPool returns the global container pool
 func GetContainerPool() *ContainerPool {
 	poolOnce.Do(func() {
-		// Pool size should match or exceed parallel test count
-		// Default to 6 containers (4 parallel + 2 buffer)
+		fmt.Printf("🏗️ Creating global container pool (first time only)\n")
 		globalPool = &ContainerPool{
-			containers: make(chan ContainerInfo, 6),
-			poolSize:   6,
+			created: make(chan struct{}),
 		}
+
+		// Register cleanup on process exit
+		// This ensures containers are cleaned up even if tests don't call CleanupPool
+		go func() {
+			// Wait for a signal or timeout
+			time.Sleep(5 * time.Minute)
+			globalPool.CleanupPool()
+		}()
 	})
 	return globalPool
 }
 
-// InitializePool creates the container pool
+// InitializePool creates the single shared container
 func (p *ContainerPool) InitializePool(t *testing.T) error {
 	var initErr error
 
 	p.once.Do(func() {
-		p.mu.Lock()
-		defer p.mu.Unlock()
+		t.Logf("🔧 Initializing shared container pool (first time only)")
+		// Create single container with retry logic
+		var container tc.Container
+		var broker string
+		var err error
 
-		if p.created {
-			return
-		}
+		// Optimized retry logic with faster backoff for test environments
+		maxRetries := 3              // Reduced from 5 for faster failure
+		baseDelay := 1 * time.Second // Reduced from 2s
 
-		// Create containers concurrently
-		var wg sync.WaitGroup
-		errors := make([]error, p.poolSize)
-
-		for i := 0; i < p.poolSize; i++ {
-			wg.Add(1)
-			go func(id int) {
-				defer wg.Done()
-
-				container, broker, err := p.createContainer(t, id)
-				if err != nil {
-					errors[id] = err
-					return
-				}
-
-				// Send container to pool
-				select {
-				case p.containers <- ContainerInfo{
-					Container: container,
-					Broker:    broker,
-					ID:        id,
-				}:
-				default:
-					// Pool is full, terminate container
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-					defer cancel()
-					_ = container.Terminate(ctx)
-					errors[id] = fmt.Errorf("pool full")
-				}
-			}(i)
-		}
-
-		wg.Wait()
-
-		// Check for any errors
-		for _, err := range errors {
-			if err != nil {
-				initErr = err
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			container, broker, err = p.createContainer(t, 0)
+			if err == nil {
 				break
+			}
+
+			// Log the attempt for debugging
+			t.Logf("Container attempt %d failed: %v", attempt+1, err)
+
+			if attempt < maxRetries-1 {
+				// Linear backoff for faster retry in test environments
+				delay := baseDelay * time.Duration(attempt+1) // 1s, 2s, 3s
+				time.Sleep(delay)
 			}
 		}
 
-		if initErr == nil {
-			p.created = true
+		if err != nil {
+			initErr = fmt.Errorf("failed to create shared container after %d attempts: %v", maxRetries, err)
+			return
 		}
+
+		// Store the single container
+		p.container = ContainerInfo{
+			Container: container,
+			Broker:    broker,
+			ID:        0,
+		}
+
+		// Signal that the container is ready
+		close(p.created)
+		t.Logf("✅ Shared Redpanda container initialized successfully at %s", broker)
 	})
 
 	return initErr
 }
 
-// GetContainer acquires a container from the pool
-func (p *ContainerPool) GetContainer(t *testing.T) (ContainerInfo, error) {
-	p.mu.RLock()
-	if !p.created {
-		p.mu.RUnlock()
-		if err := p.InitializePool(t); err != nil {
-			return ContainerInfo{}, err
-		}
-		p.mu.RLock()
-	}
-	p.mu.RUnlock()
-
+// GetContainer returns the shared container
+func (p *ContainerPool) GetContainer(_ *testing.T) (ContainerInfo, error) {
+	// Wait for container to be ready
 	select {
-	case container := <-p.containers:
-		return container, nil
-	case <-time.After(30 * time.Second):
-		return ContainerInfo{}, fmt.Errorf("timeout waiting for container from pool")
+	case <-p.created:
+		// Container is ready, return it
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		return p.container, nil
+	case <-time.After(2 * time.Minute):
+		return ContainerInfo{}, fmt.Errorf("timeout waiting for container initialization")
 	}
 }
 
-// ReturnContainer returns a container to the pool
-func (p *ContainerPool) ReturnContainer(container ContainerInfo) {
-	select {
-	case p.containers <- container:
-		// Container returned successfully
-	default:
-		// Pool is full, terminate the container
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = container.Container.Terminate(ctx)
-	}
+// ReturnContainer is a no-op for single container approach
+func (p *ContainerPool) ReturnContainer(_ ContainerInfo) {
+	// No-op: Single container is shared across all tests
+	// No need to return anything since all tests use the same container
 }
 
 // createContainer creates a single Redpanda container
@@ -147,35 +161,115 @@ func (p *ContainerPool) createContainer(_ *testing.T, id int) (tc.Container, str
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Calculate port for this container (19092 + id)
-	port := 19092 + id
+	// Retry container creation up to 3 times for transient failures
+	maxRetries := 3
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		container, broker, err := p.createContainerAttempt(ctx, id)
+		if err == nil {
+			return container, broker, nil
+		}
+		lastErr = err
+
+		// Wait before retry (exponential backoff)
+		if attempt < maxRetries-1 {
+			waitTime := time.Duration(attempt+1) * 2 * time.Second
+			time.Sleep(waitTime)
+		}
+	}
+
+	return nil, "", fmt.Errorf("failed to create container after %d attempts: %w", maxRetries, lastErr)
+}
+
+// createContainerAttempt makes a single attempt to create a container
+func (p *ContainerPool) createContainerAttempt(ctx context.Context, id int) (tc.Container, string, error) {
+	// Use dynamic port allocation to avoid conflicts
+	// Dynamically find an available port on the host for 9092/tcp
+	getAvailablePort := func() (int, error) {
+		// Try multiple times to find an available port
+		maxRetries := 5
+		for attempt := 0; attempt < maxRetries; attempt++ {
+			l, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				if attempt == maxRetries-1 {
+					return 0, fmt.Errorf("failed to find available port after %d attempts: %w", maxRetries, err)
+				}
+				// Brief delay before retry
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			defer func() {
+				_ = l.Close() // Ignore error in cleanup
+			}()
+			addr := l.Addr().(*net.TCPAddr)
+			return addr.Port, nil
+		}
+		return 0, fmt.Errorf("failed to find available port after %d attempts", maxRetries)
+	}
+
+	// Get the available port before creating the request
+	availablePort, err := getAvailablePort()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to find available port for Redpanda container %d: %w", id, err)
+	}
+	port := availablePort
 
 	req := tc.ContainerRequest{
-		Image:        "redpandadata/redpanda:v24.3.7",
+		Image:        "docker.redpanda.com/redpandadata/redpanda:v24.3.1",
 		ExposedPorts: []string{"9092/tcp", "9644/tcp"},
 		Cmd: []string{
 			"redpanda", "start",
-			"--overprovisioned",
-			"--smp", "1",
-			"--memory", "256M", // Reduced memory per container
-			"--reserve-memory", "0M",
-			"--node-id", fmt.Sprintf("%d", id),
-			"--check=false",
 			"--kafka-addr", "PLAINTEXT://0.0.0.0:9092",
 			"--advertise-kafka-addr", fmt.Sprintf("PLAINTEXT://127.0.0.1:%d", port),
-			"--default-log-level=error",
 			"--mode", "dev-container",
+			"--smp", "1",
+			"--default-log-level=error",
+			"--overprovisioned",
+			"--unsafe-bypass-fsync=true",
+			"--lock-memory=false",
+			"--reserve-memory=0M",
 		},
-		WaitingFor: wait.ForListeningPort("9092/tcp").WithStartupTimeout(30 * time.Second),
+		Env: map[string]string{
+			"REDPANDA_DEVELOPER_MODE": "true",
+			"REDPANDA_LOG_LEVEL":      "error",
+			"REDPANDA_AIO_MAX_NR":     "0",    // Disable AIO to avoid macOS issues
+			"REDPANDA_FAST_STARTUP":   "true", // Custom optimization flag
+		},
+		WaitingFor: wait.ForListeningPort("9092/tcp").WithStartupTimeout(15 * time.Second), // Reduced from 30s
 	}
 
-	// Bind host port
+	// Bind host port and configure container for testing
 	req.HostConfigModifier = func(hc *containerTypes.HostConfig) {
 		if hc.PortBindings == nil {
 			hc.PortBindings = nat.PortMap{}
 		}
 		hc.PortBindings[nat.Port("9092/tcp")] = []nat.PortBinding{
 			{HostIP: "0.0.0.0", HostPort: fmt.Sprintf("%d", port)},
+		}
+
+		// Configure container for testing environment with optimized resource limits
+		_, memoryLimit := detectSystemResources()
+		hc.Resources = containerTypes.Resources{
+			Memory:     memoryLimit, // Use detected memory limit
+			MemorySwap: -1,          // Disable swap
+			CPUShares:  512,         // Increased CPU shares for faster processing
+			NanoCPUs:   500000000,   // 0.5 CPU cores (500 million nanoseconds) - increased for faster startup
+		}
+
+		// Add additional Docker configuration for macOS compatibility
+		hc.Sysctls = map[string]string{
+			"net.core.somaxconn": "1024",
+		}
+
+		// Disable swap to avoid issues
+		hc.MemorySwap = -1
+
+		// Add ulimits to prevent resource issues
+		hc.Ulimits = []*containerTypes.Ulimit{
+			{Name: "nofile", Soft: 2048, Hard: 2048}, // Increased file descriptor limit
+			{Name: "nproc", Soft: 2048, Hard: 2048},  // Increased process limit
+			{Name: "memlock", Soft: -1, Hard: -1},    // Unlimited memory lock
 		}
 	}
 
@@ -184,47 +278,54 @@ func (p *ContainerPool) createContainer(_ *testing.T, id int) (tc.Container, str
 		Started:          true,
 	})
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to start redpanda container %d: %v", id, err)
+		// Check if it's a timeout error
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, "", fmt.Errorf("timeout starting redpanda container %d (2 minutes): %w", id, err)
+		}
+		return nil, "", fmt.Errorf("failed to start redpanda container %d: %w", id, err)
 	}
 
 	broker := fmt.Sprintf("localhost:%d", port)
 	return container, broker, nil
 }
 
-// CleanupPool terminates all containers in the pool
+// CleanupPool terminates the shared container
 func (p *ContainerPool) CleanupPool() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if !p.created {
+	// Check if container was ever created
+	select {
+	case <-p.created:
+		// Container was created, proceed with cleanup
+	default:
+		// Container was never created, nothing to clean up
 		return
 	}
 
-	// Close the channel to signal no more containers will be added
-	close(p.containers)
-
-	// Terminate all remaining containers
+	// Terminate the single shared container
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	for container := range p.containers {
+	p.mu.RLock()
+	container := p.container
+	p.mu.RUnlock()
+
+	if container.Container != nil {
 		if err := container.Container.Terminate(ctx); err != nil {
-			fmt.Printf("Warning: failed to terminate container %d: %v\n", container.ID, err)
+			fmt.Printf("Warning: failed to terminate shared container during cleanup: %v\n", err)
+		} else {
+			fmt.Printf("Shared Redpanda container terminated successfully\n")
 		}
 	}
-
-	p.created = false
 }
 
 // GetPoolStats returns pool statistics
 func (p *ContainerPool) GetPoolStats() (available, total int) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	if !p.created {
-		return 0, p.poolSize
+	// Check if container was created
+	select {
+	case <-p.created:
+		// Container is ready
+		return 1, 1 // Single container available
+	default:
+		// Container not ready yet
+		return 0, 1 // Single container total
 	}
-
-	available = len(p.containers)
-	return available, p.poolSize
 }

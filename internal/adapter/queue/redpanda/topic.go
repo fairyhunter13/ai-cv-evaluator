@@ -1,3 +1,8 @@
+// Package redpanda provides Redpanda/Kafka queue integration.
+//
+// It handles message publishing and consumption for job processing.
+// The package provides reliable message delivery with exactly-once
+// semantics and supports horizontal scaling of workers.
 package redpanda
 
 import (

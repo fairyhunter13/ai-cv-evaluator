@@ -17,10 +17,11 @@ import (
 // TestE2E_HappyPath_UploadEvaluateResult exercises the core flow without
 // making strong assumptions about asynchronous completion in constrained envs.
 func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
-	t.Parallel()
-	if testing.Short() {
-		t.Skip("Skipping E2E tests in short mode")
-	}
+	// NO SKIPPING - E2E tests must always run
+	t.Parallel() // Enable parallel execution
+
+	// Clear dump directory before test
+	clearDumpDirectory(t)
 
 	httpTimeout := 2 * time.Second
 	if testing.Short() {
@@ -28,14 +29,14 @@ func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
 	}
 	client := &http.Client{Timeout: httpTimeout}
 
-	// Ensure app is reachable; skip test if not ready
+	// Ensure app is reachable; fail test if not ready
 	// Derive healthz from configurable baseURL (defined in helpers)
 	healthz := strings.TrimSuffix(baseURL, "/v1") + "/healthz"
 	if resp, err := client.Get(healthz); err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Skip("App not available; skipping happy path E2E")
+		t.Fatalf("App not available; healthz check failed: %v", err)
 	} else if resp != nil {
 		resp.Body.Close()
 	}
@@ -45,16 +46,25 @@ func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
 	dumpJSON(t, "happy_path_upload_response.json", uploadResp)
 
 	// 2) Enqueue Evaluate
-	evalResp := evaluateFiles(t, client, uploadResp["cv_id"], uploadResp["project_id"])
+	cvID, ok := uploadResp["cv_id"].(string)
+	require.True(t, ok, "cv_id should be a string")
+	projectID, ok := uploadResp["project_id"].(string)
+	require.True(t, ok, "project_id should be a string")
+	evalResp := evaluateFiles(t, client, cvID, projectID)
 	dumpJSON(t, "happy_path_evaluate_response.json", evalResp)
 	jobID, ok := evalResp["id"].(string)
 	require.True(t, ok && jobID != "", "evaluate should return job id")
 
-	// 3) Wait up to 45s and require terminal (completed/failed). Never queued.
-	final := waitForCompleted(t, client, jobID, 90*time.Second)
+	// 3) Wait up to 60s and require terminal (completed/failed). Never queued.
+	// Note: AI model processing can be slow, so we use a reasonable timeout
+	final := waitForCompleted(t, client, jobID, 300*time.Second)
 	dumpJSON(t, "happy_path_result_response.json", final)
 	st, _ := final["status"].(string)
-	require.NotEqual(t, "queued", st, "terminal state expected, got queued: %#v", final)
+
+	// CRITICAL: E2E tests must only accept successful completions
+	require.NotEqual(t, "queued", st, "E2E test failed: job stuck in queued state - %#v", final)
+	require.NotEqual(t, "processing", st, "E2E test failed: job stuck in processing state - %#v", final)
+	require.Equal(t, "completed", st, "E2E test failed: job did not complete successfully. Status: %v, Response: %#v", st, final)
 	switch st {
 	case "completed":
 		res, ok := final["result"].(map[string]any)
@@ -71,6 +81,22 @@ func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
 		}
 	default:
 		t.Fatalf("unexpected status: %v", st)
+	}
+
+	// Test Summary
+	t.Logf("=== HappyPath E2E Test Summary ===")
+	t.Logf("Test Status: %s", st)
+	if st == "completed" {
+		t.Logf("✅ Test PASSED - Job completed successfully")
+		if res, ok := final["result"].(map[string]any); ok {
+			t.Logf("Result contains: cv_match_rate=%v, project_score=%v",
+				res["cv_match_rate"] != nil, res["project_score"] != nil)
+		}
+	} else if st == "failed" {
+		t.Logf("⚠️ Test PASSED - Job failed (expected in E2E due to AI model limitations)")
+		if err, ok := final["error"].(map[string]any); ok {
+			t.Logf("Error details: %v", err)
+		}
 	}
 
 	if b, err := json.MarshalIndent(final, "", "  "); err == nil {

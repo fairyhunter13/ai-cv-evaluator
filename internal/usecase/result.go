@@ -1,3 +1,8 @@
+// Package usecase contains application business logic services.
+//
+// It orchestrates domain logic and coordinates between adapters.
+// The usecase layer implements the application's business rules
+// and provides a clean interface for the presentation layer.
 package usecase
 
 import (
@@ -41,19 +46,19 @@ func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, m
 	slog.Info("job retrieved", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Time("created_at", job.CreatedAt), slog.Time("updated_at", job.UpdatedAt))
 	if job.Status != domain.JobCompleted {
 		slog.Info("job not completed", slog.String("job_id", id), slog.String("status", string(job.Status)))
-		// Stale timeout policy: mark queued/processing older than 2 minutes as failed
-		// Increased from 30s to 2 minutes to allow for real AI processing time
+		// Stale timeout policy: mark queued/processing older than 5 minutes as failed
+		// Increased from 2 minutes to 5 minutes to allow for free model processing time
 		now := time.Now().UTC()
 		stale := false
-		if job.Status == domain.JobQueued && now.Sub(job.CreatedAt) > 2*time.Minute {
+		if job.Status == domain.JobQueued && now.Sub(job.CreatedAt) > 5*time.Minute {
 			stale = true
 		}
-		if job.Status == domain.JobProcessing && now.Sub(job.UpdatedAt) > 2*time.Minute {
+		if job.Status == domain.JobProcessing && now.Sub(job.UpdatedAt) > 5*time.Minute {
 			stale = true
 		}
 		if stale {
 			slog.Warn("job marked as stale", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Duration("age", now.Sub(job.CreatedAt)))
-			msg := "timeout: job exceeded 2 minutes"
+			msg := "timeout: job exceeded 5 minutes"
 			_ = s.Jobs.UpdateStatus(ctx, id, domain.JobFailed, &msg)
 			job.Status = domain.JobFailed
 			job.Error = msg

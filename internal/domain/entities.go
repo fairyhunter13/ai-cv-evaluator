@@ -166,6 +166,8 @@ type AIClient interface {
 	Embed(ctx Context, texts []string) ([][]float32, error)
 	// ChatJSON returns a JSON strictly matching provided schema instruction; deterministic in mock mode
 	ChatJSON(ctx Context, systemPrompt, userPrompt string, maxTokens int) (string, error)
+	// CleanCoTResponse cleans chain-of-thought leakage from AI responses
+	CleanCoTResponse(ctx Context, response string) (string, error)
 }
 
 // TextExtractor (port)

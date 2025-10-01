@@ -1,4 +1,5 @@
 //go:build e2e
+// +build e2e
 
 package e2e_test
 
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // baseURL and dumpJSON are provided by helpers_e2e_test.go
@@ -19,9 +22,11 @@ import (
 // the candidate's real CV and a project report based on this repository.
 // It logs the full JSON responses so they can be captured as screenshots.
 func TestE2E_RFC_RealResponses_UploadEvaluateResult(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping E2E tests in short mode")
-	}
+	// NO SKIPPING - E2E tests must always run
+	t.Parallel() // Enable parallel execution
+
+	// Clear dump directory before test
+	clearDumpDirectory(t)
 
 	httpTimeout := 3 * time.Second
 	client := &http.Client{Timeout: httpTimeout}
@@ -32,7 +37,7 @@ func TestE2E_RFC_RealResponses_UploadEvaluateResult(t *testing.T) {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Skip("App not available; skipping RFC evidence E2E")
+		t.Fatalf("App not available; healthz check failed: %v", err)
 	} else if resp != nil {
 		resp.Body.Close()
 	}
@@ -54,7 +59,11 @@ func TestE2E_RFC_RealResponses_UploadEvaluateResult(t *testing.T) {
 	dumpJSON(t, "rfc_upload_response.json", uploadResp)
 
 	// 3) Enqueue evaluate
-	evalResp := evaluateFiles(t, client, uploadResp["cv_id"], uploadResp["project_id"])
+	cvID, ok := uploadResp["cv_id"].(string)
+	require.True(t, ok, "cv_id should be a string")
+	projectID, ok := uploadResp["project_id"].(string)
+	require.True(t, ok, "project_id should be a string")
+	evalResp := evaluateFiles(t, client, cvID, projectID)
 	dumpJSON(t, "rfc_evaluate_response.json", evalResp)
 
 	// Log /evaluate JSON response (RFC evidence)
@@ -67,31 +76,36 @@ func TestE2E_RFC_RealResponses_UploadEvaluateResult(t *testing.T) {
 		t.Fatalf("/evaluate did not return a job id in response: %#v", evalResp)
 	}
 
-	// 4) Poll until terminal (<= ~60s) to gather RFC evidence
-	final := waitForCompleted(t, client, jobID, 120*time.Second)
+	// 4) Poll until terminal (<= ~80s) to gather RFC evidence
+	final := waitForCompleted(t, client, jobID, 300*time.Second)
 	dumpJSON(t, "rfc_result_response.json", final)
+
+	// CRITICAL: E2E tests must only accept successful completions
+	st, _ := final["status"].(string)
+	require.NotEqual(t, "queued", st, "E2E test failed: job stuck in queued state - %#v", final)
+	require.NotEqual(t, "processing", st, "E2E test failed: job stuck in processing state - %#v", final)
+	require.Equal(t, "completed", st, "E2E test failed: job did not complete successfully. Status: %v, Response: %#v", st, final)
+
 	// Log /result JSON response (RFC evidence)
 	if b, err := json.MarshalIndent(final, "", "  "); err == nil {
 		t.Logf("RFC Evidence - /result response:\n%s", string(b))
 	}
-	st, _ := final["status"].(string)
-	switch st {
-	case "completed":
-		res, ok := final["result"].(map[string]any)
-		if !ok {
-			t.Fatalf("result object missing: %#v", final)
-		}
-		if _, ok := res["cv_match_rate"]; !ok {
-			t.Fatalf("cv_match_rate missing: %#v", res)
-		}
-		if _, ok := res["project_score"]; !ok {
-			t.Fatalf("project_score missing: %#v", res)
-		}
-	case "failed":
-		if _, ok := final["error"].(map[string]any); !ok {
-			t.Fatalf("expected error object for failed status: %#v", final)
-		}
-	default:
-		t.Fatalf("expected terminal status (completed/failed), got: %v", st)
+	// Validate successful completion
+	res, ok := final["result"].(map[string]any)
+	require.True(t, ok, "result object missing for completed job")
+	if _, ok := res["cv_match_rate"]; !ok {
+		t.Fatalf("cv_match_rate missing: %#v", res)
+	}
+	if _, ok := res["project_score"]; !ok {
+		t.Fatalf("project_score missing: %#v", res)
+	}
+
+	// Test Summary
+	t.Logf("=== RFC Real Responses E2E Test Summary ===")
+	t.Logf("Test Status: %s", st)
+	t.Logf("✅ Test PASSED - RFC evidence collected successfully")
+	if res, ok := final["result"].(map[string]any); ok {
+		t.Logf("Result contains: cv_match_rate=%v, project_score=%v",
+			res["cv_match_rate"] != nil, res["project_score"] != nil)
 	}
 }

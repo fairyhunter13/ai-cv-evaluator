@@ -22,32 +22,47 @@ type embedReq struct {
 }
 
 func TestChatJSON_UsesAutoAndFallbacks(t *testing.T) {
-	// Chat test server
-	chatTS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/chat/completions" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		var cr chatReq
-		_ = json.NewDecoder(r.Body).Decode(&cr)
-		if cr.Model != "openrouter/auto" {
-			t.Fatalf("expected auto model, got %q", cr.Model)
-		}
-		if len(cr.Models) != 2 {
-			t.Fatalf("expected 2 fallback models, got %d", len(cr.Models))
-		}
+	// Test server that handles both /models and /chat/completions
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(200)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"choices": []map[string]any{{"message": map[string]any{"content": "{\"ok\":true}"}}},
-		})
+
+		if r.URL.Path == "/models" {
+			// Mock OpenRouter models API response
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{
+						"id": "meta-llama/llama-3.1-8b-instruct:free",
+						"pricing": map[string]string{
+							"prompt":     "0",
+							"completion": "0",
+							"request":    "0",
+							"image":      "0",
+						},
+					},
+				},
+			})
+			return
+		}
+
+		if r.URL.Path == "/chat/completions" {
+			var cr chatReq
+			_ = json.NewDecoder(r.Body).Decode(&cr)
+			if cr.Model != "meta-llama/llama-3.1-8b-instruct:free" {
+				t.Fatalf("expected free model, got %q", cr.Model)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{{"message": map[string]any{"content": "{\"ok\":true}"}}},
+			})
+			return
+		}
+
+		t.Fatalf("unexpected path: %s", r.URL.Path)
 	}))
-	defer chatTS.Close()
+	defer server.Close()
 
 	cfg := config.Config{
-		OpenRouterAPIKey:   "x",
-		OpenRouterBaseURL:  chatTS.URL,
-		ChatModel:          "", // trigger auto
-		ChatFallbackModels: []string{"openai/gpt-4o-mini", "gryphe/mythomax-l2-13b"},
+		OpenRouterAPIKey:  "x",
+		OpenRouterBaseURL: server.URL,
 	}
 	c := NewTestClient(cfg)
 	out, err := c.ChatJSON(context.Background(), "sys", "user", 64)

@@ -1,3 +1,8 @@
+// Package usecase contains application business logic services.
+//
+// It orchestrates domain logic and coordinates between adapters.
+// The usecase layer implements the application's business rules
+// and provides a clean interface for the presentation layer.
 package usecase
 
 import (

@@ -2,8 +2,6 @@
 .env.production
 .env.bak
 docs/project.md
-RFC.md
-RFC-Submission.md
 docs/rfc/
 docs/rfc.backups/
 # Generated files and directories
@@ -23,6 +21,7 @@ test/testdata/golden/*_response.json
 .DS_Store
 vendor
 cv/
+!secrets/cv
 test/dump
 
 
@@ -31,3 +30,8 @@ models.response.json
 
 # artifacts
 artifacts/
+
+# Project reports and submissions
+project_report.md
+rfc_submission_complete.md
+rfc_submission_complete.pdf
