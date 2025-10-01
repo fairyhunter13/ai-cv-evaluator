@@ -12,7 +12,7 @@ import (
 
 // TestTransactionalProducerConfiguration tests that the producer is configured with TransactionalID
 func TestTransactionalProducerConfiguration(t *testing.T) {
-	brokers := []string{"localhost:9092"}
+	brokers := []string{getContainerBroker(t)}
 	producer, err := NewProducer(brokers)
 
 	// This test would require mocking the kgo.Client
@@ -23,7 +23,7 @@ func TestTransactionalProducerConfiguration(t *testing.T) {
 
 // TestTransactionalConsumerConfiguration tests that the consumer is configured with TransactionalID
 func TestTransactionalConsumerConfiguration(t *testing.T) {
-	brokers := []string{"localhost:9092"}
+	brokers := []string{getContainerBroker(t)}
 	groupID := "test-group"
 
 	// Mock dependencies
@@ -46,7 +46,7 @@ func TestExactlyOnceSemanticsConfiguration(t *testing.T) {
 	t.Run("producer has TransactionalID", func(t *testing.T) {
 		// The producer should be configured with TransactionalID
 		// This is verified by the NewProducer function
-		brokers := []string{"localhost:9092"}
+		brokers := []string{getContainerBroker(t)}
 		producer, err := NewProducer(brokers)
 		assert.NoError(t, err)
 		assert.NotNil(t, producer)
@@ -55,7 +55,7 @@ func TestExactlyOnceSemanticsConfiguration(t *testing.T) {
 	t.Run("consumer has TransactionalID", func(t *testing.T) {
 		// The consumer should be configured with TransactionalID
 		// This is verified by the NewConsumer function
-		brokers := []string{"localhost:9092"}
+		brokers := []string{getContainerBroker(t)}
 		groupID := "test-group"
 
 		var jobs domain.JobRepository
@@ -94,7 +94,7 @@ func TestIdempotencyKeyHandling(t *testing.T) {
 func TestErrorHandling(t *testing.T) {
 	t.Run("producer handles marshal errors", func(t *testing.T) {
 		// Test that marshal errors are properly handled
-		brokers := []string{"localhost:9092"}
+		brokers := []string{getContainerBroker(t)}
 		producer, err := NewProducer(brokers)
 		assert.NoError(t, err)
 
@@ -109,10 +109,10 @@ func TestErrorHandling(t *testing.T) {
 			StudyCaseBrief: "Test study case",
 		}
 
-		// This should not panic
+		// This should not panic and should succeed with real container
 		_, err = producer.EnqueueEvaluate(ctx, payload)
-		// Error expected due to no actual Kafka connection
-		assert.Error(t, err)
+		// With real container, this should succeed
+		assert.NoError(t, err)
 	})
 }
 
@@ -122,7 +122,7 @@ func TestOffsetCommitBehavior(t *testing.T) {
 		// This test would require mocking the kgo.Client and testing the processRecord method
 		// For now, we verify the structure supports proper offset commits
 
-		brokers := []string{"localhost:9092"}
+		brokers := []string{getContainerBroker(t)}
 		groupID := "test-group"
 
 		var jobs domain.JobRepository
@@ -146,7 +146,7 @@ func TestTransactionIsolationLevel(t *testing.T) {
 		// The consumer should be configured with ReadCommitted isolation level
 		// This is verified by the NewConsumer function configuration
 
-		brokers := []string{"localhost:9092"}
+		brokers := []string{getContainerBroker(t)}
 		groupID := "test-group"
 
 		var jobs domain.JobRepository
@@ -170,7 +170,7 @@ func TestManualOffsetCommit(t *testing.T) {
 		// The consumer should have auto-commit disabled
 		// This is verified by the kgo.DisableAutoCommit() configuration
 
-		brokers := []string{"localhost:9092"}
+		brokers := []string{getContainerBroker(t)}
 		groupID := "test-group"
 
 		var jobs domain.JobRepository

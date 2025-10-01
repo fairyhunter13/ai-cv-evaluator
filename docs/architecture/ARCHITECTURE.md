@@ -1,4 +1,4 @@
-# Architecture
+# System Architecture
 
 This service follows Clean Architecture principles with clear separation of concerns and a split server/worker architecture for optimal scalability and reliability.
 
@@ -8,53 +8,23 @@ This service follows Clean Architecture principles with clear separation of conc
 graph TB
     Client[Client/Browser]
     Frontend[Vue 3 Frontend]
-    LB[Load Balancer]
     Server[Go Server API]
-    Worker1[Worker 1]
-    Worker2[Worker 2]
-    WorkerN[Worker N]
+    Worker[Worker Pool]
     DB[(PostgreSQL)]
-    Redpanda[(Redpanda Queue)]
-    Qdrant[(Qdrant Vector DB)]
+    Queue[(Redpanda Queue)]
+    Vector[(Qdrant Vector DB)]
     Tika[Apache Tika]
     AI[AI Provider]
     
-    Client -->|HTTPS| LB
-    LB -->|Static Files| Frontend
-    LB -->|API Calls| Server
-    Frontend -->|HTTP API| Server
+    Client -->|HTTPS| Frontend
+    Frontend -->|API Calls| Server
     Server --> DB
-    Server --> Redpanda
-    Worker1 --> Redpanda
-    Worker2 --> Redpanda
-    WorkerN --> Redpanda
-    Worker1 --> DB
-    Worker2 --> DB
-    WorkerN --> DB
-    Worker1 --> Qdrant
-    Worker2 --> Qdrant
-    WorkerN --> Qdrant
-    Worker1 --> Tika
-    Worker2 --> Tika
-    WorkerN --> Tika
-    Worker1 --> AI
-    Worker2 --> AI
-    WorkerN --> AI
-    
-    subgraph Observability
-        Prometheus[Prometheus]
-        Grafana[Grafana]
-        Jaeger[Jaeger]
-        Server --> Prometheus
-        Worker1 --> Prometheus
-        Worker2 --> Prometheus
-        WorkerN --> Prometheus
-        Server --> Jaeger
-        Worker1 --> Jaeger
-        Worker2 --> Jaeger
-        WorkerN --> Jaeger
-        Prometheus --> Grafana
-    end
+    Server --> Queue
+    Worker --> Queue
+    Worker --> DB
+    Worker --> Vector
+    Worker --> Tika
+    Worker --> AI
 ```
 
 ## Request Flow

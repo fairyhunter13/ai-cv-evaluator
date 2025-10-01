@@ -225,7 +225,7 @@ sops .env.production.sops.yaml
 ## Configuration
 Environment variables (see `.env.sample`):
 - Core: `APP_ENV`, `PORT`, `DB_URL`, `KAFKA_BROKERS`
-- AI: `AI_PROVIDER`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, etc.
+- AI: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, etc.
 - Vector DB: `QDRANT_URL`, `QDRANT_API_KEY`
 - Extractor: `TIKA_URL`
 - Observability: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`

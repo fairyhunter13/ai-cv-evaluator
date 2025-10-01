@@ -179,7 +179,7 @@ func TestBuildReadinessChecks_ContextCancellation(t *testing.T) {
 func TestBuildReadinessChecks_Timeout(t *testing.T) {
 	// Create a server that takes longer than the timeout
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(3 * time.Second) // Longer than the 2s timeout
+		time.Sleep(3 * time.Second) // Longer than the 2s timeout to ensure it always times out
 		w.WriteHeader(200)
 	}))
 	defer server.Close()

@@ -1,3 +1,8 @@
+// Package app wires application components and startup helpers.
+//
+// It provides dependency injection and application initialization.
+// The package coordinates between different layers and provides
+// a clean application bootstrap process.
 package app
 
 import (

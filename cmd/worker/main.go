@@ -59,15 +59,25 @@ func main() {
 	upRepo := postgres.NewUploadRepo(pool)
 	resRepo := postgres.NewResultRepo(pool)
 
-	// Worker (Redpanda consumer)
-	worker, err := redpanda.NewConsumer(
+	// Worker (Redpanda consumer) with dynamic worker pool
+	// Use CONSUMER_MAX_CONCURRENCY as max workers, with min workers as 2
+	minWorkers := 2
+	maxWorkers := cfg.ConsumerMaxConcurrency
+	if maxWorkers < minWorkers {
+		maxWorkers = minWorkers + 2 // Ensure we have at least 4 workers max
+	}
+
+	worker, err := redpanda.NewConsumerWithConfig(
 		cfg.KafkaBrokers,
-		"ai-cv-evaluator-workers", // Consumer group ID
+		"ai-cv-evaluator-workers",  // Consumer group ID
+		"ai-cv-evaluator-consumer", // Transactional ID
 		jobRepo,
 		upRepo,
 		resRepo,
 		freeModelWrapper,
 		qcli,
+		minWorkers,
+		maxWorkers,
 	)
 	if err != nil {
 		slog.Error("redpanda consumer init failed", slog.Any("error", err))

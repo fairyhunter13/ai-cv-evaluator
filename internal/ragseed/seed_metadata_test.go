@@ -28,6 +28,9 @@ func (s metaAI) Embed(_ domain.Context, texts []string) ([][]float32, error) {
 func (s metaAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, error) {
 	return "{}", nil
 }
+func (s metaAI) CleanCoTResponse(_ domain.Context, response string) (string, error) {
+	return response, nil
+}
 
 func TestSeedFile_MetadataMapping(t *testing.T) {
 	t.Setenv("RAGSEED_ALLOW_ABSPATHS", "1")

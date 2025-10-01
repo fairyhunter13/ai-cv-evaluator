@@ -1,133 +1,102 @@
-// Package freemodels implements a service to fetch and manage free OpenRouter models.
+// Package freemodels provides a service for managing free AI models from OpenRouter.
 package freemodels
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
-	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Model represents an OpenRouter model with pricing information.
+// Model represents a model from OpenRouter API
 type Model struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Pricing     Pricing     `json:"pricing"`
-	Context     int         `json:"context_length"`
-	Description string      `json:"description"`
-	TopProvider json.RawMessage `json:"top_provider,omitempty"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Pricing     Pricing `json:"pricing"`
 }
 
-// Pricing contains the cost information for a model.
+// Pricing represents the pricing information for a model
 type Pricing struct {
-	Prompt     any `json:"prompt"`     // Price per token for prompts
-	Completion any `json:"completion"` // Price per token for completions
+	Prompt     string `json:"prompt"`
+	Completion string `json:"completion"`
+	Request    string `json:"request"`
+	Image      string `json:"image"`
 }
 
-// Service manages free OpenRouter models with automatic fetching and rotation.
+// OpenRouterResponse represents the response from OpenRouter API
+type OpenRouterResponse struct {
+	Data []Model `json:"data"`
+}
+
+// Service handles fetching and managing free models from OpenRouter
 type Service struct {
-	httpClient    *http.Client
-	models        []Model
-	modelsMutex   sync.RWMutex
-	lastFetch     time.Time
-	fetchInterval time.Duration
-	apiKey        string
-	baseURL       string
+	apiKey     string
+	baseURL    string
+	httpClient *http.Client
+	models     []Model
+	lastFetch  time.Time
+	refreshDur time.Duration
+	mu         sync.RWMutex
 }
 
-// New creates a new free models service.
-func New(apiKey, baseURL string) *Service {
+// NewService creates a new free models service
+func NewService(apiKey, baseURL string, refreshDur time.Duration) *Service {
 	return &Service{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		fetchInterval: 1 * time.Hour, // Default refresh every hour
-		apiKey:        apiKey,
-		baseURL:       baseURL,
+		apiKey:     apiKey,
+		baseURL:    baseURL,
+		httpClient: &http.Client{Timeout: 30 * time.Second},
+		refreshDur: refreshDur,
 	}
 }
 
-// NewWithRefresh creates a new free models service with custom refresh interval.
-func NewWithRefresh(apiKey, baseURL string, refreshInterval time.Duration) *Service {
-	return &Service{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		fetchInterval: refreshInterval,
-		apiKey:        apiKey,
-		baseURL:       baseURL,
-	}
-}
-
-// GetFreeModels returns a list of free models, fetching from OpenRouter if needed.
+// GetFreeModels returns the list of free models, fetching from API if needed
 func (s *Service) GetFreeModels(ctx context.Context) ([]Model, error) {
-	s.modelsMutex.RLock()
-	needsRefresh := s.lastFetch.IsZero() || time.Since(s.lastFetch) > s.fetchInterval
-	s.modelsMutex.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Check if we need to refresh the models list
+	needsRefresh := s.models == nil || time.Since(s.lastFetch) > s.refreshDur
 
 	if needsRefresh {
-		if err := s.fetchModels(ctx); err != nil {
-			slog.Warn("failed to fetch fresh models, using cached", slog.Any("error", err))
+		slog.Info("fetching free models from OpenRouter API",
+			slog.String("base_url", s.baseURL),
+			slog.Duration("refresh_interval", s.refreshDur))
+
+		models, err := s.fetchModelsFromAPI(ctx)
+		if err != nil {
+			// If API fetch fails and we have cached models, use them
+			if s.models != nil {
+				slog.Warn("failed to fetch models from API, using cached models",
+					slog.Any("error", err),
+					slog.Int("cached_count", len(s.models)))
+				return s.models, nil
+			}
+			return nil, fmt.Errorf("failed to fetch models from API: %w", err)
 		}
+
+		s.models = models
+		s.lastFetch = time.Now()
+
+		slog.Info("successfully fetched free models",
+			slog.Int("count", len(models)),
+			slog.Time("last_fetch", s.lastFetch))
 	}
 
-	s.modelsMutex.RLock()
-	defer s.modelsMutex.RUnlock()
-
-	// Return a copy to avoid race conditions
-	result := make([]Model, len(s.models))
-	copy(result, s.models)
-	return result, nil
+	return s.models, nil
 }
 
-// GetRandomFreeModel returns a random free model for load balancing.
-func (s *Service) GetRandomFreeModel(ctx context.Context) (string, error) {
-	models, err := s.GetFreeModels(ctx)
+// fetchModelsFromAPI fetches all models from OpenRouter API and filters free ones
+func (s *Service) fetchModelsFromAPI(ctx context.Context) ([]Model, error) {
+	url := s.baseURL + "/models"
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return "", err
-	}
-
-	if len(models) == 0 {
-		return "", fmt.Errorf("no free models available")
-	}
-
-	// Use current time as seed for pseudo-random selection
-	index := int(time.Now().UnixNano()) % len(models)
-	return models[index].ID, nil
-}
-
-// GetBestFreeModel returns the best free model based on context length and reliability.
-func (s *Service) GetBestFreeModel(ctx context.Context) (string, error) {
-	models, err := s.GetFreeModels(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	if len(models) == 0 {
-		return "", fmt.Errorf("no free models available")
-	}
-
-	// Sort by context length (descending) and then by name for consistency
-	sort.Slice(models, func(i, j int) bool {
-		if models[i].Context != models[j].Context {
-			return models[i].Context > models[j].Context
-		}
-		return models[i].Name < models[j].Name
-	})
-
-	return models[0].ID, nil
-}
-
-// fetchModels fetches the latest models from OpenRouter API.
-func (s *Service) fetchModels(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", s.baseURL+"/models", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	if s.apiKey != "" {
@@ -137,94 +106,87 @@ func (s *Service) fetchModels(ctx context.Context) error {
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to fetch models: %w", err)
+		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			slog.Warn("failed to close response body", slog.Any("error", closeErr))
-		}
-	}()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var response struct {
-		Data []Model `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	var apiResp OpenRouterResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Filter for free models (prompt price is zero across possible formats)
+	// Filter for free models only
+	freeModels := s.filterFreeModels(apiResp.Data)
+
+	slog.Info("filtered free models from OpenRouter API",
+		slog.Int("total_models", len(apiResp.Data)),
+		slog.Int("free_models", len(freeModels)))
+
+	return freeModels, nil
+}
+
+// filterFreeModels filters models to only include free ones
+func (s *Service) filterFreeModels(models []Model) []Model {
 	var freeModels []Model
-	for _, model := range response.Data {
+
+	for _, model := range models {
 		if s.isFreeModel(model) {
 			freeModels = append(freeModels, model)
 		}
 	}
 
-	s.modelsMutex.Lock()
-	s.models = freeModels
-	s.lastFetch = time.Now()
-	s.modelsMutex.Unlock()
-
-	slog.Info("fetched free models from OpenRouter",
-		slog.Int("total_models", len(response.Data)),
-		slog.Int("free_models", len(freeModels)))
-
-	return nil
+	return freeModels
 }
 
-// isFreeModel checks if a model is free based on its pricing.
+// isFreeModel checks if a model is free based on its pricing
 func (s *Service) isFreeModel(model Model) bool {
-	// Check if prompt pricing is free across flexible shapes.
-	return priceIsFree(model.Pricing.Prompt)
-}
+	// A model is considered free if all pricing fields are "0" or empty
+	pricing := model.Pricing
 
-// priceIsFree determines whether a pricing value represents a free price.
-// It supports strings ("", "0", "0.0"), numbers (0), and nested objects (any zero-like value).
-func priceIsFree(v any) bool {
-	switch t := v.(type) {
-	case nil:
-		// Treat missing as free to match previous behavior (empty => free)
-		return true
-	case string:
-		s := strings.TrimSpace(t)
-		return s == "" || s == "0" || s == "0.0"
-	case float64:
-		return t == 0
-	case map[string]any:
-		// Consider free if any nested value indicates zero price.
-		for _, vv := range t {
-			if priceIsFree(vv) {
-				return true
-			}
-		}
-		return false
-	default:
-		return false
-	}
-}
+	// Check if all pricing fields indicate free usage
+	isPromptFree := pricing.Prompt == "0" || pricing.Prompt == "" || pricing.Prompt == "0.0"
+	isCompletionFree := pricing.Completion == "0" || pricing.Completion == "" || pricing.Completion == "0.0"
+	isRequestFree := pricing.Request == "0" || pricing.Request == "" || pricing.Request == "0.0"
+	isImageFree := pricing.Image == "0" || pricing.Image == "" || pricing.Image == "0.0"
 
-// GetModelInfo returns information about a specific model.
-func (s *Service) GetModelInfo(ctx context.Context, modelID string) (*Model, error) {
-	models, err := s.GetFreeModels(ctx)
-	if err != nil {
-		return nil, err
+	// All pricing must be free
+	allFree := isPromptFree && isCompletionFree && isRequestFree && isImageFree
+
+	// Additional check: exclude known paid model patterns
+	modelID := strings.ToLower(model.ID)
+	excludedPatterns := []string{
+		"gpt-4", "gpt-5", "claude-3", "gemini-pro", "mistral-large",
+		"mixtral-8x", "llama-2-70b", "llama-2-13b", "command-",
+		"auto", // openrouter/auto
 	}
 
-	for _, model := range models {
-		if model.ID == modelID {
-			return &model, nil
+	for _, pattern := range excludedPatterns {
+		if strings.Contains(modelID, pattern) {
+			slog.Debug("excluding model with paid pattern",
+				slog.String("model_id", model.ID),
+				slog.String("pattern", pattern))
+			return false
 		}
 	}
 
-	return nil, fmt.Errorf("model %s not found in free models", modelID)
+	if allFree {
+		slog.Debug("identified free model",
+			slog.String("model_id", model.ID),
+			slog.String("name", model.Name),
+			slog.String("pricing", fmt.Sprintf("prompt:%s,completion:%s,request:%s,image:%s",
+				pricing.Prompt, pricing.Completion, pricing.Request, pricing.Image)))
+	}
+
+	return allFree
 }
 
-// GetFreeModelIDs returns just the model IDs for easy use in configuration.
-func (s *Service) GetFreeModelIDs(ctx context.Context) ([]string, error) {
+// GetModelIDs returns just the model IDs for easy use
+func (s *Service) GetModelIDs(ctx context.Context) ([]string, error) {
 	models, err := s.GetFreeModels(ctx)
 	if err != nil {
 		return nil, err
@@ -238,19 +200,32 @@ func (s *Service) GetFreeModelIDs(ctx context.Context) ([]string, error) {
 	return ids, nil
 }
 
-// GetRefreshStatus returns information about the last refresh and next refresh time.
-func (s *Service) GetRefreshStatus() (lastFetch time.Time, nextFetch time.Time, refreshInterval time.Duration) {
-	s.modelsMutex.RLock()
-	defer s.modelsMutex.RUnlock()
+// Refresh forces a refresh of the models list
+func (s *Service) Refresh(ctx context.Context) error {
+	s.mu.Lock()
+	s.models = nil
+	s.lastFetch = time.Time{}
+	s.mu.Unlock()
 
-	lastFetch = s.lastFetch
-	refreshInterval = s.fetchInterval
-	nextFetch = s.lastFetch.Add(s.fetchInterval)
+	// Force refresh by calling the internal logic
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	return lastFetch, nextFetch, refreshInterval
-}
+	slog.Info("fetching free models from OpenRouter API",
+		slog.String("base_url", s.baseURL),
+		slog.Duration("refresh_interval", s.refreshDur))
 
-// ForceRefresh forces an immediate refresh of the models list.
-func (s *Service) ForceRefresh(ctx context.Context) error {
-	return s.fetchModels(ctx)
+	models, err := s.fetchModelsFromAPI(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to fetch models from API: %w", err)
+	}
+
+	s.models = models
+	s.lastFetch = time.Now()
+
+	slog.Info("successfully fetched free models",
+		slog.Int("count", len(models)),
+		slog.Time("last_fetch", s.lastFetch))
+
+	return nil
 }

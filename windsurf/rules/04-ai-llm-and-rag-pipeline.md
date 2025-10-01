@@ -13,7 +13,6 @@ Design and implement the AI pipeline with prompt design, chaining, RAG, and resi
 
 - Environment:
   - Chat (OpenRouter):
-    - `AI_PROVIDER` (default `openrouter`)
     - `OPENROUTER_API_KEY` (required for live; requests will fail if unset)
     - `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
     - `CHAT_MODEL` (default `openrouter/auto` via OpenRouter)

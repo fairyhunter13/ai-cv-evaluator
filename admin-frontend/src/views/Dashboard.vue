@@ -139,25 +139,61 @@
 
         <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-600">Total Uploads</p>
-                <p class="text-3xl font-bold text-gray-900">{{ stats.uploads }}</p>
+          <!-- Loading State -->
+          <div v-if="statsLoading" class="col-span-full">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+              <div class="text-center">
+                <LoadingSpinner size="lg" text="Loading statistics..." />
               </div>
-              <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                </svg>
-              </div>
-            </div>
-            <div class="mt-4 flex items-center text-sm text-green-600">
-              <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
-              </svg>
-              +12% from last month
             </div>
           </div>
+          
+          <!-- Error State -->
+          <div v-else-if="statsError" class="col-span-full">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div class="rounded-md bg-red-50 p-4">
+                <div class="flex">
+                  <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                  <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error loading statistics</h3>
+                    <p class="mt-1 text-sm text-red-700">{{ statsError }}</p>
+                    <button
+                      @click="loadStats"
+                      class="mt-2 text-sm text-red-600 hover:text-red-500"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Stats Cards -->
+          <template v-else>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-gray-600">Total Uploads</p>
+                  <p class="text-3xl font-bold text-gray-900">{{ stats.uploads }}</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                  </svg>
+                </div>
+              </div>
+              <div class="mt-4 flex items-center text-sm text-green-600">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                </svg>
+                +12% from last month
+              </div>
+            </div>
 
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div class="flex items-center justify-between">
@@ -219,6 +255,7 @@
               -5% from last month
             </div>
           </div>
+          </template>
         </div>
 
         <!-- Quick Actions -->
@@ -358,6 +395,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
+import LoadingSpinner from '@/components/LoadingSpinner.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -371,6 +409,9 @@ const stats = reactive({
   completed: 0,
   avgTime: 0
 })
+
+const statsLoading = ref(false)
+const statsError = ref('')
 
 const toggleSidebar = () => {
   sidebarOpen.value = !sidebarOpen.value
@@ -386,6 +427,9 @@ const handleLogout = async () => {
 }
 
 const loadStats = async () => {
+  statsLoading.value = true
+  statsError.value = ''
+  
   try {
     const response = await axios.get('/admin/api/stats', {
       withCredentials: true,
@@ -395,6 +439,7 @@ const loadStats = async () => {
       // Check if response contains error information
       if (response.data.error) {
         console.error('API returned error:', response.data.error)
+        statsError.value = 'Failed to load statistics'
         // Set default values instead of mock data
         stats.uploads = 0
         stats.evaluations = 0
@@ -410,11 +455,14 @@ const loadStats = async () => {
     }
   } catch (error) {
     console.error('Failed to load stats:', error)
+    statsError.value = 'Failed to load statistics'
     // Set default values instead of mock data
     stats.uploads = 0
     stats.evaluations = 0
     stats.completed = 0
     stats.avgTime = 0
+  } finally {
+    statsLoading.value = false
   }
 }
 
