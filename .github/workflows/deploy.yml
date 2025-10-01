@@ -76,16 +76,71 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build and push Docker image
-        id: build
+      - name: Build and push server Docker image
+        id: build-server
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: Dockerfile.server
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ needs.pre-deploy-checks.outputs.image_tag }}
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}-server:${{ needs.pre-deploy-checks.outputs.image_tag }}
+            ghcr.io/${{ github.repository }}-server:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push worker Docker image
+        id: build-worker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.worker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-worker:${{ needs.pre-deploy-checks.outputs.image_tag }}
+            ghcr.io/${{ github.repository }}-worker:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend Docker image
+        id: build-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./admin-frontend
+          file: Dockerfile.prod
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-frontend:${{ needs.pre-deploy-checks.outputs.image_tag }}
+            ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push migration Docker image
+        id: build-migrate
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.migrate
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-migrate:${{ needs.pre-deploy-checks.outputs.image_tag }}
+            ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
@@ -93,26 +148,59 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
-      - name: Security scan of built image
+      - name: Security scan of server image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'ghcr.io/${{ github.repository }}:${{ github.sha }}'
+          image-ref: 'ghcr.io/${{ github.repository }}-server:${{ github.sha }}'
           format: 'table'
           exit-code: '1'
           severity: 'CRITICAL,HIGH'
       
-      - name: Generate SBOM (Software Bill of Materials)
+      - name: Security scan of worker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ github.repository }}-worker:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Security scan of frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+      
+      - name: Generate SBOM for server image
         uses: anchore/sbom-action@v0
         with:
-          image: 'ghcr.io/${{ github.repository }}:${{ github.sha }}'
+          image: 'ghcr.io/${{ github.repository }}-server:${{ github.sha }}'
           format: spdx-json
-          output-file: sbom.spdx.json
+          output-file: sbom-server.spdx.json
       
-      - name: Upload SBOM
+      - name: Generate SBOM for worker image
+        uses: anchore/sbom-action@v0
+        with:
+          image: 'ghcr.io/${{ github.repository }}-worker:${{ github.sha }}'
+          format: spdx-json
+          output-file: sbom-worker.spdx.json
+      
+      - name: Generate SBOM for frontend image
+        uses: anchore/sbom-action@v0
+        with:
+          image: 'ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}'
+          format: spdx-json
+          output-file: sbom-frontend.spdx.json
+      
+      - name: Upload SBOMs
         uses: actions/upload-artifact@v4
         with:
           name: sbom-${{ github.sha }}
-          path: sbom.spdx.json
+          path: |
+            sbom-server.spdx.json
+            sbom-worker.spdx.json
+            sbom-frontend.spdx.json
   
   e2e-verify:
     runs-on: ubuntu-latest
@@ -231,51 +319,81 @@ jobs:
             cd ~/ai-cv-evaluator
             
             # Check if services are running
-            if docker compose ps --services --filter "status=running" | grep -q .; then
+            if docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | grep -q .; then
               echo "Current services health check..."
-              docker compose exec -T db pg_isready -U $POSTGRES_USER || echo "Warning: Postgres not ready"
-              docker compose exec -T redis redis-cli ping || echo "Warning: Redis not ready"
+              docker compose -f docker-compose.prod.yml exec -T db pg_isready -U postgres || echo "Warning: Postgres not ready"
+              docker compose -f docker-compose.prod.yml exec -T redpanda rpk cluster health || echo "Warning: Redpanda health check failed"
             fi
           '
       
-      - name: Pull new image
+      - name: Pull new images
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "docker pull ghcr.io/${{ github.repository }}:${{ github.sha }}"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+            docker pull ghcr.io/${{ github.repository }}-server:${{ github.sha }}
+            docker pull ghcr.io/${{ github.repository }}-worker:${{ github.sha }}
+            docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+          "
+      
+      - name: Build and push migration Docker image
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+            docker pull ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}
+          "
       
       - name: Run database migrations
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
-            
-            # Backup database before migration
-            docker compose exec -T db pg_dump -U \$POSTGRES_USER \$POSTGRES_DB > "backup_$(date +%Y%m%d_%H%M%S).sql" || echo "Warning: Backup failed"
-            
-            # Run migrations with the new image
-            docker run --rm --network ai-cv-evaluator_default \
-              -e DB_URL="\$DB_URL" \
-              ghcr.io/${{ github.repository }}:${{ github.sha }} \
-              sh -c "cd /app && make migrate"
+            # Load production env for DB_URL (if present)
+            set -a; [ -f .env.production ] && . ./.env.production || true; set +a
+
+            # Ensure DB service is up for backup/migrations
+            docker compose -f docker-compose.prod.yml up -d db
+            echo "Waiting for Postgres to be ready..."
+            for i in {1..30}; do
+              if docker compose -f docker-compose.prod.yml exec -T db pg_isready -U postgres >/dev/null 2>&1; then
+                echo "Postgres is ready"; break; fi; echo "  Attempt $i/30: waiting for db..."; sleep 2; done
+
+            # Backup database before migration (best-effort)
+            docker compose -f docker-compose.prod.yml exec -T db pg_dump -U postgres app > "backup_$(date +%Y%m%d_%H%M%S).sql" || echo "Warning: Backup failed"
+
+            # Run migrations using the dedicated migration container
+            docker compose -f docker-compose.prod.yml run --rm migrate
           '
       
       - name: Rolling deployment (production compose)
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
-            # Update image tag in prod compose file
-            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator:.*|image: ghcr.io/${{ github.repository }}:${{ github.sha }}|g" docker-compose.prod.yml || true
+            # Update image tags in prod compose file
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-server:.*|image: ghcr.io/${{ github.repository }}-server:${{ github.sha }}|g" docker-compose.prod.yml || true
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-worker:.*|image: ghcr.io/${{ github.repository }}-worker:${{ github.sha }}|g" docker-compose.prod.yml || true
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-frontend:.*|image: ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}|g" docker-compose.prod.yml || true
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-migrate:.*|image: ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}|g" docker-compose.prod.yml || true
             # Bring up with production compose and env
             export COMPOSE_FILE=docker-compose.prod.yml
             docker compose up -d
             
             # Wait for health check
-            echo "Waiting for application to be healthy (via Nginx)..."
+            echo "Waiting for application to be healthy..."
             for i in {1..30}; do
               if curl -f http://localhost/healthz > /dev/null 2>&1; then
-                echo "Application is healthy"
+                echo "Backend is healthy"
                 break
               fi
-              echo "Attempt $i: Waiting for health check..."
+              echo "Attempt $i: Waiting for backend health check..."
               sleep 10
+            done
+            
+            # Check frontend is accessible
+            echo "Checking frontend accessibility..."
+            for i in {1..10}; do
+              if curl -f http://localhost/ > /dev/null 2>&1; then
+                echo "Frontend is accessible"
+                break
+              fi
+              echo "Attempt $i: Waiting for frontend..."
+              sleep 5
             done
             
             # Final verification
@@ -292,9 +410,10 @@ jobs:
             if [ -z "'$LETSENCRYPT_EMAIL'" ]; then
               echo "LETSENCRYPT_EMAIL not set; skipping cert issuance";
             else
-              docker compose run --rm certbot certonly \
+              docker compose -f docker-compose.prod.yml run --rm certbot certonly \
                 --webroot -w /var/www/certbot \
                 -d ai-cv-evaluator.web.id \
+                -d dashboard.ai-cv-evaluator.web.id \
                 --email '$LETSENCRYPT_EMAIL' --agree-tos --non-interactive --keep-until-expiring || true
             fi
           '
@@ -308,7 +427,11 @@ jobs:
               if [ -f deploy/nginx/conf.d/app-http-redirect.conf.template ]; then
                 cp -f deploy/nginx/conf.d/app-http-redirect.conf.template deploy/nginx/conf.d/app-http.conf
               fi
-              docker compose exec -T nginx nginx -s reload || true
+              # Enable dashboard HTTPS config if present
+              if [ -f deploy/nginx/conf.d/dashboard.conf.template ]; then
+                cp -f deploy/nginx/conf.d/dashboard.conf.template deploy/nginx/conf.d/dashboard.conf
+              fi
+              docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || true
             fi
           '
       
@@ -327,15 +450,19 @@ jobs:
             curl -f http://localhost/readyz && echo "✓ Readiness check passed"
             
             # Check logs for any immediate errors
-            echo "=== Recent Logs ==="
-            docker compose logs --tail=50 app
+            echo "=== Recent Server Logs ==="
+            docker compose -f docker-compose.prod.yml logs --tail=50 backend
+            echo "=== Recent Worker Logs ==="
+            docker compose -f docker-compose.prod.yml logs --tail=50 worker
           '
       
       - name: Cleanup old images
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             # Remove old images (keep last 3)
-            docker images ghcr.io/${{ github.repository }} --format "table {{.Tag}}\t{{.ID}}" | tail -n +4 | awk "{print \$2}" | xargs -r docker rmi || true
+            docker images ghcr.io/${{ github.repository }}-server --format "table {{.Tag}}\t{{.ID}}" | tail -n +4 | awk "{print \$2}" | xargs -r docker rmi || true
+            docker images ghcr.io/${{ github.repository }}-worker --format "table {{.Tag}}\t{{.ID}}" | tail -n +4 | awk "{print \$2}" | xargs -r docker rmi || true
+            docker images ghcr.io/${{ github.repository }}-frontend --format "table {{.Tag}}\t{{.ID}}" | tail -n +4 | awk "{print \$2}" | xargs -r docker rmi || true
             
             # Clean up unused images and volumes
             docker system prune -f

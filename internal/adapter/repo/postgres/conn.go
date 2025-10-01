@@ -11,10 +11,14 @@ import (
 // The pool is configured with sane defaults for this application.
 func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	cfg.MaxConns = 10
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return pool, nil
 }

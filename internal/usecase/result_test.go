@@ -5,32 +5,28 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
-type stubJobRepoR struct{ job domain.Job; getErr error }
-
-func (s *stubJobRepoR) Create(_ domain.Context, _ domain.Job) (string, error) { return "", nil }
-func (s *stubJobRepoR) UpdateStatus(_ domain.Context, _ string, _ domain.JobStatus, _ *string) error { return nil }
-func (s *stubJobRepoR) Get(_ domain.Context, _ string) (domain.Job, error) { return s.job, s.getErr }
-func (s *stubJobRepoR) FindByIdempotencyKey(_ domain.Context, _ string) (domain.Job, error) { return domain.Job{}, domain.ErrNotFound }
-
-type stubResultRepoR struct{}
-
-func (s *stubResultRepoR) Upsert(_ domain.Context, _ domain.Result) error { return nil }
-func (s *stubResultRepoR) GetByJobID(_ domain.Context, _ string) (domain.Result, error) { return domain.Result{}, nil }
-
 func TestResult_FailedShape_ReturnsErrorObject(t *testing.T) {
-	svc := usecase.NewResultService(&stubJobRepoR{job: domain.Job{ID: "job1", Status: domain.JobFailed, Error: "schema invalid: missing field"}}, &stubResultRepoR{})
+	jobRepo := domainmocks.NewJobRepository(t)
+	resultRepo := domainmocks.NewResultRepository(t)
+
+	// Set up mock expectations
+	jobRepo.On("Get", mock.Anything, "job1").Return(domain.Job{ID: "job1", Status: domain.JobFailed, Error: "schema invalid: missing field"}, nil)
+
+	svc := usecase.NewResultService(jobRepo, resultRepo)
 	st, body, etag, err := svc.Fetch(context.Background(), "job1", "")
 	require.NoError(t, err)
 	assert.Equal(t, 200, st)
 	require.NotEmpty(t, etag)
 	// Expect id, status, error.code and error.message
-	assert.Equal(t, "job1", body["id"]) //nolint:forcetypeassert
+	assert.Equal(t, "job1", body["id"])       //nolint:forcetypeassert
 	assert.Equal(t, "failed", body["status"]) //nolint:forcetypeassert
 	errObj, ok := body["error"].(map[string]any)
 	require.True(t, ok)

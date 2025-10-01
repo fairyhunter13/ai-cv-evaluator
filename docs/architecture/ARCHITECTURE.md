@@ -1,34 +1,58 @@
 # Architecture
 
-This service follows Clean Architecture principles with clear separation of concerns.
+This service follows Clean Architecture principles with clear separation of concerns and a split server/worker architecture for optimal scalability and reliability.
 
 ## System Overview
 
 ```mermaid
 graph TB
     Client[Client/Browser]
+    Frontend[Vue 3 Frontend]
     LB[Load Balancer]
-    App[Go Backend]
+    Server[Go Server API]
+    Worker1[Worker 1]
+    Worker2[Worker 2]
+    WorkerN[Worker N]
     DB[(PostgreSQL)]
-    Redis[(Redis Queue)]
+    Redpanda[(Redpanda Queue)]
     Qdrant[(Qdrant Vector DB)]
     Tika[Apache Tika]
     AI[AI Provider]
     
     Client -->|HTTPS| LB
-    LB -->|HTTP| App
-    App --> DB
-    App --> Redis
-    App --> Qdrant
-    App --> Tika
-    App --> AI
+    LB -->|Static Files| Frontend
+    LB -->|API Calls| Server
+    Frontend -->|HTTP API| Server
+    Server --> DB
+    Server --> Redpanda
+    Worker1 --> Redpanda
+    Worker2 --> Redpanda
+    WorkerN --> Redpanda
+    Worker1 --> DB
+    Worker2 --> DB
+    WorkerN --> DB
+    Worker1 --> Qdrant
+    Worker2 --> Qdrant
+    WorkerN --> Qdrant
+    Worker1 --> Tika
+    Worker2 --> Tika
+    WorkerN --> Tika
+    Worker1 --> AI
+    Worker2 --> AI
+    WorkerN --> AI
     
     subgraph Observability
         Prometheus[Prometheus]
         Grafana[Grafana]
         Jaeger[Jaeger]
-        App --> Prometheus
-        App --> Jaeger
+        Server --> Prometheus
+        Worker1 --> Prometheus
+        Worker2 --> Prometheus
+        WorkerN --> Prometheus
+        Server --> Jaeger
+        Worker1 --> Jaeger
+        Worker2 --> Jaeger
+        WorkerN --> Jaeger
         Prometheus --> Grafana
     end
 ```
@@ -38,35 +62,181 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant H as HTTP Handler
+    participant S as Server
     participant U as UseCase
     participant Q as Queue
-    participant W as Worker
+    participant W1 as Worker 1
+    participant W2 as Worker 2
     participant AI as AI Service
     participant DB as Database
     
-    C->>H: POST /v1/upload
-    H->>U: Process upload
+    C->>S: POST /v1/upload
+    S->>U: Process upload
     U->>DB: Store texts
-    H-->>C: Return IDs
+    S-->>C: Return IDs
     
-    C->>H: POST /v1/evaluate
-    H->>U: Enqueue evaluation
+    C->>S: POST /v1/evaluate
+    S->>U: Enqueue evaluation
     U->>DB: Create job (queued)
     U->>Q: Enqueue task
-    H-->>C: Return job ID
+    S-->>C: Return job ID
     
-    W->>Q: Poll for tasks
-    W->>DB: Update status (processing)
-    W->>AI: Generate evaluation
-    W->>DB: Store results
-    W->>DB: Update status (completed)
+    W1->>Q: Consume tasks (read committed, transactional)
+    W2->>Q: Consume tasks (read committed, transactional)
+    W1->>DB: Update status (processing)
+    W1->>AI: Generate evaluation
+    W1->>DB: Store results
+    W1->>DB: Update status (completed)
     
-    C->>H: GET /v1/result/{id}
-    H->>U: Fetch result
+    C->>S: GET /v1/result/{id}
+    S->>U: Fetch result
     U->>DB: Get job & result
-    H-->>C: Return evaluation
+    S-->>C: Return evaluation
 ```
+
+## Split Architecture
+
+### Frontend Container (`admin-frontend`)
+- **Purpose**: Vue 3 + Vite admin dashboard with Hot Module Replacement
+- **Development**: HMR-enabled development server on port 3001
+- **Production**: Static files served via Nginx
+- **Features**: Modern development workflow with Vue 3, TypeScript, Tailwind CSS
+
+### Server Container (`backend`)
+- **Purpose**: API-only HTTP requests and task enqueueing
+- **Responsibilities**: 
+  - Serve API endpoints
+  - Enqueue background tasks to Redpanda
+  - Run database migrations
+  - Handle authentication and session management
+- **Scaling**: Can be scaled horizontally behind load balancer
+
+### Worker Container (`worker`)
+- **Purpose**: Process background tasks from Redpanda queue
+- **Responsibilities**:
+  - Handle AI processing tasks
+  - Process file extraction and analysis
+  - Update job status and results
+- **Scaling**: Runs with 8 replicas for high availability
+- **Performance**: 30 concurrent workers per replica (240 total workers)
+
+### Infrastructure Services
+- **PostgreSQL**: Primary database for job storage and results
+- **Redpanda**: Kafka-compatible queue system for task processing
+- **Qdrant**: Vector database for AI embeddings and similarity search
+- **Apache Tika**: Text extraction from various file formats
+- **Nginx**: Reverse proxy and static file serving
+- **Observability**: Prometheus, Grafana, Jaeger for monitoring
+
+## Production Architecture
+
+### Docker Images
+- **Frontend**: `ghcr.io/fairyhunter13/ai-cv-evaluator-frontend:latest`
+- **Backend**: `ghcr.io/fairyhunter13/ai-cv-evaluator-server:latest`
+- **Worker**: `ghcr.io/fairyhunter13/ai-cv-evaluator-worker:latest`
+
+### Production Configuration
+- **Multi-arch builds**: linux/amd64, linux/arm64
+- **Security scanning**: Trivy security scans
+- **SBOM generation**: Software Bill of Materials for compliance
+- **SSL/TLS**: Automatic certificate management with Certbot
+
+### Scaling Strategy
+- **Horizontal Scaling**: Worker replicas can be increased independently
+- **Vertical Scaling**: CPU and memory limits per container
+- **Auto-scaling**: Based on queue metrics and resource utilization
+- **Load Balancing**: Server can be scaled behind load balancer
+
+### Performance Optimization
+- **Worker Configuration**: 30 workers per replica, 8 replicas total (240 workers)
+- **Queue Priorities**: default (10), critical (6), low (1)
+- **Retry Logic**: Exponential backoff with timeout handling
+- **Resource Allocation**: CPU and memory limits per container
+- **Responsibilities**:
+  - User interface for testing and consuming APIs
+  - File upload forms and result visualization
+  - Authentication and session management
+  - Real-time job status polling
+- **Technology Stack**:
+  - **Framework**: Vue 3 with Composition API
+  - **Build Tool**: Vite for HMR and fast builds
+  - **Styling**: Tailwind CSS for responsive design
+  - **State Management**: Pinia for application state
+  - **Routing**: Vue Router for SPA navigation
+- **Development**: HMR-enabled dev server (port 3001)
+- **Production**: Static files served by Nginx
+- **Image**: `ghcr.io/fairyhunter13/ai-cv-evaluator-frontend:latest`
+
+### Server Container (`cmd/server`)
+- **Purpose**: API-only backend handling HTTP requests and endpoints
+- **Responsibilities**:
+  - HTTP request handling and routing
+  - File upload processing
+  - Job creation and status tracking
+  - Result retrieval
+  - Health checks and metrics
+  - Admin authentication API
+- **Dependencies**: Database, Redpanda (for job creation)
+- **Image**: `ghcr.io/fairyhunter13/ai-cv-evaluator-server:latest`
+
+### Worker Container (`cmd/worker`)
+- **Purpose**: Processes background AI evaluation tasks
+- **Responsibilities**:
+  - Consuming Redpanda queue for tasks
+  - AI processing and evaluation
+  - Database updates for job status
+  - Result storage
+- **Configuration**:
+  - **Concurrency**: 30 workers per container
+  - **Replicas**: 8 containers (240 total concurrent workers)
+  - **Queue**: Single topic `evaluate-jobs`, read-committed isolation, transactional offset commits
+- **Dependencies**: Database, Redpanda, Qdrant, Tika, AI providers
+- **Image**: `ghcr.io/fairyhunter13/ai-cv-evaluator-worker:latest`
+
+### Benefits of Split Architecture
+- **Scalability**: Frontend, workers, and server can be scaled independently
+- **Reliability**: Server failures don't affect job processing; frontend failures don't affect backend
+- **Resource Optimization**: Different resource requirements for each component
+- **Deployment Flexibility**: Independent deployment cycles for frontend, backend, and workers
+- **Development Experience**: HMR for frontend, independent development workflows
+- **Monitoring**: Separate metrics and logging for each component
+
+## Frontend Architecture
+
+### Vue 3 + Vite Application Structure
+```
+admin-frontend/
+├── src/
+│   ├── views/           # Page components
+│   │   ├── Login.vue
+│   │   ├── Dashboard.vue
+│   │   ├── Upload.vue
+│   │   ├── Evaluate.vue
+│   │   └── Result.vue
+│   ├── stores/          # Pinia state management
+│   │   └── auth.ts
+│   ├── App.vue          # Root component
+│   └── main.ts          # Application entry point
+├── public/              # Static assets
+├── package.json         # Dependencies and scripts
+├── vite.config.ts      # Vite configuration
+├── tailwind.config.js   # Tailwind CSS configuration
+└── nginx.conf          # Production Nginx configuration
+```
+
+### Frontend Technology Stack
+- **Vue 3**: Modern reactive framework with Composition API
+- **Vite**: Fast build tool with Hot Module Replacement (HMR)
+- **Tailwind CSS**: Utility-first CSS framework for styling
+- **Pinia**: State management library for Vue
+- **Vue Router**: Client-side routing for SPA navigation
+- **TypeScript**: Type safety and better development experience
+
+### Frontend-Backend Communication
+- **API Endpoints**: RESTful HTTP API calls to backend
+- **Authentication**: Session-based authentication with cookies
+- **CORS**: Configured for cross-origin requests during development
+- **Error Handling**: Structured error responses with user-friendly messages
 
 ## Layers
 
@@ -127,7 +297,7 @@ CREATE TABLE results (
 ## Key Components
 
 - **HTTP Server**: Chi router with middleware chain
-- **Queue Worker**: Asynq-based async processing
+- **Queue Worker**: Redpanda-based transactional processing (exactly-once via Kafka transactions)
 - **AI Client**: Abstraction over OpenAI/OpenRouter
 - **Vector DB**: Qdrant for RAG storage/retrieval
 - **Text Extractor**: Apache Tika for PDF/DOCX.
@@ -143,8 +313,8 @@ CREATE TABLE results (
 4) Returns `{ "cv_id": "...", "project_id": "..." }`.
 
 ### POST /v1/evaluate (JSON)
-1) Validate DTO fields with `validator/v10` (presence and max lengths).
-2) `EvaluateService.Enqueue` creates a `Job` (status `queued`) and enqueues a task via Asynq.
+1) Validate DTO fields with `validator/v10` (presence and max lengths). `job_description` and `study_case_brief` are optional - if not provided, default values are used.
+2) `EvaluateService.Enqueue` creates a `Job` (status `queued`) and enqueues a task to Redpanda (Kafka-compatible) for immediate worker consumption.
 3) Returns `{ "id": "<job-id>", "status": "queued" }` immediately.
 
 ### Worker: evaluate_job
@@ -217,6 +387,39 @@ graph LR
 7. Results stored and available via polling
 
 ## Deployment
-- Dockerfile multi-stage build; Compose includes app, Postgres, Redis (Asynq), Qdrant, Tika, and observability stack.
-- CI builds, lints, tests, validates OpenAPI, and builds a container image.
-- Deploy workflow uses SSH key-based auth and non-blocking compose steps.
+
+### Development Environment
+- **Docker Compose**: Includes server, 8 worker replicas, and all dependencies
+- **Worker Configuration**: 30 concurrency per worker, 8 replicas (240 total workers)
+- **Services**: PostgreSQL, Redpanda, Qdrant, Tika, and observability stack
+
+### Production Environment
+- **Split Images**: Separate server and worker Docker images
+- **Server Image**: `ghcr.io/fairyhunter13/ai-cv-evaluator-server:latest`
+- **Worker Image**: `ghcr.io/fairyhunter13/ai-cv-evaluator-worker:latest`
+- **Worker Replicas**: 8 containers with 30 concurrency each
+- **CI/CD**: Automated builds, security scanning, and deployment
+- **Multi-arch**: Support for linux/amd64 and linux/arm64
+
+### Container Configuration
+```yaml
+# Development
+worker:
+  deploy:
+    replicas: 8
+  environment:
+    - APP_ENV=dev
+
+# Production  
+worker:
+  deploy:
+    replicas: 8
+  environment:
+    - APP_ENV=prod
+```
+
+### Performance Characteristics
+- **Throughput**: 240 concurrent workers (8 replicas × 30 concurrency)
+- **Queue Processing**: Priority-based with retry logic
+- **Job Completion**: 6-10 seconds average processing time
+- **Reliability**: Graceful shutdown and error handling

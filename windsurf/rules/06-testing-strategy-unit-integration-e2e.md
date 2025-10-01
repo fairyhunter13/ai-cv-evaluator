@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-Deliver high-confidence coverage focusing on Unit and E2E tests. Integration tests are retired in favor of E2E that exercise the running app directly.
+Deliver high-confidence coverage focusing on Unit and E2E tests. E2E tests exercise the running app directly.
 
 Terminology: The terms "E2E" and "e2e" refer to the same end-to-end tests. Prefer "E2E" in documentation and prose, while the build tag remains `e2e`.
 
@@ -41,8 +41,8 @@ Terminology: The terms "E2E" and "e2e" refer to the same end-to-end tests. Prefe
   - Prefer a package-local `testdata/` subdirectory for package-specific fixtures.
   - Use `test/testdata/` only for shared, cross-cutting fixtures referenced by multiple packages.
 
-# Integration Tests (Retired)
-- Integration tests are removed to simplify the testing matrix. The E2E suite assumes the app is running (via Docker Compose or similar) and hits live endpoints.
+# E2E Tests
+- The E2E suite assumes the app is running (via Docker Compose or similar) and hits live endpoints.
 
 - Run the stack via `docker compose up -d` (recommended) and hit the live app.
 - Use `httpexpect` or `resty` to test:
@@ -64,7 +64,7 @@ Terminology: The terms "E2E" and "e2e" refer to the same end-to-end tests. Prefe
 - Prefer polling with backoff over fixed sleeps.
 - Benchmarks for critical paths (optional).
 
-# CI Integration (Testing)
+# CI Testing
 - Unit tests (fast, race, coverage):
   - Run: go test -race -short -coverprofile=coverage.unit.out ./...
 - E2E tests (optional in PRs, mandatory on main/tags):

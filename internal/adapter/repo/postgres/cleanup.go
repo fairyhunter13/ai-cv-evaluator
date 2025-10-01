@@ -12,7 +12,7 @@ import (
 
 // CleanupService handles data retention and cleanup
 type CleanupService struct {
-	Pool       Beginner
+	Pool          Beginner
 	RetentionDays int
 }
 
@@ -39,13 +39,13 @@ func NewCleanupService(pool Beginner, retentionDays int) *CleanupService {
 // CleanupOldData removes data older than retention period
 func (s *CleanupService) CleanupOldData(ctx context.Context) error {
 	cutoff := time.Now().AddDate(0, 0, -s.RetentionDays)
-	
+
 	// Start transaction for consistency
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("cleanup begin tx: %w", err)
 	}
-	defer func(){ _ = tx.Rollback(ctx) }()
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// Delete old results (cascade from jobs)
 	var deletedResults int64

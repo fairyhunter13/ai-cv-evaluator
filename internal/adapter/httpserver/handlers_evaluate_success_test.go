@@ -2,8 +2,8 @@ package httpserver_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -42,21 +42,23 @@ func TestReadyzHandler_OK_And_Unavailable(t *testing.T) {
 		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
-		func(_ context.Context) error { return nil },
 	)
 	w := httptest.NewRecorder()
 	s.ReadyzHandler()(w, httptest.NewRequest("GET", "/readyz", nil))
-	if w.Result().StatusCode != http.StatusOK { t.Fatalf("want 200, got %d", w.Result().StatusCode) }
+	if w.Result().StatusCode != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Result().StatusCode)
+	}
 
 	// now make one check fail
 	s = httpserver.NewServer(cfg, upSvc, evSvc, resSvc,
 		nil,
 		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
-		func(_ context.Context) error { return nil },
 		func(_ context.Context) error { return http.ErrHandlerTimeout },
 	)
 	w2 := httptest.NewRecorder()
 	s.ReadyzHandler()(w2, httptest.NewRequest("GET", "/readyz", nil))
-	if w2.Result().StatusCode != http.StatusServiceUnavailable { t.Fatalf("want 503, got %d", w2.Result().StatusCode) }
+	if w2.Result().StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("want 503, got %d", w2.Result().StatusCode)
+	}
 }

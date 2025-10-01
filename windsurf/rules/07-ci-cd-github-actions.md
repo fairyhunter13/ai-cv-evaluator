@@ -9,7 +9,7 @@ Provide CI/CD with GitHub Actions covering linting, tests, security, containeriz
   - Setup Go with caching.
   - Run format check, `golangci-lint`, `go vet`, `govulncheck`.
   - Unit tests with coverage artifact.
-  - Integration tests using services (Postgres, Redis, Qdrant) or `testcontainers`.
+  - E2E tests using services (Postgres, Redis, Qdrant) or `testcontainers`.
   - Build multi-stage Docker image; upload as artifact for reuse.
 
 - `.github/workflows/docker-publish.yml` (on tag):
@@ -23,7 +23,7 @@ Provide CI/CD with GitHub Actions covering linting, tests, security, containeriz
     - Setup SSH agent.
     - Connect to VPS.
     - Login to GHCR if private.
-    - Pull image, run migrations, and `docker compose up -d`.
+    - Pull images (including migration container), and `docker compose up -d` (migrations run automatically).
 
 # VPS Deploy Notes (avoid stuck commands)
 - Use non-interactive commands and `-d` for compose to avoid blocking.
@@ -33,15 +33,15 @@ Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST mkdir -p $REMOTE_COMPOS
 Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker login ghcr.io -u $GHCR_USERNAME -p $GHCR_TOKEN
 Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker pull $IMAGE_REF
 Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker compose -f $REMOTE_COMPOSE_PATH/docker-compose.yml up -d
-Run: ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST docker run --rm --network host $IMAGE_REF make migrate
+# Migrations run automatically via Docker Compose service dependencies
 
 - Ensure remote compose uses `restart: unless-stopped` and healthchecks.
 
 # Tests in CI (explicit commands)
 - Unit (fast, race, coverage):
   - Run: go test -race -short -coverprofile=coverage.unit.out ./...
-- Integration (containers with tags):
-  - Run: go test -tags=e2e -coverprofile=coverage.int.out ./...
+- E2E (containers with tags):
+  - Run: go test -tags=e2e -coverprofile=coverage.e2e.out ./...
 - E2E (toggle on main/tags):
   - Run: go test -tags=e2e ./test/e2e/...
 - Artifacts:

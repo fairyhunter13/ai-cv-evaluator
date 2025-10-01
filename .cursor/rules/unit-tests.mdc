@@ -1,0 +1,44 @@
+---
+alwaysApply: true
+---
+When running Go unit tests, always use the following command pattern:
+
+```bash
+go test -v -race -timeout=60s -failfast -parallel=4 ./...
+```
+
+**Required flags:**
+- `-v`: Verbose output to show test names and results
+- `-race`: Enable race condition detection
+- `-timeout=60s`: Set 60-second timeout for all tests
+- `-failfast`: Stop on first test failure
+- `-parallel=4`: Run up to 4 tests in parallel (adjust based on CPU cores)
+
+**For specific packages or files:**
+- Single package: `go test -v -race -timeout=60s -failfast -parallel=4 ./internal/adapter/queue/redpanda`
+- Single test file: `go test -v -race -timeout=60s -failfast -parallel=4 ./internal/adapter/queue/redpanda -run TestSpecificFunction`
+- Multiple packages: `go test -v -race -timeout=60s -failfast -parallel=4 ./internal/... ./pkg/...`
+
+**Additional useful flags:**
+- `-count=1`: Disable test caching
+- `-short`: Skip long-running tests
+- `-cover`: Show coverage information
+- `-coverprofile=coverage.out`: Generate coverage profile
+
+**Example commands:**
+```bash
+# Run all tests
+go test -v -race -timeout=60s -failfast -parallel=4 ./...
+
+# Run tests with coverage
+go test -v -race -timeout=60s -failfast -parallel=4 -cover ./...
+
+# Run specific test
+go test -v -race -timeout=60s -failfast -parallel=4 -run TestConsumer ./internal/adapter/queue/redpanda
+
+# Run tests without cache
+go test -v -race -timeout=60s -failfast -parallel=4 -count=1 ./...
+
+# Adjust parallelism based on CPU cores (e.g., 8 cores = -parallel=8)
+go test -v -race -timeout=60s -failfast -parallel=8 ./...
+```

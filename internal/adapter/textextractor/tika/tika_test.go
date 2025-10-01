@@ -41,10 +41,10 @@ func TestClient_ExtractPath(t *testing.T) {
 				assert.Equal(t, http.MethodPut, r.Method)
 				assert.Equal(t, "/tika", r.URL.Path)
 				assert.Equal(t, "text/plain", r.Header.Get("Accept"))
-				
+
 				body, _ := io.ReadAll(r.Body)
 				assert.Equal(t, "This is test content", string(body))
-				
+
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("Extracted text content"))
 			},
@@ -57,7 +57,7 @@ func TestClient_ExtractPath(t *testing.T) {
 			filePath: testFile,
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, "application/pdf", r.Header.Get("Content-Type"))
-				
+
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("PDF content extracted"))
 			},
@@ -69,9 +69,9 @@ func TestClient_ExtractPath(t *testing.T) {
 			fileName: "document.docx",
 			filePath: testFile,
 			handler: func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+				assert.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 					r.Header.Get("Content-Type"))
-				
+
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("DOCX content extracted"))
 			},
@@ -123,15 +123,15 @@ func TestClient_ExtractPath(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-            
-            server := httptest.NewServer(tt.handler)
-            defer server.Close()
-			
+
+			server := httptest.NewServer(tt.handler)
+			defer server.Close()
+
 			client := tika.New(server.URL)
 			ctx := context.Background()
-			
+
 			got, err := client.ExtractPath(ctx, tt.fileName, tt.filePath)
-			
+
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {
@@ -166,7 +166,7 @@ func TestNew(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			
+
 			client := tika.New(tt.baseURL)
 			assert.NotNil(t, client)
 		})

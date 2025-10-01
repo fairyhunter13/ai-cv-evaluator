@@ -31,7 +31,7 @@ type Client struct {
 // New constructs a Tika client with a default timeout.
 func New(baseURL string) *Client {
 	return &Client{
-		baseURL: baseURL,
+		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
 	}
 }
@@ -44,7 +44,9 @@ func (c *Client) ExtractPath(ctx context.Context, fileName, path string) (string
 	var openPath string
 	if os.Getenv("TIKA_ALLOW_ABSPATHS") != "1" {
 		abs, err := filepath.Abs(path)
-		if err != nil { return "", err }
+		if err != nil {
+			return "", err
+		}
 		abs = filepath.Clean(abs)
 		tmp := filepath.Clean(os.TempDir())
 		wd, _ := os.Getwd()
@@ -53,38 +55,62 @@ func (c *Client) ExtractPath(ctx context.Context, fileName, path string) (string
 		var rel string
 		if strings.HasPrefix(abs, tmp+string(os.PathSeparator)) || abs == tmp {
 			base = tmp
-			if r, err := filepath.Rel(base, abs); err == nil { rel = r } else { return "", err }
+			if r, err := filepath.Rel(base, abs); err == nil {
+				rel = r
+			} else {
+				return "", err
+			}
 		} else if strings.HasPrefix(abs, wd+string(os.PathSeparator)) || abs == wd {
 			base = wd
-			if r, err := filepath.Rel(base, abs); err == nil { rel = r } else { return "", err }
+			if r, err := filepath.Rel(base, abs); err == nil {
+				rel = r
+			} else {
+				return "", err
+			}
 		} else {
 			return "", fmt.Errorf("disallowed path: %s", abs)
 		}
 		openPath = filepath.Join(base, rel)
 	} else {
-		if abs, err2 := filepath.Abs(path); err2 == nil { openPath = filepath.Clean(abs) } else { openPath = path }
+		if abs, err2 := filepath.Abs(path); err2 == nil {
+			openPath = filepath.Clean(abs)
+		} else {
+			openPath = path
+		}
 	}
 	// Read file contents to avoid gosec G304 concerns around os.Open with variable paths.
 	bfile, err := os.ReadFile(openPath)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	u := c.baseURL
-	if u == "" { u = "http://localhost:9998" }
+	if u == "" {
+		u = "http://localhost:9998"
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u+"/tika", bytes.NewReader(bfile))
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	req.Header.Set("Accept", "text/plain")
 	// Content-Type best-effort from extension
 	ct := contentTypeFromExt(filepath.Ext(fileName))
-	if ct != "" { req.Header.Set("Content-Type", ct) }
+	if ct != "" {
+		req.Header.Set("Content-Type", ct)
+	}
 
 	resp, err := c.httpClient.Do(req)
-	if err != nil { return "", err }
-	defer func(){ _ = resp.Body.Close() }()
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("tika status %d", resp.StatusCode)
 	}
 	b, err := io.ReadAll(resp.Body)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	// Sanitize control characters and then collapse all whitespace to single spaces
 	sanitized := textx.SanitizeText(string(b))
 	fields := strings.Fields(sanitized)

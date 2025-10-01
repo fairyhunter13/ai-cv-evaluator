@@ -95,6 +95,52 @@ var (
 			Buckets: []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		},
 	)
+
+	// AITokenUsage tracks AI token consumption by provider, type, and model.
+	AITokenUsage = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "ai_tokens_total",
+			Help: "Total AI tokens used",
+		},
+		[]string{"provider", "type", "model"},
+	)
+
+	// RAGEffectiveness tracks RAG retrieval effectiveness scores.
+	RAGEffectiveness = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "rag_retrieval_effectiveness",
+			Help:    "RAG retrieval effectiveness score",
+			Buckets: []float64{0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
+		},
+		[]string{"collection", "query_type"},
+	)
+
+	// ScoreDriftDetector tracks score drift from baseline.
+	ScoreDriftDetector = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "evaluation_score_drift",
+			Help: "Detected score drift from baseline",
+		},
+		[]string{"metric_type", "model_version", "corpus_version"},
+	)
+
+	// CircuitBreakerStatus tracks circuit breaker state.
+	CircuitBreakerStatus = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "circuit_breaker_status",
+			Help: "Circuit breaker status (0=closed, 1=open, 2=half-open)",
+		},
+		[]string{"service", "operation"},
+	)
+
+	// RAGRetrievalErrors tracks RAG retrieval failures.
+	RAGRetrievalErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "rag_retrieval_errors_total",
+			Help: "Total RAG retrieval errors",
+		},
+		[]string{"collection", "error_type"},
+	)
 )
 
 // InitMetrics registers all Prometheus metrics with the default registry.
@@ -109,6 +155,11 @@ func InitMetrics() {
 	prometheus.MustRegister(JobsFailedTotal)
 	prometheus.MustRegister(CVMatchRateHistogram)
 	prometheus.MustRegister(ProjectScoreHistogram)
+	prometheus.MustRegister(AITokenUsage)
+	prometheus.MustRegister(RAGEffectiveness)
+	prometheus.MustRegister(ScoreDriftDetector)
+	prometheus.MustRegister(CircuitBreakerStatus)
+	prometheus.MustRegister(RAGRetrievalErrors)
 }
 
 // HTTPMetricsMiddleware records Prometheus metrics for each request.
@@ -164,4 +215,29 @@ func ObserveEvaluation(cvMatchRate, projectScore float64) {
 	if projectScore >= 1 && projectScore <= 10 {
 		ProjectScoreHistogram.Observe(projectScore)
 	}
+}
+
+// RecordAITokenUsage records AI token consumption.
+func RecordAITokenUsage(provider, tokenType, model string, tokens int) {
+	AITokenUsage.WithLabelValues(provider, tokenType, model).Add(float64(tokens))
+}
+
+// RecordRAGEffectiveness records RAG retrieval effectiveness.
+func RecordRAGEffectiveness(collection, queryType string, effectiveness float64) {
+	RAGEffectiveness.WithLabelValues(collection, queryType).Observe(effectiveness)
+}
+
+// RecordScoreDrift records score drift from baseline.
+func RecordScoreDrift(metricType, modelVersion, corpusVersion string, drift float64) {
+	ScoreDriftDetector.WithLabelValues(metricType, modelVersion, corpusVersion).Set(drift)
+}
+
+// RecordCircuitBreakerStatus records circuit breaker state.
+func RecordCircuitBreakerStatus(service, operation string, status int) {
+	CircuitBreakerStatus.WithLabelValues(service, operation).Set(float64(status))
+}
+
+// RecordRAGRetrievalError records RAG retrieval errors.
+func RecordRAGRetrievalError(collection, errorType string) {
+	RAGRetrievalErrors.WithLabelValues(collection, errorType).Inc()
 }

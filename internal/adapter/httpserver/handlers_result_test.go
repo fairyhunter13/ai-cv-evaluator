@@ -5,41 +5,49 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-chi/chi/v5"
 	httpserver "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/httpserver"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
+	"github.com/go-chi/chi/v5"
 )
 
-type stubJobRepoRes struct{ job domain.Job }
-
-func (s *stubJobRepoRes) Create(_ domain.Context, _ domain.Job) (string, error) { return "", nil }
-func (s *stubJobRepoRes) UpdateStatus(_ domain.Context, _ string, _ domain.JobStatus, _ *string) error {
-	return nil
+func createMockJobRepoRes(t *testing.T, job domain.Job) *domainmocks.JobRepository {
+	mockRepo := domainmocks.NewJobRepository(t)
+	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("", nil).Maybe()
+	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(job, nil).Maybe()
+	mockRepo.EXPECT().FindByIdempotencyKey(mock.Anything, mock.Anything).Return(domain.Job{}, domain.ErrNotFound).Maybe()
+	mockRepo.EXPECT().Count(mock.Anything).Return(int64(0), nil).Maybe()
+	mockRepo.EXPECT().CountByStatus(mock.Anything, mock.Anything).Return(int64(0), nil).Maybe()
+	mockRepo.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).Return([]domain.Job{}, nil).Maybe()
+	mockRepo.EXPECT().GetAverageProcessingTime(mock.Anything).Return(float64(0), nil).Maybe()
+	return mockRepo
 }
-func (s *stubJobRepoRes) Get(_ domain.Context, _ string) (domain.Job, error) { return s.job, nil }
-func (s *stubJobRepoRes) FindByIdempotencyKey(_ domain.Context, _ string) (domain.Job, error) {
-	return domain.Job{}, domain.ErrNotFound
+
+func createMockResultRepoRes(t *testing.T, res domain.Result) *domainmocks.ResultRepository {
+	mockRepo := domainmocks.NewResultRepository(t)
+	mockRepo.EXPECT().Upsert(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockRepo.EXPECT().GetByJobID(mock.Anything, mock.Anything).Return(res, nil).Maybe()
+	return mockRepo
 }
 
-type stubResultRepoRes struct{ res domain.Result }
-
-func (s *stubResultRepoRes) Upsert(_ domain.Context, _ domain.Result) error { return nil }
-func (s *stubResultRepoRes) GetByJobID(_ domain.Context, _ string) (domain.Result, error) { return s.res, nil }
-
-func newResultServer(job domain.Job, res domain.Result) *httpserver.Server {
+func newResultServer(t *testing.T, job domain.Job, res domain.Result) *httpserver.Server {
 	cfg := config.Config{Port: 8080, AppEnv: "dev"}
+	jobRepo := createMockJobRepoRes(t, job)
+	resultRepo := createMockResultRepoRes(t, res)
 	upSvc := usecase.NewUploadService(nil)
-	evSvc := usecase.NewEvaluateService(&stubJobRepoRes{job: job}, nil, nil)
-	resSvc := usecase.NewResultService(&stubJobRepoRes{job: job}, &stubResultRepoRes{res: res})
-	return httpserver.NewServer(cfg, upSvc, evSvc, resSvc, nil, nil, nil, nil, nil)
+	evSvc := usecase.NewEvaluateService(jobRepo, nil, nil)
+	resSvc := usecase.NewResultService(jobRepo, resultRepo)
+	return httpserver.NewServer(cfg, upSvc, evSvc, resSvc, nil, nil, nil, nil)
 }
 
 func TestResultHandler_Completed_ETagCaching(t *testing.T) {
-	srv := newResultServer(domain.Job{ID: "job1", Status: domain.JobCompleted}, domain.Result{JobID: "job1", CVMatchRate: 0.9, CVFeedback: "good.", ProjectScore: 9, ProjectFeedback: "nice.", OverallSummary: "great overall."})
+	srv := newResultServer(t, domain.Job{ID: "job1", Status: domain.JobCompleted}, domain.Result{JobID: "job1", CVMatchRate: 0.9, CVFeedback: "good.", ProjectScore: 9, ProjectFeedback: "nice.", OverallSummary: "great overall."})
 	router := chi.NewRouter()
 	router.Get("/v1/result/{id}", srv.ResultHandler())
 	r := httptest.NewRequest(http.MethodGet, "/v1/result/job1", nil)
@@ -64,7 +72,7 @@ func TestResultHandler_Completed_ETagCaching(t *testing.T) {
 }
 
 func TestResultHandler_FailedShape_IncludesError(t *testing.T) {
-	srv := newResultServer(domain.Job{ID: "job2", Status: domain.JobFailed, Error: "schema invalid: field"}, domain.Result{})
+	srv := newResultServer(t, domain.Job{ID: "job2", Status: domain.JobFailed, Error: "schema invalid: field"}, domain.Result{})
 	router := chi.NewRouter()
 	router.Get("/v1/result/{id}", srv.ResultHandler())
 	r := httptest.NewRequest(http.MethodGet, "/v1/result/job2", nil)

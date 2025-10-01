@@ -16,6 +16,8 @@ The project requires a deployment strategy that balances cost, simplicity, and r
 
 We will deploy to a **VPS (Virtual Private Server)** using Docker Compose with automated deployment via GitHub Actions.
 
+**UPDATE (2025-01-15):** The deployment strategy has been updated to include Redpanda as the message queue system, replacing the previous Redis/Asynq setup. See [ADR-0006: Redpanda Migration](0006-redpanda-migration.md) for details.
+
 ## Consequences
 
 ### Positive
@@ -67,6 +69,7 @@ We will deploy to a **VPS (Virtual Private Server)** using Docker Compose with a
 - **OS**: Ubuntu LTS for stability and support
 - **Deployment**: GitHub Actions with SSH key authentication
 - **Services**: Docker Compose with persistent volumes
-- **Monitoring**: Self-hosted Prometheus/Grafana stack
+- **Queue System**: Redpanda (Kafka-compatible) for message processing
+- **Monitoring**: Self-hosted Prometheus/Grafana stack with Redpanda metrics
 - **Backup**: Automated database dumps and volume snapshots
 - **Security**: UFW firewall, fail2ban, automated security updates
