@@ -1,4 +1,8 @@
 // Package qdrant provides a minimal Qdrant HTTP client used by the app.
+//
+// It handles vector database operations for RAG functionality.
+// The package provides methods for collection management,
+// vector operations, and similarity search.
 package qdrant
 
 import (

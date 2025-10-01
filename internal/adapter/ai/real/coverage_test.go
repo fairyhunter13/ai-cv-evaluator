@@ -34,11 +34,11 @@ func TestNew(t *testing.T) {
 	if client.embedHC == nil {
 		t.Error("Expected embedHC to be non-nil")
 	}
-	if client.chatHC.Timeout != 15*time.Second {
-		t.Errorf("Expected chat timeout to be 15s, got %v", client.chatHC.Timeout)
+	if client.chatHC.Timeout != 60*time.Second {
+		t.Errorf("Expected chat timeout to be 60s, got %v", client.chatHC.Timeout)
 	}
-	if client.embedHC.Timeout != 15*time.Second {
-		t.Errorf("Expected embed timeout to be 15s, got %v", client.embedHC.Timeout)
+	if client.embedHC.Timeout != 30*time.Second {
+		t.Errorf("Expected embed timeout to be 30s, got %v", client.embedHC.Timeout)
 	}
 }
 
@@ -143,7 +143,7 @@ func TestChatJSON_ServerError(t *testing.T) {
 	cfg := config.Config{
 		OpenRouterAPIKey:  "test-key",
 		OpenRouterBaseURL: server.URL,
-		ChatModel:         "test-model",
+		// ChatModel field removed from config
 	}
 
 	client := NewTestClient(cfg)
@@ -165,7 +165,7 @@ func TestChatJSON_InvalidJSON(t *testing.T) {
 	cfg := config.Config{
 		OpenRouterAPIKey:  "test-key",
 		OpenRouterBaseURL: server.URL,
-		ChatModel:         "test-model",
+		// ChatModel field removed from config
 	}
 
 	client := NewTestClient(cfg)
@@ -189,7 +189,7 @@ func TestChatJSON_EmptyChoices(t *testing.T) {
 	cfg := config.Config{
 		OpenRouterAPIKey:  "test-key",
 		OpenRouterBaseURL: server.URL,
-		ChatModel:         "test-model",
+		// ChatModel field removed from config
 	}
 
 	client := NewTestClient(cfg)
@@ -202,29 +202,42 @@ func TestChatJSON_EmptyChoices(t *testing.T) {
 
 func TestChatJSON_WithFallbackModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
 
-		// Check that fallback models are included
-		if models, ok := req["models"].([]string); !ok || len(models) != 2 {
-			t.Logf("Expected 2 fallback models, got %v", req["models"])
+		if r.URL.Path == "/models" {
+			// Mock OpenRouter models API response with free models
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{
+						"id": "meta-llama/llama-3.1-8b-instruct:free",
+						"pricing": map[string]string{
+							"prompt":     "0",
+							"completion": "0",
+							"request":    "0",
+							"image":      "0",
+						},
+					},
+				},
+			})
+			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"choices": []map[string]any{
-				{"message": map[string]any{"content": "test response"}},
-			},
-		})
+		if r.URL.Path == "/chat/completions" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{"message": map[string]any{"content": "test response"}},
+				},
+			})
+			return
+		}
+
+		t.Fatalf("unexpected path: %s", r.URL.Path)
 	}))
 	defer server.Close()
 
 	cfg := config.Config{
-		OpenRouterAPIKey:   "test-key",
-		OpenRouterBaseURL:  server.URL,
-		ChatModel:          "test-model",
-		ChatFallbackModels: []string{"fallback1", "fallback2"},
+		OpenRouterAPIKey:  "test-key",
+		OpenRouterBaseURL: server.URL,
 	}
 
 	client := NewTestClient(cfg)
@@ -353,7 +366,7 @@ func TestChatJSON_ContextCancellation(t *testing.T) {
 	cfg := config.Config{
 		OpenRouterAPIKey:  "test-key",
 		OpenRouterBaseURL: server.URL,
-		ChatModel:         "test-model",
+		// ChatModel field removed from config
 	}
 
 	client := NewTestClient(cfg)

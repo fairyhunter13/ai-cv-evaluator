@@ -35,7 +35,6 @@ Provide a productive Go developer experience with strict linting, formatting, an
   - `PORT` (default 8080)
   - `DB_URL` (Postgres/SQLite DSN)
   - `REDIS_URL` (for queue)
-  - `AI_PROVIDER` (default `openrouter`)
   - `OPENROUTER_API_KEY` (required for live chat when using OpenRouter)
   - `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`)
   - `CHAT_MODEL` (default `openrouter/auto` via OpenRouter)
@@ -73,6 +72,8 @@ Provide a productive Go developer experience with strict linting, formatting, an
 # Test Placement Enforcement (Local)
 - Unit tests MUST be co-located next to the code under test in the same package directory (e.g., `foo.go` ↔ `foo_test.go`).
 - The top-level `test/` tree is reserved for E2E suites (`test/e2e/`) and shared fixtures only. Do not place unit tests under `test/`.
+- **E2E Test Build Tags**: All E2E tests MUST have `//go:build e2e` and `// +build e2e` build tags
+- **E2E Test Isolation**: E2E tests are excluded from regular test runs and require `-tags=e2e` flag
 - Optional pre-commit guard to block misplaced tests:
   ```bash
   #!/usr/bin/env bash
@@ -80,6 +81,11 @@ Provide a productive Go developer experience with strict linting, formatting, an
   # Disallow *_test.go directly under top-level test/ except test/e2e/**
   if git ls-files -- '*.go' | grep -E '^test/.*_test\.go$' | grep -vE '^test/e2e/'; then
     echo "Error: unit tests must be colocated next to code. Move tests out of top-level test/ (allowed only under test/e2e/)." >&2
+    exit 1
+  fi
+  # Verify E2E tests have build tags
+  if git ls-files -- 'test/e2e/*.go' | xargs grep -L '//go:build e2e'; then
+    echo "Error: E2E test files must have //go:build e2e build tag" >&2
     exit 1
   fi
   ```

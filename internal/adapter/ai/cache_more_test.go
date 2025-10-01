@@ -21,6 +21,10 @@ func (c *chatAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, 
 	return "{}", nil
 }
 
+func (c *chatAI) CleanCoTResponse(_ domain.Context, response string) (string, error) {
+	return response, nil
+}
+
 func Test_ChatJSON_Passthrough(t *testing.T) {
 	base := &chatAI{}
 	wrapped := NewEmbedCache(base, 4)
@@ -42,6 +46,10 @@ func (e *evictAI) Embed(_ domain.Context, texts []string) ([][]float32, error) {
 }
 func (e *evictAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, error) {
 	return "{}", nil
+}
+
+func (e *evictAI) CleanCoTResponse(_ domain.Context, response string) (string, error) {
+	return response, nil
 }
 
 func Test_EmbedCache_EvictionFIFO(t *testing.T) {

@@ -69,332 +69,331 @@ admin-frontend/
 **Props**:
 - `type`: 'success' | 'error' | 'warning' | 'info'
 - `message`: string
-- `duration`: number (milliseconds)
 
 **Usage**:
 ```vue
 <NotificationToast 
-  :type="'success'" 
-  :message="'Operation completed'" 
-  :duration="3000" 
+  :type="notificationType"
+  :message="notificationMessage"
+  @dismiss="handleDismiss"
 />
 ```
 
-## Page Components
+### 3. Dashboard.vue
 
-### 1. Dashboard.vue
-
-**Purpose**: Main dashboard with statistics and navigation.
+**Purpose**: Main dashboard displaying system overview and statistics.
 
 **Features**:
-- Statistics overview (uploads, evaluations, completed jobs)
-- Navigation sidebar
-- User menu
-- Quick actions
+- System statistics display
+- Recent activity feed
+- Quick action buttons
 - Real-time updates
 
-**State Management**:
-- Uses `useAuthStore` for authentication
-- Fetches dashboard statistics via API
-- Manages sidebar and user menu state
+**Key Sections**:
+- Statistics cards (uploads, evaluations, success rate)
+- Recent jobs table
+- System health indicators
+- Quick action buttons
 
-**Key Methods**:
+**API Integration**:
 ```typescript
-const loadStats = async () => {
   // Fetch dashboard statistics
-}
-
-const toggleSidebar = () => {
-  // Toggle mobile sidebar
-}
-
-const handleLogout = async () => {
-  // Handle user logout
-}
+const fetchStats = async () => {
+  try {
+    const response = await api.get('/admin/api/stats');
+    stats.value = response.data;
+  } catch (error) {
+    handleError(error);
+  }
+};
 ```
 
-**API Endpoints**:
-- `GET /admin/api/stats` - Dashboard statistics
+### 4. Login.vue
 
-### 2. Login.vue
-
-**Purpose**: Authentication page for admin access.
+**Purpose**: User authentication interface.
 
 **Features**:
-- Username/password form
-- Form validation
+- Login form with validation
 - Error handling
-- Redirect after login
+- Loading states
+- Redirect after successful login
 
 **Form Fields**:
-- `username`: string (required)
-- `password`: string (required)
+- Username
+- Password
+- Remember me checkbox
 
 **Validation Rules**:
-- Username: minimum 3 characters
-- Password: minimum 6 characters
+- Username: Required, minimum 3 characters
+- Password: Required, minimum 6 characters
 
-**State Management**:
-- Uses `useAuthStore` for authentication state
-- Manages form state and validation
-- Handles login errors
+**Usage**:
+```vue
+<Login 
+  @login="handleLogin"
+  @error="handleError"
+/>
+```
 
-### 3. Upload.vue
+### 5. Upload.vue
 
 **Purpose**: File upload interface for CV and project documents.
 
 **Features**:
-- Drag-and-drop file upload
+- Drag and drop file upload
 - File type validation
 - Progress indicators
 - Multiple file support
-- File preview
-
-**Supported File Types**:
-- `.txt` - Plain text files
-- `.pdf` - PDF documents
-- `.docx` - Word documents
 
 **File Validation**:
-- Maximum file size: 10MB (configurable)
-- MIME type validation
-- Content type checking
+- Allowed types: PDF, DOCX, TXT
+- Maximum file size: 10MB
+- File name sanitization
 
-**Key Methods**:
-```typescript
-const handleFileUpload = (files: FileList) => {
-  // Process uploaded files
-}
+**Upload Process**:
+1. File selection/upload
+2. Client-side validation
+3. Server upload
+4. Response handling
+5. Success/error feedback
 
-const validateFile = (file: File) => {
-  // Validate file type and size
-}
-
-const uploadFiles = async () => {
-  // Upload files to server
-}
+**Usage**:
+```vue
+<Upload 
+  @upload-success="handleUploadSuccess"
+  @upload-error="handleUploadError"
+/>
 ```
 
-**API Endpoints**:
-- `POST /v1/upload` - Upload CV and project files
+### 6. Evaluate.vue
 
-### 4. Evaluate.vue
-
-**Purpose**: Job evaluation interface with form inputs.
+**Purpose**: Job evaluation interface.
 
 **Features**:
 - CV and project selection
 - Job description input
 - Study case brief input
-- Form validation
-- Job submission
+- Evaluation submission
 
 **Form Fields**:
-- `cv_id`: string (required)
-- `project_id`: string (required)
-- `job_description`: string (optional)
-- `study_case_brief`: string (optional)
+- CV ID (from upload)
+- Project ID (from upload)
+- Job description (optional)
+- Study case brief (optional)
 
-**Validation Rules**:
-- CV and project IDs are required
-- Job description: maximum 2000 characters
-- Study case brief: maximum 2000 characters
+**Validation**:
+- CV ID and Project ID are required
+- Job description and study case brief are optional
+- Maximum length validation for text fields
 
-**Key Methods**:
-```typescript
-const loadUploads = async () => {
-  // Load available uploads
-}
-
-const submitEvaluation = async () => {
-  // Submit evaluation job
-}
-
-const validateForm = () => {
-  // Validate form inputs
-}
+**Usage**:
+```vue
+<Evaluate 
+  :cv-id="selectedCvId"
+  :project-id="selectedProjectId"
+  @evaluate="handleEvaluate"
+  @error="handleError"
+/>
 ```
 
-**API Endpoints**:
-- `GET /admin/api/uploads` - Get available uploads
-- `POST /v1/evaluate` - Submit evaluation job
+### 7. Result.vue
 
-### 5. Result.vue
-
-**Purpose**: Display evaluation results and job status.
+**Purpose**: Display evaluation results.
 
 **Features**:
-- Job status display
 - Result visualization
-- Progress tracking
-- Error handling
-- Result export
-
-**Job Statuses**:
-- `queued` - Job is queued for processing
-- `processing` - Job is being processed
-- `completed` - Job completed successfully
-- `failed` - Job failed with error
+- Score breakdown
+- Feedback display
+- Export functionality
 
 **Result Display**:
-- CV match rate (0-1 scale)
-- Project score (1-10 scale)
-- Feedback text
+- CV match rate (0-100%)
+- Project score (1-10)
+- Detailed feedback
 - Overall summary
 
-**Key Methods**:
-```typescript
-const loadResult = async () => {
-  // Load job result
-}
+**Visualization**:
+- Progress bars for scores
+- Color-coded results
+- Responsive design
 
-const pollStatus = async () => {
-  // Poll job status
-}
-
-const exportResult = () => {
-  // Export result data
-}
+**Usage**:
+```vue
+<Result 
+  :result="evaluationResult"
+  :loading="isLoading"
+  @export="handleExport"
+/>
 ```
 
-**API Endpoints**:
-- `GET /v1/result/{id}` - Get job result
+### 8. Jobs.vue
 
-### 6. Jobs.vue
-
-**Purpose**: Job management interface with listing and filtering.
+**Purpose**: Job management interface.
 
 **Features**:
-- Job listing with pagination
+- Job list with pagination
 - Status filtering
 - Search functionality
 - Job details view
-- Bulk operations
 
-**Filtering Options**:
-- Status: queued, processing, completed, failed
-- Date range
-- Search by ID or description
+**Job Statuses**:
+- Queued
+- Processing
+- Completed
+- Failed
 
-**Pagination**:
-- Page size: 10, 25, 50, 100
-- Page navigation
-- Total count display
+**Features**:
+- Pagination controls
+- Status filters
+- Search by job ID
+- Sort by date/status
 
-**Key Methods**:
-```typescript
-const loadJobs = async () => {
-  // Load job list
-}
-
-const applyFilters = () => {
-  // Apply search and filter criteria
-}
-
-const viewJobDetails = (jobId: string) => {
-  // View job details
-}
+**Usage**:
+```vue
+<Jobs 
+  :jobs="jobList"
+  :loading="isLoading"
+  @refresh="handleRefresh"
+  @filter="handleFilter"
+/>
 ```
-
-**API Endpoints**:
-- `GET /admin/api/jobs` - Get job list
-- `GET /admin/api/jobs/{id}` - Get job details
 
 ## State Management
 
-### Auth Store (`stores/auth.ts`)
+### 1. Auth Store (auth.ts)
 
-**Purpose**: Authentication state management using Pinia.
+**Purpose**: Manage authentication state and user session.
 
 **State**:
 ```typescript
 interface AuthState {
-  isAuthenticated: boolean
-  user: User | null
-  loading: boolean
+  isAuthenticated: boolean;
+  user: User | null;
+  token: string | null;
+  loading: boolean;
 }
 ```
 
 **Actions**:
+- `login(credentials)`: Authenticate user
+- `logout()`: Clear session
+- `checkAuth()`: Verify current session
+- `refreshToken()`: Refresh authentication token
+
+**Usage**:
 ```typescript
-const login = async (username: string, password: string) => {
-  // Authenticate user
-}
+import { useAuthStore } from '@/stores/auth';
 
-const logout = async () => {
-  // Logout user
-}
-
-const checkAuth = async () => {
-  // Check authentication status
-}
+const authStore = useAuthStore();
+await authStore.login({ username, password });
 ```
 
-**Getters**:
+### 2. API Store
+
+**Purpose**: Manage API communication and data fetching.
+
+**Features**:
+- Centralized API calls
+- Error handling
+- Loading states
+- Response caching
+
+**Methods**:
+- `get(url, params)`: GET requests
+- `post(url, data)`: POST requests
+- `put(url, data)`: PUT requests
+- `delete(url)`: DELETE requests
+
+**Usage**:
 ```typescript
-const isLoggedIn = computed(() => isAuthenticated.value)
-const currentUser = computed(() => user.value)
+import { useApiStore } from '@/stores/api';
+
+const apiStore = useApiStore();
+const data = await apiStore.get('/admin/api/stats');
 ```
 
 ## Utility Functions
 
-### 1. CSRF Protection (`utils/csrf.ts`)
+### 1. API Utilities (api.ts)
 
-**Purpose**: CSRF token management for secure requests.
+**Purpose**: Centralized API communication.
 
-**Functions**:
+**Features**:
+- Base URL configuration
+- Request/response interceptors
+- Error handling
+- CSRF token management
+
+**Configuration**:
 ```typescript
-export const initCsrfProtection = () => {
-  // Initialize CSRF protection
-}
-
-export const getCsrfToken = () => {
-  // Get CSRF token
-}
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 ```
 
-### 2. Error Handling (`utils/errorHandler.ts`)
+**Usage**:
+```typescript
+import { api } from '@/utils/api';
+
+const response = await api.get('/v1/result/123');
+```
+
+### 2. Error Handler (errorHandler.ts)
 
 **Purpose**: Centralized error handling and user feedback.
 
-**Functions**:
-```typescript
-export const handleApiError = (error: any) => {
-  // Handle API errors
-}
+**Features**:
+- Error classification
+- User-friendly messages
+- Logging
+- Notification display
 
-export const isAuthError = (error: any) => {
-  // Check if error is authentication related
+**Error Types**:
+- Network errors
+- Validation errors
+- Authentication errors
+- Server errors
+
+**Usage**:
+```typescript
+import { handleError } from '@/utils/errorHandler';
+
+try {
+  await api.post('/v1/evaluate', data);
+} catch (error) {
+  handleError(error);
 }
 ```
 
-### 3. API Client (`utils/api.ts`)
+### 3. CSRF Utilities (csrf.ts)
 
-**Purpose**: HTTP client with authentication and error handling.
+**Purpose**: CSRF token management for secure requests.
 
 **Features**:
-- Automatic authentication headers
-- Request/response interceptors
-- Error handling
-- Retry logic
+- Token fetching
+- Token validation
+- Automatic token inclusion
+- Token refresh
 
-**Methods**:
+**Usage**:
 ```typescript
-export const apiClient = {
-  get: (url: string) => Promise<Response>,
-  post: (url: string, data: any) => Promise<Response>,
-  put: (url: string, data: any) => Promise<Response>,
-  delete: (url: string) => Promise<Response>
-}
+import { getCsrfToken } from '@/utils/csrf';
+
+const token = await getCsrfToken();
 ```
 
 ## Styling and Theming
 
-### Tailwind CSS Configuration
+### 1. Tailwind CSS Configuration
+
+**Configuration**: `tailwind.config.js`
 
 **Custom Colors**:
 ```javascript
-// tailwind.config.js
 module.exports = {
   theme: {
     extend: {
@@ -402,256 +401,466 @@ module.exports = {
         primary: {
           50: '#eff6ff',
           500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8'
-        }
-      }
-    }
-  }
+          900: '#1e3a8a',
+        },
+        success: {
+          50: '#f0fdf4',
+          500: '#22c55e',
+          900: '#14532d',
+        },
+        error: {
+          50: '#fef2f2',
+          500: '#ef4444',
+          900: '#7f1d1d',
+        },
+      },
+    },
+  },
+};
+```
+
+### 2. Component Styling
+
+**Base Styles**:
+```css
+/* Base component styles */
+.component-base {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200;
+}
+
+.component-header {
+  @apply px-6 py-4 border-b border-gray-200;
+}
+
+.component-content {
+  @apply px-6 py-4;
+}
+
+.component-footer {
+  @apply px-6 py-4 border-t border-gray-200;
 }
 ```
 
-**Component Classes**:
-- `.btn-primary` - Primary button styling
-- `.card` - Card component styling
-- `.form-input` - Form input styling
-- `.sidebar` - Sidebar navigation styling
-
-### Responsive Design
-
-**Breakpoints**:
-- `sm`: 640px
-- `md`: 768px
-- `lg`: 1024px
-- `xl`: 1280px
-
-**Mobile-First Approach**:
-- Base styles for mobile
-- Progressive enhancement for larger screens
-- Touch-friendly interface elements
-
-## Development Workflow
-
-### Hot Module Replacement (HMR)
-
-**Configuration**:
-```typescript
-// vite.config.ts
-export default defineConfig({
-  server: {
-    hmr: {
-      port: 3001
-    }
-  }
-})
-```
-
-**Benefits**:
-- Instant updates during development
-- State preservation across changes
-- Fast rebuild times
-
-### TypeScript Integration
-
-**Type Safety**:
-- Component props typing
-- API response typing
-- State management typing
-- Event handling typing
-
-**Example**:
-```typescript
-interface UploadProps {
-  files: File[]
-  onUpload: (files: File[]) => void
-  maxSize: number
+**Button Styles**:
+```css
+.btn-primary {
+  @apply bg-primary-500 text-white px-4 py-2 rounded-md hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500;
 }
 
-const UploadComponent: DefineComponent<UploadProps> = {
-  props: {
-    files: { type: Array as PropType<File[]>, required: true },
-    onUpload: { type: Function as PropType<(files: File[]) => void>, required: true },
-    maxSize: { type: Number, default: 10 }
-  }
+.btn-secondary {
+  @apply bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500;
+}
+
+.btn-danger {
+  @apply bg-error-500 text-white px-4 py-2 rounded-md hover:bg-error-600 focus:outline-none focus:ring-2 focus:ring-error-500;
 }
 ```
 
-## Testing
+## Component Development
 
-### Component Testing
+### 1. Component Structure
 
-**Test Structure**:
+**Template**:
+```vue
+<template>
+  <div class="component-base">
+    <header class="component-header">
+      <h2 class="text-lg font-semibold">{{ title }}</h2>
+    </header>
+    <main class="component-content">
+      <slot />
+    </main>
+    <footer class="component-footer" v-if="$slots.footer">
+      <slot name="footer" />
+    </footer>
+  </div>
+</template>
+```
+
+**Script**:
+```vue
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue';
+
+// Props
+interface Props {
+  title: string;
+  loading?: boolean;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  loading: false,
+});
+
+// Emits
+const emit = defineEmits<{
+  submit: [data: any];
+  cancel: [];
+}>();
+
+// State
+const data = ref({});
+
+// Computed
+const isValid = computed(() => {
+  return Object.keys(data.value).length > 0;
+});
+
+// Methods
+const handleSubmit = () => {
+  emit('submit', data.value);
+};
+
+// Lifecycle
+onMounted(() => {
+  // Component initialization
+});
+</script>
+```
+
+**Styles**:
+```vue
+<style scoped>
+.component-base {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200;
+}
+
+.component-header {
+  @apply px-6 py-4 border-b border-gray-200;
+}
+
+.component-content {
+  @apply px-6 py-4;
+}
+</style>
+```
+
+### 2. Component Testing
+
+**Unit Tests**:
 ```typescript
-import { mount } from '@vue/test-utils'
-import { describe, it, expect } from 'vitest'
+import { mount } from '@vue/test-utils';
+import { describe, it, expect } from 'vitest';
+import Component from './Component.vue';
 
-describe('UploadComponent', () => {
-  it('should handle file upload', async () => {
-    const wrapper = mount(UploadComponent, {
+describe('Component', () => {
+  it('renders correctly', () => {
+    const wrapper = mount(Component, {
       props: {
-        files: [],
-        onUpload: vi.fn(),
-        maxSize: 10
-      }
-    })
+        title: 'Test Title',
+      },
+    });
     
-    // Test file upload functionality
-  })
-})
+    expect(wrapper.text()).toContain('Test Title');
+  });
+
+  it('emits submit event', async () => {
+    const wrapper = mount(Component);
+    
+    await wrapper.find('button').trigger('click');
+    
+    expect(wrapper.emitted('submit')).toBeTruthy();
+  });
+});
 ```
 
-**Testing Utilities**:
-- Vue Test Utils for component testing
-- Vitest for test runner
-- Mock API responses
-- Test user interactions
+**Integration Tests**:
+```typescript
+import { mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
+import Component from './Component.vue';
+
+describe('Component Integration', () => {
+  it('works with store', () => {
+    const pinia = createPinia();
+    const wrapper = mount(Component, {
+      global: {
+        plugins: [pinia],
+      },
+    });
+    
+    // Test component with store
+  });
+});
+```
+
+### 3. Component Documentation
+
+**Component Documentation Template**:
+```markdown
+## ComponentName
+
+**Purpose**: Brief description of component purpose
+
+**Features**:
+- Feature 1
+- Feature 2
+- Feature 3
+
+**Props**:
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| prop1 | string | '' | Description |
+| prop2 | number | 0 | Description |
+
+**Events**:
+| Event | Payload | Description |
+|-------|---------|-------------|
+| event1 | data | Description |
+| event2 | - | Description |
+
+**Slots**:
+| Slot | Description |
+|------|-------------|
+| default | Main content |
+| header | Header content |
+| footer | Footer content |
+
+**Usage**:
+```vue
+<ComponentName 
+  :prop1="value1"
+  :prop2="value2"
+  @event1="handleEvent1"
+  @event2="handleEvent2"
+>
+  <template #header>
+    Header content
+  </template>
+  
+  Main content
+  
+  <template #footer>
+    Footer content
+  </template>
+</ComponentName>
+```
+
+**Examples**:
+```vue
+<!-- Basic usage -->
+<ComponentName :prop1="value" />
+
+<!-- With events -->
+<ComponentName 
+  :prop1="value"
+  @event1="handleEvent"
+/>
+
+<!-- With slots -->
+<ComponentName>
+  <template #header>Header</template>
+  Content
+  <template #footer>Footer</template>
+</ComponentName>
+```
+```
 
 ## Performance Optimization
 
-### Code Splitting
+### 1. Component Optimization
 
-**Route-based Splitting**:
+**Lazy Loading**:
+```vue
+<script setup lang="ts">
+import { defineAsyncComponent } from 'vue';
+
+const AsyncComponent = defineAsyncComponent(() => 
+  import('./HeavyComponent.vue')
+);
+</script>
+```
+
+**Memoization**:
+```vue
+<script setup lang="ts">
+import { computed, ref } from 'vue';
+
+const data = ref([]);
+
+const expensiveComputation = computed(() => {
+  return data.value.map(item => {
+    // Expensive computation
+    return processItem(item);
+  });
+});
+</script>
+```
+
+### 2. Bundle Optimization
+
+**Code Splitting**:
 ```typescript
+// Route-based code splitting
 const routes = [
   {
     path: '/dashboard',
-    component: () => import('./views/Dashboard.vue')
-  }
-]
+    component: () => import('@/views/Dashboard.vue'),
+  },
+  {
+    path: '/upload',
+    component: () => import('@/views/Upload.vue'),
+  },
+];
 ```
 
-**Component Lazy Loading**:
+**Tree Shaking**:
 ```typescript
-const LazyComponent = defineAsyncComponent(() => import('./LazyComponent.vue'))
+// Import only what you need
+import { ref, computed } from 'vue';
+import { debounce } from 'lodash-es';
 ```
 
-### Bundle Optimization
+### 3. Performance Monitoring
 
-**Vite Configuration**:
+**Performance Metrics**:
 ```typescript
-export default defineConfig({
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['vue', 'vue-router', 'pinia'],
-          ui: ['@headlessui/vue']
-        }
-      }
-    }
-  }
-})
+// Component performance monitoring
+import { onMounted, onUnmounted } from 'vue';
+
+const startTime = performance.now();
+
+onMounted(() => {
+  const endTime = performance.now();
+  console.log(`Component mounted in ${endTime - startTime}ms`);
+});
 ```
 
-## Deployment
+## Accessibility
 
-### Production Build
+### 1. ARIA Attributes
+
+**Semantic HTML**:
+```vue
+<template>
+  <div role="main" aria-label="Main content">
+    <h1 id="page-title">Page Title</h1>
+    <nav aria-label="Main navigation">
+      <ul role="list">
+        <li><a href="/dashboard" aria-current="page">Dashboard</a></li>
+        <li><a href="/upload">Upload</a></li>
+      </ul>
+    </nav>
+  </div>
+</template>
+```
+
+**Form Accessibility**:
+```vue
+<template>
+  <form @submit="handleSubmit">
+    <label for="username">Username</label>
+    <input 
+      id="username"
+      type="text"
+      v-model="username"
+      aria-describedby="username-error"
+      :aria-invalid="hasError"
+    />
+    <div id="username-error" v-if="hasError" role="alert">
+      {{ errorMessage }}
+    </div>
+  </form>
+</template>
+```
+
+### 2. Keyboard Navigation
+
+**Keyboard Support**:
+```vue
+<script setup lang="ts">
+import { onMounted, onUnmounted } from 'vue';
+
+const handleKeydown = (event: KeyboardEvent) => {
+  switch (event.key) {
+    case 'Enter':
+      handleSubmit();
+      break;
+    case 'Escape':
+      handleCancel();
+      break;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown);
+});
+</script>
+```
+
+## Development Workflow
+
+### 1. Component Development
+
+**Development Steps**:
+1. Create component file
+2. Define component structure
+3. Implement functionality
+4. Add styling
+5. Write tests
+6. Document component
+7. Review and refactor
+
+### 2. Code Quality
+
+**Linting**:
+```bash
+# ESLint
+npm run lint
+
+# Prettier
+npm run format
+
+# Type checking
+npm run type-check
+```
+
+**Testing**:
+```bash
+# Unit tests
+npm run test
+
+# E2E tests
+npm run test:e2e
+
+# Coverage
+npm run test:coverage
+```
+
+### 3. Deployment
 
 **Build Process**:
 ```bash
+# Development build
+npm run dev
+
+# Production build
 npm run build
+
+# Preview production build
+npm run preview
 ```
 
-**Output**:
-- Optimized JavaScript bundles
-- Minified CSS
-- Static assets
-- Source maps (optional)
+**Docker Build**:
+```dockerfile
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
 
-### Nginx Configuration
-
-**Production Setup**:
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    
-    location / {
-        root /var/www/admin-frontend/dist;
-        try_files $uri $uri/ /index.html;
-    }
-    
-    location /api {
-        proxy_pass http://backend:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
 ```
-
-## Best Practices
-
-### 1. Component Design
-- Single responsibility principle
-- Reusable and composable
-- Clear prop interfaces
-- Proper event handling
-
-### 2. State Management
-- Use Pinia for global state
-- Keep component state local when possible
-- Avoid prop drilling
-- Use computed properties for derived state
-
-### 3. Performance
-- Lazy load components
-- Use virtual scrolling for large lists
-- Optimize images and assets
-- Implement proper caching
-
-### 4. Accessibility
-- Semantic HTML
-- ARIA attributes
-- Keyboard navigation
-- Screen reader support
-
-### 5. Error Handling
-- Graceful error boundaries
-- User-friendly error messages
-- Retry mechanisms
-- Fallback UI components
-
-## Troubleshooting
-
-### Common Issues
-
-1. **HMR Not Working**
-   ```bash
-   # Check Vite configuration
-   # Ensure port 3001 is available
-   # Restart development server
-   ```
-
-2. **Build Failures**
-   ```bash
-   # Check TypeScript errors
-   npm run type-check
-   
-   # Check for missing dependencies
-   npm install
-   ```
-
-3. **API Connection Issues**
-   ```bash
-   # Check CORS configuration
-   # Verify API base URL
-   # Check network connectivity
-   ```
-
-### Debug Tools
-
-**Vue DevTools**:
-- Component inspection
-- State debugging
-- Performance profiling
-- Timeline analysis
-
-**Browser DevTools**:
-- Network tab for API calls
-- Console for error messages
-- Application tab for storage
-- Performance tab for optimization
 
 ---
 
-*This documentation should be updated when new components are added or existing ones are modified.*
+*This frontend components documentation ensures consistent development practices and comprehensive component coverage for the AI CV Evaluator project.*

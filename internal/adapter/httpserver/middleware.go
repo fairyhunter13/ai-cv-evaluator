@@ -1,3 +1,9 @@
+// Package httpserver contains HTTP handlers and middleware.
+//
+// It provides REST API endpoints for the application including
+// file upload, evaluation triggering, and result retrieval.
+// The package follows clean architecture principles and provides
+// a clear separation between HTTP concerns and business logic.
 package httpserver
 
 import (

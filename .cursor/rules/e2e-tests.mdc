@@ -1,0 +1,235 @@
+---
+alwaysApply: true
+---
+
+# E2E Test Requirements Rule
+
+## Core E2E Test Standards
+
+**CRITICAL**: All E2E tests MUST follow these mandatory requirements:
+
+### 1. Build Tag Requirements
+- **Build Tags**: ALL E2E test files MUST have `//go:build e2e` build tag at the top
+- **Tag Enforcement**: E2E tests can ONLY be run with `-tags=e2e` flag
+- **Isolation**: Build tags ensure E2E tests are excluded from regular test runs
+- **Special Execution**: E2E tests require explicit tag activation for execution
+
+### 2. Test Execution Requirements
+- **NO SKIPPING**: All E2E tests MUST NOT be skipped under any circumstances
+- **Required Flags**: E2E tests MUST be run with: `-tags=e2e -v -race -failfast -count=1 -timeout=90s -parallel=4` (1.5 minutes)
+- **Timeout**: Maximum timeout of 90 seconds (1.5 minutes) for all E2E test scenarios
+- **Race Detection**: Always enable race condition detection with `-race` flag
+- **No Caching**: Use `-count=1` to disable test caching and ensure fresh execution
+- **Parallel Execution**: E2E tests MUST support parallel execution with `-parallel=4` by default
+
+### 3. Test Data Management
+- **Dump Directory Clearing**: The `test/dump` directory MUST be cleared before ALL E2E test runs
+- **Response Dumping**: ALL E2E test scenarios MUST dump responses to `test/dump` directory
+- **Timestamped Files**: All dumped responses MUST include timestamps in filenames
+- **Complete Coverage**: Every test scenario must dump ALL relevant responses (upload, evaluate, result)
+
+### 4. Test Scenario Requirements
+- **No Queued Status**: ALL E2E tests MUST assert that evaluate responses NEVER contain `queued` status
+- **Terminal States Only**: Tests must wait for and verify terminal states (`completed` or `failed`)
+- **Status Validation**: Implement strict validation to ensure no `queued` status in final responses
+- **Timeout Handling**: If timeout occurs, test must fail with clear error message
+
+### 5. Test Summary Requirements
+- **Scenario Summaries**: Each E2E test scenario MUST provide a summary of results
+- **Test Data Results**: All test cases must report success/failure status with details
+- **Response Validation**: Summaries must include validation results for each response
+- **Error Reporting**: Clear error messages for any test failures or timeouts
+
+### 6. Test Structure Requirements
+- **Build Tag Header**: Every E2E test file MUST start with `//go:build e2e` and `// +build e2e`
+- **Parallel Execution**: E2E tests MUST support parallel execution with `t.Parallel()` and `-parallel=4` by default
+- **Health Checks**: All tests must verify application health before execution
+- **Cleanup**: Proper cleanup of test data and resources after test completion
+- **Logging**: Comprehensive logging of test execution and results
+- **Thread Safety**: All E2E tests must be thread-safe for parallel execution
+
+## E2E Test Implementation Standards
+
+### Test Execution Commands
+```bash
+# Standard E2E test execution (parallel)
+go test -tags=e2e -v -race -failfast -count=1 -timeout=90s -parallel=4 ./test/e2e/...
+
+# With specific base URL (parallel)
+E2E_BASE_URL="http://localhost:8080/v1" go test -tags=e2e -v -race -failfast -count=1 -timeout=90s -parallel=4 ./test/e2e/...
+
+# CI E2E execution with parallel support
+make ci-e2e E2E_PARALLEL=4
+
+# Custom parallel execution
+make run-e2e-tests E2E_PARALLEL=8 E2E_START_SERVICES=true
+```
+
+### Required Test Structure
+```go
+//go:build e2e
+// +build e2e
+
+package e2e_test
+
+import (
+    "testing"
+)
+
+func TestE2E_ScenarioName(t *testing.T) {
+    // NO SKIPPING - Remove all t.Skip() calls
+    t.Parallel() // Enable parallel execution
+    
+    // Health check before test
+    // Clear dump directory
+    // Execute test scenario
+    // Dump all responses
+    // Assert no 'queued' status
+    // Provide test summary
+}
+```
+
+### Response Dumping Requirements
+```go
+// Dump ALL responses with timestamps
+dumpJSON(t, "scenario_upload_response.json", uploadResp)
+dumpJSON(t, "scenario_evaluate_response.json", evalResp)
+dumpJSON(t, "scenario_result_response.json", finalResp)
+```
+
+### Status Validation Requirements
+```go
+// CRITICAL: Assert no 'queued' status
+st, _ := final["status"].(string)
+require.NotEqual(t, "queued", st, "terminal state expected, got queued: %#v", final)
+
+// Only accept terminal states
+switch st {
+case "completed":
+    // Validate completed state
+case "failed":
+    // Validate failed state
+default:
+    t.Fatalf("unexpected status: %v (must be completed or failed)", st)
+}
+```
+
+## E2E Test Quality Standards
+
+### 1. Test Reliability
+- **Deterministic Results**: Tests must produce consistent results
+- **No Flaky Tests**: Eliminate race conditions and timing issues
+- **Proper Timeouts**: Use appropriate timeouts for different operations
+- **Error Handling**: Comprehensive error handling and reporting
+
+### 2. Test Coverage
+- **Complete Scenarios**: Test full user workflows end-to-end
+- **Edge Cases**: Include edge cases and error scenarios
+- **Data Validation**: Validate all response data structures
+- **Status Transitions**: Verify proper status transitions
+
+### 3. Test Maintenance
+- **Clear Documentation**: Well-documented test scenarios
+- **Maintainable Code**: Clean, readable test code
+- **Consistent Patterns**: Use consistent testing patterns across all scenarios
+- **Regular Updates**: Keep tests updated with application changes
+
+## Enforcement Rules
+
+### 1. Automatic Validation
+- **Pre-commit Checks**: Validate E2E test requirements before commits
+- **CI/CD Integration**: Enforce requirements in continuous integration
+- **Code Reviews**: Review E2E tests for compliance with requirements
+- **Automated Testing**: Run E2E tests automatically on code changes
+
+### 2. Quality Gates
+- **No Skipped Tests**: Reject any E2E tests with skip conditions
+- **Status Validation**: Ensure all tests validate against 'queued' status
+- **Dump Verification**: Verify all responses are properly dumped
+- **Summary Requirements**: Ensure all tests provide proper summaries
+
+### 3. Continuous Improvement
+- **Regular Audits**: Audit E2E tests for compliance
+- **Performance Monitoring**: Monitor test execution times
+- **Coverage Analysis**: Analyze test coverage and gaps
+- **Feedback Integration**: Incorporate feedback into test improvements
+
+## Build Tag Enforcement
+
+### Build Tag Requirements
+- **File Header**: Every E2E test file MUST start with both build tag lines:
+  ```go
+  //go:build e2e
+  // +build e2e
+  ```
+- **Tag Isolation**: Build tags ensure E2E tests are excluded from regular test runs
+- **Explicit Execution**: E2E tests can ONLY be run with `-tags=e2e` flag
+- **No Regular Tests**: Without `-tags=e2e`, E2E tests are completely excluded
+
+### Build Tag Validation
+```bash
+# Verify E2E tests are excluded from regular test runs
+go test ./...  # Should NOT include E2E tests
+
+# Verify E2E tests are included only with tags
+go test -tags=e2e ./test/e2e/...  # Should include E2E tests
+```
+
+## Examples
+
+### ✅ Correct E2E Test Implementation
+```go
+//go:build e2e
+// +build e2e
+
+package e2e_test
+
+import (
+    "testing"
+)
+
+func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
+    t.Parallel()
+    // NO t.Skip() - test must always run
+    
+    // Health check
+    // Clear dump directory
+    // Execute scenario
+    // Dump responses
+    // Assert no 'queued' status
+    // Provide summary
+}
+```
+
+### ❌ Incorrect E2E Test Implementation
+```go
+// ❌ Missing build tags
+package e2e_test
+
+import (
+    "testing"
+)
+
+func TestE2E_BadExample(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping E2E tests in short mode") // ❌ NO SKIPPING
+    }
+    // Missing status validation
+    // Missing response dumping
+    // Missing test summary
+}
+```
+
+## Action Items
+- **Build Tag Enforcement**: Ensure ALL E2E test files have `//go:build e2e` and `// +build e2e` tags
+- **Tag Validation**: Verify E2E tests are excluded from regular test runs without `-tags=e2e`
+- Remove all `t.Skip()` calls from E2E tests
+- Implement strict status validation (no 'queued' status)
+- Ensure all responses are dumped to test/dump directory
+- Add comprehensive test summaries
+- Use required test execution flags with parallel support
+- Implement proper timeout handling
+- Add health checks to all tests
+- Ensure parallel execution support with `t.Parallel()` and `-parallel=4`
+- Make all E2E tests thread-safe for parallel execution
+- Update Makefile to support configurable parallel execution

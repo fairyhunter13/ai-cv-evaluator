@@ -1,3 +1,8 @@
+// Package postgres provides PostgreSQL database adapters.
+//
+// It implements repository interfaces for data persistence.
+// The package provides type-safe database operations with
+// connection pooling and transaction support.
 package postgres
 
 import (

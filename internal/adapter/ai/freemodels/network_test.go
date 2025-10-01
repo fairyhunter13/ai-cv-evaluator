@@ -12,7 +12,7 @@ func TestService_NetworkTimeout(t *testing.T) {
 	// Create a server that takes longer than the client timeout
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Sleep longer than the client timeout but still very short to keep tests fast
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond) // Increased to ensure it's always longer than timeout
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
@@ -20,14 +20,14 @@ func TestService_NetworkTimeout(t *testing.T) {
 	// Create service with shorter timeout
 	service := &Service{
 		httpClient: &http.Client{
-			Timeout: 1 * time.Millisecond, // Extremely short timeout to force timeout quickly
+			Timeout: 20 * time.Millisecond, // Short but reasonable timeout to force timeout
 		},
 		apiKey:  "test-key",
 		baseURL: ts.URL,
 	}
 
 	ctx := context.Background()
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	if err == nil {
 		t.Fatal("expected timeout error")
@@ -41,10 +41,10 @@ func TestService_NetworkTimeout(t *testing.T) {
 
 func TestService_ConnectionRefused(t *testing.T) {
 	// Use a non-existent server
-	service := New("test-key", "http://localhost:99999")
+	service := NewService("test-key", "http://localhost:99999", 1*time.Hour)
 
 	ctx := context.Background()
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	if err == nil {
 		t.Fatal("expected connection error")
@@ -59,18 +59,18 @@ func TestService_ConnectionRefused(t *testing.T) {
 func TestService_ContextCancellation(t *testing.T) {
 	// Create a server that takes time to respond
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(15 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond) // Increased to ensure it's longer than context timeout
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
-	service := New("test-key", ts.URL)
+	service := NewService("test-key", ts.URL, 1*time.Hour)
 
 	// Create a context that will be cancelled quickly
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond) // Increased slightly for reliability
 	defer cancel()
 
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	if err == nil {
 		t.Fatal("expected context cancellation error")
@@ -85,18 +85,18 @@ func TestService_ContextCancellation(t *testing.T) {
 func TestService_ContextDeadlineExceeded(t *testing.T) {
 	// Create a server that takes time to respond
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond) // Increased to ensure it's longer than deadline
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
-	service := New("test-key", ts.URL)
+	service := NewService("test-key", ts.URL, 1*time.Hour)
 
 	// Create a context with a deadline
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(5*time.Millisecond))
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(10*time.Millisecond)) // Increased for reliability
 	defer cancel()
 
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	if err == nil {
 		t.Fatal("expected deadline exceeded error")
@@ -110,10 +110,10 @@ func TestService_ContextDeadlineExceeded(t *testing.T) {
 
 func TestService_InvalidURL(t *testing.T) {
 	// Use an invalid URL
-	service := New("test-key", "invalid://url")
+	service := NewService("test-key", "invalid://url", 1*time.Hour)
 
 	ctx := context.Background()
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	if err == nil {
 		t.Fatal("expected invalid URL error")
@@ -132,10 +132,10 @@ func TestService_ServerClosed(t *testing.T) {
 	}))
 	ts.Close() // Close the server
 
-	service := New("test-key", ts.URL)
+	service := NewService("test-key", ts.URL, 1*time.Hour)
 
 	ctx := context.Background()
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	if err == nil {
 		t.Fatal("expected connection error")
@@ -165,7 +165,7 @@ func TestService_ResponseBodyCloseError(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	// This should succeed despite the body close error (it's logged but not fatal)
 	if err != nil {
@@ -175,10 +175,10 @@ func TestService_ResponseBodyCloseError(t *testing.T) {
 
 func TestService_RequestCreationError(t *testing.T) {
 	// Create a service with invalid base URL that will fail during request creation
-	service := New("test-key", "://invalid-url")
+	service := NewService("test-key", "://invalid-url", 1*time.Hour)
 
 	ctx := context.Background()
-	err := service.ForceRefresh(ctx)
+	err := service.Refresh(ctx)
 
 	if err == nil {
 		t.Fatal("expected request creation error")

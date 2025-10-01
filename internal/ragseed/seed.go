@@ -1,4 +1,8 @@
 // Package ragseed provides helpers to seed Qdrant collections from YAML files.
+//
+// It handles RAG data seeding for job descriptions and scoring rubrics.
+// The package provides methods for loading YAML configurations,
+// generating embeddings, and populating vector collections.
 package ragseed
 
 import (

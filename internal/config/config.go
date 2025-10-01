@@ -15,12 +15,8 @@ type Config struct {
 	Port              int      `env:"PORT" envDefault:"8080"`
 	DBURL             string   `env:"DB_URL" envDefault:"postgres://postgres:postgres@localhost:5432/app?sslmode=disable"`
 	KafkaBrokers      []string `env:"KAFKA_BROKERS" envSeparator:"," envDefault:"localhost:19092"`
-	AIProvider        string   `env:"AI_PROVIDER" envDefault:"openrouter"`
 	OpenRouterAPIKey  string   `env:"OPENROUTER_API_KEY"`
 	OpenRouterBaseURL string   `env:"OPENROUTER_BASE_URL" envDefault:"https://openrouter.ai/api/v1"`
-	// ChatModel: if empty, real client will default to openrouter/auto
-	ChatModel          string   `env:"CHAT_MODEL" envDefault:""`
-	ChatFallbackModels []string `env:"CHAT_FALLBACK_MODELS" envSeparator:","`
 	// FreeModelsRefresh: how often to refresh the list of available free models
 	FreeModelsRefresh   time.Duration `env:"FREE_MODELS_REFRESH" envDefault:"1h"`
 	OpenAIAPIKey        string        `env:"OPENAI_API_KEY"`
@@ -47,10 +43,12 @@ type Config struct {
 	DataRetentionDays     int           `env:"DATA_RETENTION_DAYS" envDefault:"90"`
 	CleanupInterval       time.Duration `env:"CLEANUP_INTERVAL" envDefault:"24h"`
 	// AI Backoff Configuration
-	AIBackoffMaxElapsedTime  time.Duration `env:"AI_BACKOFF_MAX_ELAPSED_TIME" envDefault:"90s"`
-	AIBackoffInitialInterval time.Duration `env:"AI_BACKOFF_INITIAL_INTERVAL" envDefault:"1s"`
-	AIBackoffMaxInterval     time.Duration `env:"AI_BACKOFF_MAX_INTERVAL" envDefault:"10s"`
-	AIBackoffMultiplier      float64       `env:"AI_BACKOFF_MULTIPLIER" envDefault:"2.0"`
+	AIBackoffMaxElapsedTime  time.Duration `env:"AI_BACKOFF_MAX_ELAPSED_TIME" envDefault:"180s"`
+	AIBackoffInitialInterval time.Duration `env:"AI_BACKOFF_INITIAL_INTERVAL" envDefault:"2s"`
+	AIBackoffMaxInterval     time.Duration `env:"AI_BACKOFF_MAX_INTERVAL" envDefault:"20s"`
+	AIBackoffMultiplier      float64       `env:"AI_BACKOFF_MULTIPLIER" envDefault:"1.5"`
+	// Queue Consumer Configuration
+	ConsumerMaxConcurrency int `env:"CONSUMER_MAX_CONCURRENCY" envDefault:"3"`
 }
 
 // AdminEnabled returns true if admin features should be enabled

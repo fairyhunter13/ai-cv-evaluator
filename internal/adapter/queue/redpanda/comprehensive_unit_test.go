@@ -18,6 +18,11 @@ import (
 
 // newTestProducer creates a producer with a unique transactional ID for testing
 func newTestProducer(t *testing.T, brokers []string) *Producer {
+	// If brokers is localhost:19092, use the actual container broker
+	if len(brokers) == 1 && brokers[0] == "localhost:19092" {
+		brokers = []string{getContainerBroker(t)}
+	}
+
 	producer, err := NewProducerWithTransactionalID(brokers, fmt.Sprintf("test-producer-%d-%s", time.Now().UnixNano(), t.Name()))
 	require.NoError(t, err)
 	return producer
@@ -188,7 +193,7 @@ func TestNewConsumer_ComprehensiveValidation(t *testing.T) {
 
 	t.Run("valid_configuration", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -220,7 +225,7 @@ func TestNewConsumer_ComprehensiveValidation(t *testing.T) {
 
 	t.Run("empty_group_id", func(t *testing.T) {
 		_, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"",
 			nil, nil, nil, nil, nil,
 		)
@@ -245,7 +250,7 @@ func TestNewConsumer_ComprehensiveValidation(t *testing.T) {
 
 	t.Run("multiple_brokers", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092", "localhost:9093"},
+			[]string{getContainerBroker(t), "localhost:9093"},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -256,7 +261,7 @@ func TestNewConsumer_ComprehensiveValidation(t *testing.T) {
 
 	t.Run("with_repositories", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, // jobs
 			nil, // uploads
@@ -281,7 +286,7 @@ func TestConsumer_Start_ComprehensiveErrorHandling(t *testing.T) {
 
 	t.Run("context_cancellation", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -298,7 +303,7 @@ func TestConsumer_Start_ComprehensiveErrorHandling(t *testing.T) {
 
 	t.Run("timeout_context", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -315,7 +320,7 @@ func TestConsumer_Start_ComprehensiveErrorHandling(t *testing.T) {
 
 	t.Run("connection_error", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -337,7 +342,7 @@ func TestConsumer_Close_Comprehensive(t *testing.T) {
 
 	t.Run("close_normal", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -349,7 +354,7 @@ func TestConsumer_Close_Comprehensive(t *testing.T) {
 
 	t.Run("close_multiple_times", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -410,7 +415,8 @@ func TestCreateTopicIfNotExists_ComprehensiveErrorHandling(t *testing.T) {
 	})
 
 	t.Run("invalid_partitions", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -421,7 +427,8 @@ func TestCreateTopicIfNotExists_ComprehensiveErrorHandling(t *testing.T) {
 	})
 
 	t.Run("invalid_replication_factor", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -432,7 +439,8 @@ func TestCreateTopicIfNotExists_ComprehensiveErrorHandling(t *testing.T) {
 	})
 
 	t.Run("negative_partitions", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -443,7 +451,8 @@ func TestCreateTopicIfNotExists_ComprehensiveErrorHandling(t *testing.T) {
 	})
 
 	t.Run("negative_replication_factor", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -560,7 +569,7 @@ func TestConsumer_GroupID_Validation_Comprehensive(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			consumer, err := NewConsumer(
-				[]string{"localhost:19092"},
+				[]string{getContainerBroker(t)},
 				tc.groupID,
 				nil, nil, nil, nil, nil,
 			)
@@ -629,7 +638,7 @@ func TestConsumer_ProcessRecord_EdgeCases(t *testing.T) {
 
 	t.Run("consumer_configuration", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -643,7 +652,7 @@ func TestConsumer_ProcessRecord_EdgeCases(t *testing.T) {
 
 	t.Run("consumer_with_all_repositories", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, // jobs
 			nil, // uploads
@@ -689,7 +698,7 @@ func TestTimeoutHandling_Comprehensive(t *testing.T) {
 
 	t.Run("consumer_timeout", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -721,7 +730,7 @@ func TestConcurrency_Comprehensive(t *testing.T) {
 
 	t.Run("multiple_consumers", func(t *testing.T) {
 		consumer1, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"group-1",
 			nil, nil, nil, nil, nil,
 		)
@@ -729,7 +738,7 @@ func TestConcurrency_Comprehensive(t *testing.T) {
 		defer func() { _ = consumer1.Close() }()
 
 		consumer2, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"group-2",
 			nil, nil, nil, nil, nil,
 		)
@@ -749,7 +758,8 @@ func TestProducer_EnqueueEvaluate_AdvancedEdgeCases(t *testing.T) {
 
 	t.Run("empty_strings_in_payload", func(t *testing.T) {
 		// Use unique transactional ID to avoid epoch conflicts
-		producer, err := NewProducerWithTransactionalID([]string{"localhost:19092"}, fmt.Sprintf("test-producer-edge-%d", time.Now().UnixNano()))
+		broker := getContainerBroker(t)
+		producer, err := NewProducerWithTransactionalID([]string{broker}, fmt.Sprintf("test-producer-edge-%d", time.Now().UnixNano()))
 		require.NoError(t, err)
 		defer func() { _ = producer.Close() }()
 
@@ -769,7 +779,8 @@ func TestProducer_EnqueueEvaluate_AdvancedEdgeCases(t *testing.T) {
 
 	t.Run("json_marshal_edge_cases", func(t *testing.T) {
 		// Use unique transactional ID to avoid epoch conflicts
-		producer, err := NewProducerWithTransactionalID([]string{"localhost:19092"}, fmt.Sprintf("test-producer-json-%d", time.Now().UnixNano()))
+		broker := getContainerBroker(t)
+		producer, err := NewProducerWithTransactionalID([]string{broker}, fmt.Sprintf("test-producer-json-%d", time.Now().UnixNano()))
 		require.NoError(t, err)
 		defer func() { _ = producer.Close() }()
 
@@ -808,7 +819,7 @@ func TestConsumer_Start_AdvancedEdgeCases(t *testing.T) {
 
 	t.Run("consumer_with_nil_repositories", func(t *testing.T) {
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			"test-group",
 			nil, nil, nil, nil, nil,
 		)
@@ -830,7 +841,7 @@ func TestConsumer_Start_AdvancedEdgeCases(t *testing.T) {
 		}
 
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			longGroupID,
 			nil, nil, nil, nil, nil,
 		)
@@ -844,7 +855,7 @@ func TestConsumer_Start_AdvancedEdgeCases(t *testing.T) {
 		specialGroupID := "group-with-特殊字符-🚀-and-symbols-!@#$%^&*()"
 
 		consumer, err := NewConsumer(
-			[]string{"localhost:19092"},
+			[]string{getContainerBroker(t)},
 			specialGroupID,
 			nil, nil, nil, nil, nil,
 		)
@@ -860,7 +871,8 @@ func TestCreateTopicIfNotExists_AdvancedEdgeCases(t *testing.T) {
 	t.Parallel()
 
 	t.Run("topic_with_special_characters", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -871,7 +883,8 @@ func TestCreateTopicIfNotExists_AdvancedEdgeCases(t *testing.T) {
 	})
 
 	t.Run("topic_with_very_long_name", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -887,7 +900,8 @@ func TestCreateTopicIfNotExists_AdvancedEdgeCases(t *testing.T) {
 	})
 
 	t.Run("topic_with_maximum_partitions", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -898,7 +912,8 @@ func TestCreateTopicIfNotExists_AdvancedEdgeCases(t *testing.T) {
 	})
 
 	t.Run("topic_with_maximum_replication_factor", func(t *testing.T) {
-		client, err := kgo.NewClient(kgo.SeedBrokers("localhost:19092"))
+		broker := getContainerBroker(t)
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
 		require.NoError(t, err)
 		defer client.Close()
 
@@ -939,8 +954,8 @@ func TestErrorHandling_AdvancedEdgeCases(t *testing.T) {
 			"not-a-valid-address",
 			"localhost:99999",
 			"192.168.1.999:9092",
-			"http://localhost:19092", // Wrong protocol
-			"localhost:abc",          // Invalid port
+			"http://" + getContainerBroker(t), // Wrong protocol
+			"localhost:abc",                   // Invalid port
 		}
 
 		for _, broker := range invalidBrokers {
@@ -970,7 +985,7 @@ func TestConcurrency_AdvancedEdgeCases(t *testing.T) {
 			wg.Add(1)
 			go func(idx int) {
 				defer wg.Done()
-				producers[idx], errors[idx] = NewProducerWithTransactionalID([]string{"localhost:19092"}, fmt.Sprintf("test-producer-%d-%d", idx, time.Now().UnixNano()))
+				producers[idx], errors[idx] = NewProducerWithTransactionalID([]string{getContainerBroker(t)}, fmt.Sprintf("test-producer-%d-%d", idx, time.Now().UnixNano()))
 			}(i)
 		}
 
@@ -997,7 +1012,7 @@ func TestConcurrency_AdvancedEdgeCases(t *testing.T) {
 			go func(idx int) {
 				defer wg.Done()
 				consumers[idx], errors[idx] = NewConsumer(
-					[]string{"localhost:19092"},
+					[]string{getContainerBroker(t)},
 					fmt.Sprintf("group-%d", idx),
 					nil, nil, nil, nil, nil,
 				)
@@ -1023,7 +1038,7 @@ func TestMemoryManagement_AdvancedEdgeCases(t *testing.T) {
 	t.Run("producer_memory_cleanup", func(_ *testing.T) {
 		// Create and close multiple producers to test memory cleanup
 		for i := 0; i < 100; i++ {
-			producer, err := NewProducerWithTransactionalID([]string{"localhost:19092"}, fmt.Sprintf("test-producer-%d-%d", i, time.Now().UnixNano()))
+			producer, err := NewProducerWithTransactionalID([]string{getContainerBroker(t)}, fmt.Sprintf("test-producer-%d-%d", i, time.Now().UnixNano()))
 			if err == nil {
 				_ = producer.Close()
 			}
@@ -1035,7 +1050,7 @@ func TestMemoryManagement_AdvancedEdgeCases(t *testing.T) {
 		// Create and close multiple consumers to test memory cleanup
 		for i := 0; i < 100; i++ {
 			consumer, err := NewConsumer(
-				[]string{"localhost:19092"},
+				[]string{getContainerBroker(t)},
 				fmt.Sprintf("group-%d", i),
 				nil, nil, nil, nil, nil,
 			)

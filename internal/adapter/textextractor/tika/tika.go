@@ -1,4 +1,8 @@
-// Package tika contains a small HTTP client for Apache Tika used for text extraction.
+// Package tika provides Apache Tika integration for text extraction.
+//
+// It extracts text content from various document formats including
+// PDF, Word, and plain text files. The package handles document
+// parsing and provides clean text output for further processing.
 package tika
 
 import (

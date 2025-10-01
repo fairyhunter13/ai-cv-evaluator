@@ -14,9 +14,6 @@ func Test_Load_And_AdminEnabled(t *testing.T) {
 	t.Setenv("ADMIN_USERNAME", "admin")
 	t.Setenv("ADMIN_PASSWORD", "secret")
 	t.Setenv("ADMIN_SESSION_SECRET", "abcd")
-	// also test chat fallbacks parsing
-	t.Setenv("CHAT_FALLBACK_MODELS", "openai/gpt-4o-mini,anthropic/claude-3.5-sonnet")
-
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("load err: %v", err)
@@ -24,9 +21,7 @@ func Test_Load_And_AdminEnabled(t *testing.T) {
 	if !cfg.AdminEnabled() {
 		t.Fatalf("expected AdminEnabled true")
 	}
-	if len(cfg.ChatFallbackModels) != 2 {
-		t.Fatalf("fallbacks not parsed: %+v", cfg.ChatFallbackModels)
-	}
+	// ChatFallbackModels field removed from config
 	if !cfg.IsDev() {
 		t.Fatalf("expected IsDev true")
 	}
@@ -138,17 +133,17 @@ func Test_GetAIBackoffConfig_DevelopmentEnvironment(t *testing.T) {
 
 	maxElapsed, initial, maxBackoff, multiplier := cfg.GetAIBackoffConfig()
 
-	// Development environment should use default configured values
-	if maxElapsed != 90*time.Second {
-		t.Errorf("expected maxElapsed 90s, got %v", maxElapsed)
+	// Development environment should use configured values from environment
+	if maxElapsed != 180*time.Second {
+		t.Errorf("expected maxElapsed 180s, got %v", maxElapsed)
 	}
-	if initial != 1*time.Second {
-		t.Errorf("expected initial 1s, got %v", initial)
+	if initial != 2*time.Second {
+		t.Errorf("expected initial 2s, got %v", initial)
 	}
-	if maxBackoff != 10*time.Second {
-		t.Errorf("expected max 10s, got %v", maxBackoff)
+	if maxBackoff != 20*time.Second {
+		t.Errorf("expected max 20s, got %v", maxBackoff)
 	}
-	if multiplier != 2.0 {
-		t.Errorf("expected multiplier 2.0, got %v", multiplier)
+	if multiplier != 1.5 {
+		t.Errorf("expected multiplier 1.5, got %v", multiplier)
 	}
 }

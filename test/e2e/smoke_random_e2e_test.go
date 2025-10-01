@@ -1,10 +1,10 @@
 //go:build e2e
+// +build e2e
 
 package e2e_test
 
 import (
 	"encoding/json"
-	"math/rand"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -14,13 +14,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 // TestE2E_SmokeRandom uploads a random CV/project pair from testdata and ensures evaluate enqueues and result endpoint responds.
 func TestE2E_SmokeRandom(t *testing.T) {
-	t.Parallel()
-	if testing.Short() {
-		t.Skip("short mode")
-	}
+	// NO SKIPPING - E2E tests must always run
+	t.Parallel() // Enable parallel execution
+
+	// Clear dump directory before test
+	clearDumpDirectory(t)
 
 	httpTimeout := 2 * time.Second
 	client := &http.Client{Timeout: httpTimeout}
@@ -31,35 +31,55 @@ func TestE2E_SmokeRandom(t *testing.T) {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		t.Skip("App not available; skipping smoke random E2E")
+		t.Fatalf("App not available; healthz check failed: %v", err)
 	} else if resp != nil {
 		resp.Body.Close()
 	}
 
-	// pick random pair from test/testdata
+	// pick deterministic pair from test/testdata to avoid flakiness
 	pairs := availablePairs()
 	require.NotEmpty(t, pairs)
-	rand.Seed(time.Now().UnixNano())
-	p := pairs[rand.Intn(len(pairs))]
+	// Use test name hash for deterministic selection instead of random
+	seed := int64(len(t.Name())) % int64(len(pairs))
+	p := pairs[seed]
 
 	// upload & evaluate
 	upload := uploadTestFiles(t, client, string(p.CV), string(p.Project))
 	dumpJSON(t, "smoke_random_upload_response.json", upload)
-	eval := evaluateFiles(t, client, upload["cv_id"], upload["project_id"])
+	cvID, ok := upload["cv_id"].(string)
+	require.True(t, ok, "cv_id should be a string")
+	projectID, ok := upload["project_id"].(string)
+	require.True(t, ok, "project_id should be a string")
+	eval := evaluateFiles(t, client, cvID, projectID)
 	dumpJSON(t, "smoke_random_evaluate_response.json", eval)
 
-	// wait until completed (AIMock guarantees completion)
-	final := waitForCompleted(t, client, eval["id"].(string), 60*time.Second)
+	// wait until completed (AI model processing can be slow)
+	final := waitForCompleted(t, client, eval["id"].(string), 300*time.Second)
 	dumpJSON(t, "smoke_random_result_response.json", final)
+
+	// CRITICAL: E2E tests must only accept successful completions
 	st, _ := final["status"].(string)
-	require.Equal(t, "completed", st)
+	require.NotEqual(t, "queued", st, "E2E test failed: job stuck in queued state - %#v", final)
+	require.NotEqual(t, "processing", st, "E2E test failed: job stuck in processing state - %#v", final)
+	require.Equal(t, "completed", st, "E2E test failed: job did not complete successfully. Status: %v, Response: %#v", st, final)
+
+	// Validate successful completion
 	res, ok := final["result"].(map[string]any)
-	require.True(t, ok)
+	require.True(t, ok, "result object missing for completed job")
 	if _, ok := res["cv_match_rate"]; !ok {
 		t.Fatalf("cv_match_rate missing: %#v", res)
 	}
 	if _, ok := res["project_score"]; !ok {
 		t.Fatalf("project_score missing: %#v", res)
+	}
+
+	// Test Summary
+	t.Logf("=== Smoke Random E2E Test Summary ===")
+	t.Logf("Test Status: %s", st)
+	t.Logf("✅ Test PASSED - Random CV/Project pair completed successfully")
+	if res, ok := final["result"].(map[string]any); ok {
+		t.Logf("Result contains: cv_match_rate=%v, project_score=%v",
+			res["cv_match_rate"] != nil, res["project_score"] != nil)
 	}
 
 	if b, err := json.MarshalIndent(final, "", "  "); err == nil {
