@@ -39,6 +39,27 @@ KAFKA_BROKERS=localhost:19092,localhost:19093,localhost:19094
 KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
 ```
 
+### Retry and DLQ Configuration
+```bash
+# Retry settings
+RETRY_MAX_RETRIES=3                    # Maximum retry attempts
+RETRY_INITIAL_DELAY=2s                # Initial retry delay
+RETRY_MAX_DELAY=30s                    # Maximum retry delay
+RETRY_MULTIPLIER=2.0                   # Exponential backoff multiplier
+RETRY_JITTER=true                      # Enable jitter for backoff
+
+# DLQ settings
+DLQ_ENABLED=true                       # Enable DLQ functionality
+DLQ_MAX_AGE=168h                       # DLQ job retention period (7 days)
+DLQ_CLEANUP_INTERVAL=24h               # DLQ cleanup interval
+```
+
+### Queue Consumer Configuration
+```bash
+# Consumer settings
+CONSUMER_MAX_CONCURRENCY=8            # Maximum concurrent consumers
+```
+
 ## AI Provider Configuration
 
 ### OpenRouter (Chat Completions)
@@ -46,8 +67,17 @@ KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
 # OpenRouter API configuration
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1    # Default
-CHAT_MODEL=                                       # Not used - free models are auto-selected
-CHAT_FALLBACK_MODELS=model1,model2,model3         # Optional fallbacks
+FREE_MODELS_REFRESH=1h                              # How often to refresh free models
+```
+
+### AI Backoff Configuration
+```bash
+# AI request backoff settings
+AI_BACKOFF_MAX_ELAPSED_TIME=180s                    # Maximum backoff time
+AI_BACKOFF_INITIAL_INTERVAL=2s                      # Initial backoff interval
+AI_BACKOFF_MAX_INTERVAL=20s                         # Maximum backoff interval
+AI_BACKOFF_MULTIPLIER=1.5                           # Backoff multiplier
+```
 ```
 
 ### OpenAI (Embeddings)

@@ -568,3 +568,51 @@ func (_c *MockPgxPool_QueryRow_Call) RunAndReturn(run func(ctx context.Context, 
 	_c.Call.Return(run)
 	return _c
 }
+
+// BeginTx provides a mock function for the type MockPgxPool
+func (_mock *MockPgxPool) BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error) {
+	ret := _mock.Called(ctx, txOptions)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BeginTx")
+	}
+
+	var r0 pgx.Tx
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, pgx.TxOptions) (pgx.Tx, error)); ok {
+		r0, r1 = rf(ctx, txOptions)
+	} else {
+		r0 = ret.Get(0).(pgx.Tx)
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+type MockPgxPool_BeginTx_Call struct {
+	*mock.Call
+}
+
+// BeginTx is a helper method to define mock.On call
+//   - ctx context.Context
+//   - txOptions pgx.TxOptions
+func (_e *MockPgxPool_Expecter) BeginTx(ctx interface{}, txOptions interface{}) *MockPgxPool_BeginTx_Call {
+	return &MockPgxPool_BeginTx_Call{Call: _e.mock.On("BeginTx", ctx, txOptions)}
+}
+
+func (_c *MockPgxPool_BeginTx_Call) Run(run func(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)) *MockPgxPool_BeginTx_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(pgx.TxOptions))
+	})
+	return _c
+}
+
+func (_c *MockPgxPool_BeginTx_Call) Return(tx pgx.Tx, err error) *MockPgxPool_BeginTx_Call {
+	_c.Call.Return(tx, err)
+	return _c
+}
+
+func (_c *MockPgxPool_BeginTx_Call) RunAndReturn(run func(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)) *MockPgxPool_BeginTx_Call {
+	_c.Call.Return(run)
+	return _c
+}

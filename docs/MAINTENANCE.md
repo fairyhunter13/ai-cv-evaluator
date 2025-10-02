@@ -1,6 +1,6 @@
 # Documentation Maintenance
 
-This document outlines the maintenance protocols, cleanup procedures, and quality standards for the AI CV Evaluator project documentation.
+This document outlines the maintenance protocols and quality standards for the AI CV Evaluator project documentation.
 
 ## 🎯 Maintenance Overview
 
@@ -9,63 +9,25 @@ The documentation maintenance system ensures:
 - **Consistent structure** and organization
 - **Up-to-date content** that reflects current implementation
 - **Quality standards** for all documentation
-- **Automated cleanup** procedures
 
 ## 📋 Maintenance Protocols
 
-### Daily Maintenance Tasks
+### Content Consolidation Rules
 
-#### Duplicate Content Detection
-- **Task**: Scan for duplicate content across all documentation files
-- **Method**: Semantic analysis and keyword overlap detection
-- **Threshold**: Flag files with >70% content overlap
-- **Action**: Suggest consolidation or removal of redundant content
+#### 1. **Duplicate Content Detection**
+- **Threshold**: >70% content overlap between documents
+- **Action**: Merge into single authoritative document
+- **Result**: Remove duplicate files after consolidation
 
-#### Link Validation
-- **Task**: Verify all internal and external links are working
-- **Method**: Automated link checking
-- **Scope**: All `.md` files in the `docs/` directory
-- **Action**: Report broken links and suggest fixes
+#### 2. **Content Bloat Prevention**
+- **Length Threshold**: Documents exceeding 1000 lines
+- **Density Check**: Low information density content
+- **Action**: Split into focused documents or remove verbose sections
 
-#### Content Freshness Check
-- **Task**: Identify outdated content
-- **Method**: Check modification dates and content relevance
-- **Scope**: All documentation files
-- **Action**: Flag outdated content for review or removal
-
-### Weekly Maintenance Tasks
-
-#### Structure Optimization
-- **Task**: Analyze documentation structure for improvements
-- **Method**: Review file organization and naming conventions
-- **Scope**: Entire `docs/` directory structure
-- **Action**: Suggest structural improvements
-
-#### Content Density Analysis
-- **Task**: Identify bloated or verbose content
-- **Method**: Analyze content density and relevance
-- **Scope**: All documentation files
-- **Action**: Suggest content consolidation or removal
-
-#### Cross-Reference Validation
-- **Task**: Ensure all cross-references are accurate
-- **Method**: Validate internal links and references
-- **Scope**: All documentation files
-- **Action**: Fix broken references and update links
-
-### Monthly Maintenance Tasks
-
-#### Comprehensive Content Audit
-- **Task**: Full review of all documentation
-- **Method**: Systematic review of each document
-- **Scope**: All documentation files
-- **Action**: Update, consolidate, or remove content as needed
-
-#### Quality Metrics Review
-- **Task**: Assess documentation quality metrics
-- **Method**: Measure coverage, accuracy, and maintainability
-- **Scope**: All documentation files
-- **Action**: Implement improvements based on metrics
+#### 3. **Outdated Content Removal**
+- **Age Threshold**: Content older than 6 months without updates
+- **Relevance Check**: Content no longer applicable to current implementation
+- **Action**: Archive or remove outdated content
 
 ## 🧹 Cleanup Procedures
 

@@ -12,9 +12,12 @@ graph TB
     Worker[Worker Pool]
     DB[(PostgreSQL)]
     Queue[(Redpanda Queue)]
+    DLQ[(Dead Letter Queue)]
     Vector[(Qdrant Vector DB)]
     Tika[Apache Tika]
     AI[AI Provider]
+    FreeModels[Free Models Service]
+    Cleanup[Data Cleanup Service]
     
     Client -->|HTTPS| Frontend
     Frontend -->|API Calls| Server
@@ -25,6 +28,9 @@ graph TB
     Worker --> Vector
     Worker --> Tika
     Worker --> AI
+    Worker --> FreeModels
+    Queue --> DLQ
+    Cleanup --> DB
 ```
 
 ## Request Flow
@@ -54,9 +60,13 @@ sequenceDiagram
     W1->>Q: Consume tasks (read committed, transactional)
     W2->>Q: Consume tasks (read committed, transactional)
     W1->>DB: Update status (processing)
-    W1->>AI: Generate evaluation
+    W1->>FreeModels: Get available free models
+    W1->>AI: Generate evaluation (with model switching)
+    W1->>AI: Validate response (refusal detection)
     W1->>DB: Store results
     W1->>DB: Update status (completed)
+    
+    Note over W1,AI: Enhanced AI Processing:<br/>- Free models selection<br/>- Refusal detection<br/>- Response validation<br/>- Model switching<br/>- Circuit breakers
     
     C->>S: GET /v1/result/{id}
     S->>U: Fetch result
@@ -93,10 +103,32 @@ sequenceDiagram
 ### Infrastructure Services
 - **PostgreSQL**: Primary database for job storage and results
 - **Redpanda**: Kafka-compatible queue system for task processing
+- **Dead Letter Queue (DLQ)**: Failed job storage and reprocessing
 - **Qdrant**: Vector database for AI embeddings and similarity search
 - **Apache Tika**: Text extraction from various file formats
 - **Nginx**: Reverse proxy and static file serving
 - **Observability**: Prometheus, Grafana, Jaeger for monitoring
+
+## Enhanced AI Features
+
+### AI Processing Pipeline
+- **Free Models Service**: Cost-effective AI processing using free models
+- **Refusal Detection**: AI-powered detection of model refusals
+- **Response Validation**: Comprehensive response quality validation
+- **Model Switching**: Intelligent model selection with circuit breakers
+- **Enhanced Error Handling**: Automatic retry and fallback mechanisms
+
+### Retry and DLQ System
+- **Automatic Retry**: Exponential backoff retry for failed jobs
+- **Dead Letter Queue**: Storage for permanently failed jobs
+- **Error Classification**: Smart retry decisions based on error types
+- **Reprocessing**: DLQ jobs can be reprocessed if needed
+
+### Data Lifecycle Management
+- **Data Retention**: Configurable data retention policies
+- **Automatic Cleanup**: Scheduled cleanup of expired data
+- **Compliance**: GDPR and data protection compliance
+- **Storage Optimization**: Cost reduction through data lifecycle management
 
 ## Production Architecture
 
