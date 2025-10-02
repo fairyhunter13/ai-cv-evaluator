@@ -31,7 +31,7 @@ func TestE2E_RFC_RealResponses_UploadEvaluateResult(t *testing.T) {
 	httpTimeout := 3 * time.Second
 	client := &http.Client{Timeout: httpTimeout}
 
-	// Ensure app is reachable; skip test if not ready (derive from baseURL)
+	// Ensure app is reachable; fail test if not ready (derive from baseURL)
 	healthz := strings.TrimSuffix(baseURL, "/v1") + "/healthz"
 	if resp, err := client.Get(healthz); err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
 		if resp != nil {

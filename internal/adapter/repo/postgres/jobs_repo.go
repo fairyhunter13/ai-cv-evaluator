@@ -152,6 +152,104 @@ func (r *JobRepo) List(ctx domain.Context, offset, limit int) ([]domain.Job, err
 	return jobs, nil
 }
 
+// ListWithFilters returns a paginated list of jobs with search and status filtering.
+func (r *JobRepo) ListWithFilters(ctx domain.Context, offset, limit int, search, status string) ([]domain.Job, error) {
+	tracer := otel.Tracer("repo.jobs")
+	ctx, span := tracer.Start(ctx, "jobs.ListWithFilters")
+	defer span.End()
+
+	// Build dynamic query based on filters
+	baseQuery := `SELECT id, status, COALESCE(error,''), created_at, updated_at, cv_id, project_id, idempotency_key FROM jobs`
+	whereClause := ""
+	args := []interface{}{}
+	argIndex := 1
+
+	// Add status filter if provided
+	if status != "" {
+		whereClause += " WHERE status = $" + fmt.Sprintf("%d", argIndex)
+		args = append(args, status)
+		argIndex++
+	}
+
+	// Add search filter if provided
+	if search != "" {
+		if whereClause == "" {
+			whereClause = " WHERE "
+		} else {
+			whereClause += " AND "
+		}
+		searchPattern := "%" + search + "%"
+		whereClause += "(id ILIKE $" + fmt.Sprintf("%d", argIndex) + " OR cv_id ILIKE $" + fmt.Sprintf("%d", argIndex+1) + " OR project_id ILIKE $" + fmt.Sprintf("%d", argIndex+2) + ")"
+		args = append(args, searchPattern, searchPattern, searchPattern)
+		argIndex += 3
+	}
+
+	// Add ordering and pagination
+	query := baseQuery + whereClause + " ORDER BY created_at DESC LIMIT $" + fmt.Sprintf("%d", argIndex) + " OFFSET $" + fmt.Sprintf("%d", argIndex+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.Pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("op=job.list_with_filters: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []domain.Job
+	for rows.Next() {
+		var j domain.Job
+		var idem *string
+		if err := rows.Scan(&j.ID, &j.Status, &j.Error, &j.CreatedAt, &j.UpdatedAt, &j.CVID, &j.ProjectID, &idem); err != nil {
+			return nil, fmt.Errorf("op=job.list_with_filters_scan: %w", err)
+		}
+		j.IdemKey = idem
+		jobs = append(jobs, j)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("op=job.list_with_filters_rows: %w", err)
+	}
+	return jobs, nil
+}
+
+// CountWithFilters returns the total count of jobs with search and status filtering.
+func (r *JobRepo) CountWithFilters(ctx domain.Context, search, status string) (int64, error) {
+	tracer := otel.Tracer("repo.jobs")
+	ctx, span := tracer.Start(ctx, "jobs.CountWithFilters")
+	defer span.End()
+
+	// Build dynamic query based on filters
+	baseQuery := `SELECT COUNT(*) FROM jobs`
+	whereClause := ""
+	args := []interface{}{}
+	argIndex := 1
+
+	// Add status filter if provided
+	if status != "" {
+		whereClause += " WHERE status = $" + fmt.Sprintf("%d", argIndex)
+		args = append(args, status)
+		argIndex++
+	}
+
+	// Add search filter if provided
+	if search != "" {
+		if whereClause == "" {
+			whereClause = " WHERE "
+		} else {
+			whereClause += " AND "
+		}
+		searchPattern := "%" + search + "%"
+		whereClause += "(id ILIKE $" + fmt.Sprintf("%d", argIndex) + " OR cv_id ILIKE $" + fmt.Sprintf("%d", argIndex+1) + " OR project_id ILIKE $" + fmt.Sprintf("%d", argIndex+2) + ")"
+		args = append(args, searchPattern, searchPattern, searchPattern)
+	}
+
+	query := baseQuery + whereClause
+	row := r.Pool.QueryRow(ctx, query, args...)
+	var count int64
+	if err := row.Scan(&count); err != nil {
+		return 0, fmt.Errorf("op=job.count_with_filters: %w", err)
+	}
+	return count, nil
+}
+
 // GetAverageProcessingTime returns the average processing time for completed jobs.
 func (r *JobRepo) GetAverageProcessingTime(ctx domain.Context) (float64, error) {
 	tracer := otel.Tracer("repo.jobs")

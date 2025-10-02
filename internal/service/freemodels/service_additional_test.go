@@ -30,7 +30,7 @@ func TestService_GetFreeModels(t *testing.T) {
 			baseURL:    "",
 			refreshDur: 1 * time.Hour,
 			mockSetup: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					_ = json.NewEncoder(w).Encode(map[string]any{
 						"data": []map[string]any{
@@ -67,7 +67,7 @@ func TestService_GetFreeModels(t *testing.T) {
 			baseURL:    "",
 			refreshDur: 1 * time.Hour,
 			mockSetup: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.WriteHeader(http.StatusInternalServerError)
 					_, _ = w.Write([]byte("Internal Server Error"))
 				}))
@@ -81,7 +81,7 @@ func TestService_GetFreeModels(t *testing.T) {
 			baseURL:    "",
 			refreshDur: 1 * time.Hour,
 			mockSetup: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					_ = json.NewEncoder(w).Encode(map[string]any{
 						"data": []map[string]any{},
@@ -133,7 +133,7 @@ func TestService_GetModelIDs(t *testing.T) {
 			baseURL:    "",
 			refreshDur: 1 * time.Hour,
 			mockSetup: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					_ = json.NewEncoder(w).Encode(map[string]any{
 						"data": []map[string]any{
@@ -170,7 +170,7 @@ func TestService_GetModelIDs(t *testing.T) {
 			baseURL:    "",
 			refreshDur: 1 * time.Hour,
 			mockSetup: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.WriteHeader(http.StatusInternalServerError)
 					_, _ = w.Write([]byte("Internal Server Error"))
 				}))
@@ -219,7 +219,7 @@ func TestService_Refresh(t *testing.T) {
 			baseURL:    "",
 			refreshDur: 1 * time.Hour,
 			mockSetup: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					_ = json.NewEncoder(w).Encode(map[string]any{
 						"data": []map[string]any{
@@ -245,7 +245,7 @@ func TestService_Refresh(t *testing.T) {
 			baseURL:    "",
 			refreshDur: 1 * time.Hour,
 			mockSetup: func() *httptest.Server {
-				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.WriteHeader(http.StatusInternalServerError)
 					_, _ = w.Write([]byte("Internal Server Error"))
 				}))
@@ -278,7 +278,7 @@ func TestService_GetFreeModels_CacheBehavior(t *testing.T) {
 	t.Parallel()
 
 	// Test that models are cached and not refetched within refresh duration
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{
@@ -315,7 +315,7 @@ func TestService_GetFreeModels_RefreshAfterDuration(t *testing.T) {
 	t.Parallel()
 
 	callCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{

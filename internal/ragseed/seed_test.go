@@ -48,7 +48,7 @@ data:
     weight: 1.0
 `), 0o600))
 
-	aiClient := domainmocks.NewAIClient(t)
+	aiClient := domainmocks.NewMockAIClient(t)
 	aiClient.On("Embed", mock.Anything, mock.AnythingOfType("[]string")).Return(func(_ context.Context, texts []string) [][]float32 {
 		vecs := make([][]float32, len(texts))
 		for i := range texts {
@@ -73,7 +73,7 @@ func TestSeedFile_ListFallback(t *testing.T) {
 	p := filepath.Join(dir, "seed.yaml")
 	require.NoError(t, os.WriteFile(p, []byte("- one\n- two\n"), 0o600))
 
-	aiClient := domainmocks.NewAIClient(t)
+	aiClient := domainmocks.NewMockAIClient(t)
 	aiClient.On("Embed", mock.Anything, mock.AnythingOfType("[]string")).Return(func(_ context.Context, texts []string) [][]float32 {
 		vecs := make([][]float32, len(texts))
 		for i := range texts {
@@ -91,7 +91,7 @@ func TestSeedFile_ListFallback(t *testing.T) {
 func TestSeedFile_NotFound(t *testing.T) {
 	q := qdrantcli.New("http://127.0.0.1", "")
 
-	aiClient := domainmocks.NewAIClient(t)
+	aiClient := domainmocks.NewMockAIClient(t)
 	// No expectations needed since the file doesn't exist - the function should fail early
 
 	if err := ragseed.SeedFile(context.Background(), q, aiClient, "/does/not/exist.yaml", "c"); err == nil {
@@ -104,7 +104,7 @@ func TestSeedDefault_Additional(t *testing.T) {
 	defer ts.Close()
 	q := qdrantcli.New(ts.URL, "")
 
-	aiClient := domainmocks.NewAIClient(t)
+	aiClient := domainmocks.NewMockAIClient(t)
 	aiClient.On("Embed", mock.Anything, mock.AnythingOfType("[]string")).Return(func(_ context.Context, texts []string) [][]float32 {
 		vecs := make([][]float32, len(texts))
 		for i := range texts {
@@ -124,7 +124,7 @@ func TestSeedDefault_WithError(t *testing.T) {
 	// Use an invalid URL to test error handling
 	q := qdrantcli.New("http://invalid-url", "")
 
-	aiClient := domainmocks.NewAIClient(t)
+	aiClient := domainmocks.NewMockAIClient(t)
 	// Allow Embed to be called but return an error or success
 	aiClient.On("Embed", mock.Anything, mock.AnythingOfType("[]string")).Return(func(_ context.Context, texts []string) [][]float32 {
 		vecs := make([][]float32, len(texts))

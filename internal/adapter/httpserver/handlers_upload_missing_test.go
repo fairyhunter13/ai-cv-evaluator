@@ -18,15 +18,15 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
-type errExtractor struct{}
-
-func (e *errExtractor) ExtractPath(_ domain.Context, _ string, _ string) (string, error) {
-	return "", errors.New("extract fail")
+func createMockTextExtractorError(t *testing.T) *domainmocks.MockTextExtractor {
+	mockExtractor := domainmocks.NewMockTextExtractor(t)
+	mockExtractor.EXPECT().ExtractPath(mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("extract fail")).Maybe()
+	return mockExtractor
 }
 
 // Mock creation functions
-func createMockUploadRepo3(t *testing.T) *domainmocks.UploadRepository {
-	mockRepo := domainmocks.NewUploadRepository(t)
+func createMockUploadRepo3(t *testing.T) *domainmocks.MockUploadRepository {
+	mockRepo := domainmocks.NewMockUploadRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ domain.Context, u domain.Upload) (string, error) {
 		if u.Type == domain.UploadTypeCV {
 			return "cv-1", nil
@@ -41,8 +41,8 @@ func createMockUploadRepo3(t *testing.T) *domainmocks.UploadRepository {
 	return mockRepo
 }
 
-func createMockJobRepo3(t *testing.T) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepo3(t *testing.T) *domainmocks.MockJobRepository {
+	mockRepo := domainmocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).RunAndReturn(func(_ domain.Context, id string) (domain.Job, error) {
@@ -56,8 +56,8 @@ func createMockJobRepo3(t *testing.T) *domainmocks.JobRepository {
 	return mockRepo
 }
 
-func createMockQueue3(t *testing.T) *domainmocks.Queue {
-	mockRepo := domainmocks.NewQueue(t)
+func createMockQueue3(t *testing.T) *domainmocks.MockQueue {
+	mockRepo := domainmocks.NewMockQueue(t)
 	mockRepo.EXPECT().EnqueueEvaluate(mock.Anything, mock.Anything).Return("t-1", nil).Maybe()
 	return mockRepo
 }
@@ -75,7 +75,7 @@ func newSrv(t *testing.T, ext domain.TextExtractor) *httpserver.Server {
 }
 
 func TestUploadHandler_MissingCV(t *testing.T) {
-	srv := newSrv(t, &errExtractor{})
+	srv := newSrv(t, createMockTextExtractorError(t))
 	// Only project part
 	buf := &bytes.Buffer{}
 	w := multipart.NewWriter(buf)
@@ -93,7 +93,7 @@ func TestUploadHandler_MissingCV(t *testing.T) {
 }
 
 func TestUploadHandler_MissingProject(t *testing.T) {
-	srv := newSrv(t, &errExtractor{})
+	srv := newSrv(t, createMockTextExtractorError(t))
 	buf := &bytes.Buffer{}
 	w := multipart.NewWriter(buf)
 	fw, _ := w.CreateFormFile("cv", "cv.txt")
@@ -110,7 +110,7 @@ func TestUploadHandler_MissingProject(t *testing.T) {
 }
 
 func TestUploadHandler_PDF_ExtractorError(t *testing.T) {
-	srv := newSrv(t, &errExtractor{})
+	srv := newSrv(t, createMockTextExtractorError(t))
 	pdf := []byte("%PDF-1.7\n%")
 	body, ctype := func() (*bytes.Buffer, string) {
 		buf := &bytes.Buffer{}

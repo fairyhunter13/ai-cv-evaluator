@@ -16,8 +16,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func createMockJobRepoRes(t *testing.T, job domain.Job) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepoRes(t *testing.T, job domain.Job) *domainmocks.MockJobRepository {
+	mockRepo := domainmocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(job, nil).Maybe()
@@ -29,8 +29,8 @@ func createMockJobRepoRes(t *testing.T, job domain.Job) *domainmocks.JobReposito
 	return mockRepo
 }
 
-func createMockResultRepoRes(t *testing.T, res domain.Result) *domainmocks.ResultRepository {
-	mockRepo := domainmocks.NewResultRepository(t)
+func createMockResultRepoRes(t *testing.T, res domain.Result) *domainmocks.MockResultRepository {
+	mockRepo := domainmocks.NewMockResultRepository(t)
 	mockRepo.EXPECT().Upsert(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().GetByJobID(mock.Anything, mock.Anything).Return(res, nil).Maybe()
 	return mockRepo

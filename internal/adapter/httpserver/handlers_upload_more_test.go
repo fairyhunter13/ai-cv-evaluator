@@ -18,15 +18,15 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
-type okExtractor struct{}
-
-func (n *okExtractor) ExtractPath(_ domain.Context, _ string, _ string) (string, error) {
-	return "text", nil
+func createMockTextExtractor(t *testing.T) *domainmocks.MockTextExtractor {
+	mockExtractor := domainmocks.NewMockTextExtractor(t)
+	mockExtractor.EXPECT().ExtractPath(mock.Anything, mock.Anything, mock.Anything).Return("text", nil).Maybe()
+	return mockExtractor
 }
 
 // Mock creation functions
-func createMockUploadRepo2(t *testing.T) *domainmocks.UploadRepository {
-	mockRepo := domainmocks.NewUploadRepository(t)
+func createMockUploadRepo2(t *testing.T) *domainmocks.MockUploadRepository {
+	mockRepo := domainmocks.NewMockUploadRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ domain.Context, u domain.Upload) (string, error) {
 		if u.Type == domain.UploadTypeCV {
 			return "cv-1", nil
@@ -41,8 +41,8 @@ func createMockUploadRepo2(t *testing.T) *domainmocks.UploadRepository {
 	return mockRepo
 }
 
-func createMockJobRepo2(t *testing.T) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepo2(t *testing.T) *domainmocks.MockJobRepository {
+	mockRepo := domainmocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).RunAndReturn(func(_ domain.Context, id string) (domain.Job, error) {
@@ -56,8 +56,8 @@ func createMockJobRepo2(t *testing.T) *domainmocks.JobRepository {
 	return mockRepo
 }
 
-func createMockQueue2(t *testing.T) *domainmocks.Queue {
-	mockRepo := domainmocks.NewQueue(t)
+func createMockQueue2(t *testing.T) *domainmocks.MockQueue {
+	mockRepo := domainmocks.NewMockQueue(t)
 	mockRepo.EXPECT().EnqueueEvaluate(mock.Anything, mock.Anything).Return("t-1", nil).Maybe()
 	return mockRepo
 }
@@ -90,7 +90,7 @@ func buildMultipartWithNames2(t *testing.T, fields map[string][]byte, names map[
 }
 
 func TestUploadHandler_406_NotAcceptable(t *testing.T) {
-	srv := newSrvWithExt(t, &okExtractor{})
+	srv := newSrvWithExt(t, createMockTextExtractor(t))
 	body, ctype := buildMultipartWithNames2(t, map[string][]byte{"cv": []byte("cv"), "project": []byte("pr")}, map[string]string{"cv": "cv.txt", "project": "prj.txt"})
 	r := httptest.NewRequest(http.MethodPost, "/v1/upload", bytes.NewReader(body.Bytes()))
 	r.Header.Set("Content-Type", ctype)
@@ -103,7 +103,7 @@ func TestUploadHandler_406_NotAcceptable(t *testing.T) {
 }
 
 func TestUploadHandler_InvalidContentType(t *testing.T) {
-	srv := newSrvWithExt(t, &okExtractor{})
+	srv := newSrvWithExt(t, createMockTextExtractor(t))
 	r := httptest.NewRequest(http.MethodPost, "/v1/upload", bytes.NewReader([]byte("not multipart")))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Accept", "application/json")
@@ -115,7 +115,7 @@ func TestUploadHandler_InvalidContentType(t *testing.T) {
 }
 
 func TestUploadHandler_ProjectExtensionUnsupported(t *testing.T) {
-	srv := newSrvWithExt(t, &okExtractor{})
+	srv := newSrvWithExt(t, createMockTextExtractor(t))
 	body, ctype := buildMultipartWithNames2(t, map[string][]byte{"cv": []byte("cv"), "project": []byte("pr")}, map[string]string{"cv": "cv.txt", "project": "prj.exe"})
 	r := httptest.NewRequest(http.MethodPost, "/v1/upload", bytes.NewReader(body.Bytes()))
 	r.Header.Set("Content-Type", ctype)
@@ -128,7 +128,7 @@ func TestUploadHandler_ProjectExtensionUnsupported(t *testing.T) {
 }
 
 func TestUploadHandler_PDF_Extractor_Success(t *testing.T) {
-	srv := newSrvWithExt(t, &okExtractor{})
+	srv := newSrvWithExt(t, createMockTextExtractor(t))
 	// Minimal headers for detection
 	pdf := []byte("%PDF-1.4\n%")
 	body, ctype := buildMultipartWithNames2(t, map[string][]byte{"cv": pdf, "project": pdf}, map[string]string{"cv": "cv.pdf", "project": "prj.pdf"})

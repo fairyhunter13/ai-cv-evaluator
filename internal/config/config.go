@@ -48,7 +48,7 @@ type Config struct {
 	AIBackoffMaxInterval     time.Duration `env:"AI_BACKOFF_MAX_INTERVAL" envDefault:"20s"`
 	AIBackoffMultiplier      float64       `env:"AI_BACKOFF_MULTIPLIER" envDefault:"1.5"`
 	// Queue Consumer Configuration
-	ConsumerMaxConcurrency int `env:"CONSUMER_MAX_CONCURRENCY" envDefault:"3"`
+	ConsumerMaxConcurrency int `env:"CONSUMER_MAX_CONCURRENCY" envDefault:"8"`
 }
 
 // AdminEnabled returns true if admin features should be enabled

@@ -281,3 +281,54 @@ func TestClient_Search(t *testing.T) {
 		})
 	}
 }
+
+func TestClient_Ping(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+		wantErr bool
+	}{
+		{
+			name: "successful ping",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"result": "ok"}))
+			},
+			wantErr: false,
+		},
+		{
+			name: "ping with server error",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			},
+			wantErr: true,
+		},
+		{
+			name: "ping with not found",
+			handler: func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(tt.handler)
+			defer server.Close()
+
+			client := qdrant.New(server.URL, "test-api-key")
+
+			err := client.Ping(context.Background())
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

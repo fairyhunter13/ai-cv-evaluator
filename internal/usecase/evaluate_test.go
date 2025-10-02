@@ -11,15 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
 // Test helpers for creating mocks with minimal expectations
-func setupMocks() (*domainmocks.JobRepository, *domainmocks.Queue, *domainmocks.UploadRepository) {
-	jobRepo := &domainmocks.JobRepository{}
-	queue := &domainmocks.Queue{}
-	uploadRepo := &domainmocks.UploadRepository{}
+func setupMocks() (*mocks.MockJobRepository, *mocks.MockQueue, *mocks.MockUploadRepository) {
+	jobRepo := &mocks.MockJobRepository{}
+	queue := &mocks.MockQueue{}
+	uploadRepo := &mocks.MockUploadRepository{}
 
 	// Only set up expectations for methods that are actually called
 	// The usecase only calls: FindByIdempotencyKey, Create, UpdateStatus on JobRepository

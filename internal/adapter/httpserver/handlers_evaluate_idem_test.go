@@ -17,8 +17,8 @@ import (
 )
 
 // Mock creation functions
-func createMockJobRepoIdem(t *testing.T, found domain.Job) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepoIdem(t *testing.T, found domain.Job) *domainmocks.MockJobRepository {
+	mockRepo := domainmocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("job-new", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(found, nil).Maybe()
@@ -35,14 +35,14 @@ func createMockJobRepoIdem(t *testing.T, found domain.Job) *domainmocks.JobRepos
 	return mockRepo
 }
 
-func createMockQueueIdem(t *testing.T) *domainmocks.Queue {
-	mockRepo := domainmocks.NewQueue(t)
+func createMockQueueIdem(t *testing.T) *domainmocks.MockQueue {
+	mockRepo := domainmocks.NewMockQueue(t)
 	mockRepo.EXPECT().EnqueueEvaluate(mock.Anything, mock.Anything).Return("t-1", nil).Maybe()
 	return mockRepo
 }
 
-func createMockUploadRepoIdem(t *testing.T) *domainmocks.UploadRepository {
-	mockRepo := domainmocks.NewUploadRepository(t)
+func createMockUploadRepoIdem(t *testing.T) *domainmocks.MockUploadRepository {
+	mockRepo := domainmocks.NewMockUploadRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ domain.Context, u domain.Upload) (string, error) {
 		if u.Type == domain.UploadTypeCV {
 			return "cv", nil
