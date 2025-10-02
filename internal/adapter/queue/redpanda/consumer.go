@@ -80,11 +80,21 @@ func NewConsumerWithTopic(brokers []string, groupID string, transactionalID stri
 	}
 	defer tempClient.Close()
 
-	if err := createTopicIfNotExists(ctx, tempClient, topic, 1, 1); err != nil {
-		slog.Warn("failed to create topic, it may already exist",
+	// Create optimized topic for parallel processing
+	partitions := int32(8) // Multiple partitions for parallel processing
+	replicationFactor := int16(1)
+
+	if err := createOptimizedTopicForParallelProcessing(ctx, tempClient, topic, partitions, replicationFactor); err != nil {
+		slog.Warn("failed to create optimized topic, falling back to standard topic creation",
 			slog.String("topic", topic),
 			slog.Any("error", err))
-		// Don't fail if topic creation fails - it might already exist
+		// Fallback to standard topic creation
+		if err := createTopicIfNotExists(ctx, tempClient, topic, 1, 1); err != nil {
+			slog.Warn("failed to create topic, it may already exist",
+				slog.String("topic", topic),
+				slog.Any("error", err))
+			// Don't fail if topic creation fails - it might already exist
+		}
 	}
 
 	// Create transactional session for EOS semantics
@@ -94,14 +104,29 @@ func NewConsumerWithTopic(brokers []string, groupID string, transactionalID stri
 		slog.String("group_id", groupID),
 		slog.String("topic", topic))
 
-	session, err := kgo.NewGroupTransactSession(
+	// Configure consumer options for parallel processing
+	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		kgo.TransactionalID(transactionalID),
 		kgo.FetchIsolationLevel(kgo.ReadCommitted()),
 		kgo.ConsumerGroup(groupID),
 		kgo.ConsumeTopics(topic),
 		kgo.RequireStableFetchOffsets(),
-	)
+
+		// ✅ FIXED: Add connection timeout configurations to prevent context deadline exceeded
+		kgo.DialTimeout(30 * time.Second),            // Connection establishment timeout
+		kgo.RequestTimeoutOverhead(10 * time.Second), // Request timeout buffer
+		kgo.RetryTimeout(60 * time.Second),           // Retry timeout for failed requests
+		kgo.SessionTimeout(30 * time.Second),         // Consumer group session timeout
+
+		// Optimized settings for parallel processing
+		kgo.FetchMaxBytes(1048576),               // 1MB fetch size
+		kgo.FetchMaxWait(100 * time.Millisecond), // 100ms fetch wait
+		kgo.FetchMinBytes(1),                     // Minimum bytes to fetch
+		kgo.FetchMaxPartitionBytes(1048576),      // 1MB per partition
+	}
+
+	session, err := kgo.NewGroupTransactSession(opts...)
 	if err != nil {
 		slog.Error("failed to create redpanda transactional session",
 			slog.Any("error", err),
@@ -238,8 +263,8 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 				slog.String("topic", c.topic),
 				slog.String("group_id", c.groupID))
 
-			// FIXED: Increased timeout for AI processing (was 10s, now 30s)
-			fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			// FIXED: Increased timeout to accommodate connection timeouts (was 30s, now 60s)
+			fetchCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			slog.Info("calling session.PollFetches", slog.String("topic", c.topic))
 			fetches := c.session.PollFetches(fetchCtx)
 			cancel()

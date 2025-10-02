@@ -162,6 +162,78 @@ func (_c *MockJobRepository_CountByStatus_Call) RunAndReturn(run func(ctx domain
 	return _c
 }
 
+// CountWithFilters provides a mock function for the type MockJobRepository
+func (_mock *MockJobRepository) CountWithFilters(ctx domain.Context, search string, status string) (int64, error) {
+	ret := _mock.Called(ctx, search, status)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountWithFilters")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(domain.Context, string, string) (int64, error)); ok {
+		return returnFunc(ctx, search, status)
+	}
+	if returnFunc, ok := ret.Get(0).(func(domain.Context, string, string) int64); ok {
+		r0 = returnFunc(ctx, search, status)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(domain.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, search, status)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockJobRepository_CountWithFilters_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountWithFilters'
+type MockJobRepository_CountWithFilters_Call struct {
+	*mock.Call
+}
+
+// CountWithFilters is a helper method to define mock.On call
+//   - ctx domain.Context
+//   - search string
+//   - status string
+func (_e *MockJobRepository_Expecter) CountWithFilters(ctx interface{}, search interface{}, status interface{}) *MockJobRepository_CountWithFilters_Call {
+	return &MockJobRepository_CountWithFilters_Call{Call: _e.mock.On("CountWithFilters", ctx, search, status)}
+}
+
+func (_c *MockJobRepository_CountWithFilters_Call) Run(run func(ctx domain.Context, search string, status string)) *MockJobRepository_CountWithFilters_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 domain.Context
+		if args[0] != nil {
+			arg0 = args[0].(domain.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockJobRepository_CountWithFilters_Call) Return(n int64, err error) *MockJobRepository_CountWithFilters_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockJobRepository_CountWithFilters_Call) RunAndReturn(run func(ctx domain.Context, search string, status string) (int64, error)) *MockJobRepository_CountWithFilters_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function for the type MockJobRepository
 func (_mock *MockJobRepository) Create(ctx domain.Context, j domain.Job) (string, error) {
 	ret := _mock.Called(ctx, j)
@@ -420,162 +492,6 @@ func (_c *MockJobRepository_GetAverageProcessingTime_Call) RunAndReturn(run func
 	return _c
 }
 
-// ListWithFilters provides a mock function for the type MockJobRepository
-func (_mock *MockJobRepository) ListWithFilters(ctx domain.Context, offset, limit int, search, status string) ([]domain.Job, error) {
-	ret := _mock.Called(ctx, offset, limit, search, status)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListWithFilters")
-	}
-
-	var r0 []domain.Job
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(domain.Context, int, int, string, string) ([]domain.Job, error)); ok {
-		return returnFunc(ctx, offset, limit, search, status)
-	}
-	if returnFunc, ok := ret.Get(0).(func(domain.Context, int, int, string, string) []domain.Job); ok {
-		r0 = returnFunc(ctx, offset, limit, search, status)
-	} else {
-		r0 = ret.Get(0).([]domain.Job)
-	}
-	if returnFunc, ok := ret.Get(1).(func(domain.Context, int, int, string, string) error); ok {
-		r1 = returnFunc(ctx, offset, limit, search, status)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockJobRepository_ListWithFilters_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListWithFilters'
-type MockJobRepository_ListWithFilters_Call struct {
-	*mock.Call
-}
-
-// ListWithFilters is a helper method to define mock.On call
-//   - ctx domain.Context
-//   - offset int
-//   - limit int
-//   - search string
-//   - status string
-func (_e *MockJobRepository_Expecter) ListWithFilters(ctx interface{}, offset interface{}, limit interface{}, search interface{}, status interface{}) *MockJobRepository_ListWithFilters_Call {
-	return &MockJobRepository_ListWithFilters_Call{Call: _e.mock.On("ListWithFilters", ctx, offset, limit, search, status)}
-}
-
-func (_c *MockJobRepository_ListWithFilters_Call) Run(run func(ctx domain.Context, offset, limit int, search, status string)) *MockJobRepository_ListWithFilters_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 domain.Context
-		if args[0] != nil {
-			arg0 = args[0].(domain.Context)
-		}
-		var arg1 int
-		if args[1] != nil {
-			arg1 = args[1].(int)
-		}
-		var arg2 int
-		if args[2] != nil {
-			arg2 = args[2].(int)
-		}
-		var arg3 string
-		if args[3] != nil {
-			arg3 = args[3].(string)
-		}
-		var arg4 string
-		if args[4] != nil {
-			arg4 = args[4].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-			arg4,
-		)
-	})
-	return _c
-}
-
-func (_c *MockJobRepository_ListWithFilters_Call) Return(jobs []domain.Job, err error) *MockJobRepository_ListWithFilters_Call {
-	_c.Call.Return(jobs, err)
-	return _c
-}
-
-func (_c *MockJobRepository_ListWithFilters_Call) RunAndReturn(run func(ctx domain.Context, offset, limit int, search, status string) ([]domain.Job, error)) *MockJobRepository_ListWithFilters_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// CountWithFilters provides a mock function for the type MockJobRepository
-func (_mock *MockJobRepository) CountWithFilters(ctx domain.Context, search, status string) (int64, error) {
-	ret := _mock.Called(ctx, search, status)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CountWithFilters")
-	}
-
-	var r0 int64
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(domain.Context, string, string) (int64, error)); ok {
-		return returnFunc(ctx, search, status)
-	}
-	if returnFunc, ok := ret.Get(0).(func(domain.Context, string, string) int64); ok {
-		r0 = returnFunc(ctx, search, status)
-	} else {
-		r0 = ret.Get(0).(int64)
-	}
-	if returnFunc, ok := ret.Get(1).(func(domain.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, search, status)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockJobRepository_CountWithFilters_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountWithFilters'
-type MockJobRepository_CountWithFilters_Call struct {
-	*mock.Call
-}
-
-// CountWithFilters is a helper method to define mock.On call
-//   - ctx domain.Context
-//   - search string
-//   - status string
-func (_e *MockJobRepository_Expecter) CountWithFilters(ctx interface{}, search interface{}, status interface{}) *MockJobRepository_CountWithFilters_Call {
-	return &MockJobRepository_CountWithFilters_Call{Call: _e.mock.On("CountWithFilters", ctx, search, status)}
-}
-
-func (_c *MockJobRepository_CountWithFilters_Call) Run(run func(ctx domain.Context, search, status string)) *MockJobRepository_CountWithFilters_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 domain.Context
-		if args[0] != nil {
-			arg0 = args[0].(domain.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockJobRepository_CountWithFilters_Call) Return(count int64, err error) *MockJobRepository_CountWithFilters_Call {
-	_c.Call.Return(count, err)
-	return _c
-}
-
-func (_c *MockJobRepository_CountWithFilters_Call) RunAndReturn(run func(ctx domain.Context, search, status string) (int64, error)) *MockJobRepository_CountWithFilters_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // List provides a mock function for the type MockJobRepository
 func (_mock *MockJobRepository) List(ctx domain.Context, offset int, limit int) ([]domain.Job, error) {
 	ret := _mock.Called(ctx, offset, limit)
@@ -646,6 +562,92 @@ func (_c *MockJobRepository_List_Call) Return(jobs []domain.Job, err error) *Moc
 }
 
 func (_c *MockJobRepository_List_Call) RunAndReturn(run func(ctx domain.Context, offset int, limit int) ([]domain.Job, error)) *MockJobRepository_List_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListWithFilters provides a mock function for the type MockJobRepository
+func (_mock *MockJobRepository) ListWithFilters(ctx domain.Context, offset int, limit int, search string, status string) ([]domain.Job, error) {
+	ret := _mock.Called(ctx, offset, limit, search, status)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListWithFilters")
+	}
+
+	var r0 []domain.Job
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(domain.Context, int, int, string, string) ([]domain.Job, error)); ok {
+		return returnFunc(ctx, offset, limit, search, status)
+	}
+	if returnFunc, ok := ret.Get(0).(func(domain.Context, int, int, string, string) []domain.Job); ok {
+		r0 = returnFunc(ctx, offset, limit, search, status)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]domain.Job)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(domain.Context, int, int, string, string) error); ok {
+		r1 = returnFunc(ctx, offset, limit, search, status)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockJobRepository_ListWithFilters_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListWithFilters'
+type MockJobRepository_ListWithFilters_Call struct {
+	*mock.Call
+}
+
+// ListWithFilters is a helper method to define mock.On call
+//   - ctx domain.Context
+//   - offset int
+//   - limit int
+//   - search string
+//   - status string
+func (_e *MockJobRepository_Expecter) ListWithFilters(ctx interface{}, offset interface{}, limit interface{}, search interface{}, status interface{}) *MockJobRepository_ListWithFilters_Call {
+	return &MockJobRepository_ListWithFilters_Call{Call: _e.mock.On("ListWithFilters", ctx, offset, limit, search, status)}
+}
+
+func (_c *MockJobRepository_ListWithFilters_Call) Run(run func(ctx domain.Context, offset int, limit int, search string, status string)) *MockJobRepository_ListWithFilters_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 domain.Context
+		if args[0] != nil {
+			arg0 = args[0].(domain.Context)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 int
+		if args[2] != nil {
+			arg2 = args[2].(int)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockJobRepository_ListWithFilters_Call) Return(jobs []domain.Job, err error) *MockJobRepository_ListWithFilters_Call {
+	_c.Call.Return(jobs, err)
+	return _c
+}
+
+func (_c *MockJobRepository_ListWithFilters_Call) RunAndReturn(run func(ctx domain.Context, offset int, limit int, search string, status string) ([]domain.Job, error)) *MockJobRepository_ListWithFilters_Call {
 	_c.Call.Return(run)
 	return _c
 }

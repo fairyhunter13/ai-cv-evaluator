@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -60,13 +61,22 @@ func NewProducerWithTransactionalID(brokers []string, transactionalID string) (*
 		return nil, fmt.Errorf("redpanda client: %w", err)
 	}
 
-	// Create topic if it doesn't exist
+	// Create optimized topic for parallel processing
 	ctx := context.Background()
-	if err := createTopicIfNotExists(ctx, client, TopicEvaluate, 1, 1); err != nil {
-		slog.Warn("failed to create topic, it may already exist",
+	partitions := int32(8) // Multiple partitions for parallel processing
+	replicationFactor := int16(1)
+
+	if err := createOptimizedTopicForParallelProcessing(ctx, client, TopicEvaluate, partitions, replicationFactor); err != nil {
+		slog.Warn("failed to create optimized topic, falling back to standard topic creation",
 			slog.String("topic", TopicEvaluate),
 			slog.Any("error", err))
-		// Don't fail if topic creation fails - it might already exist
+		// Fallback to standard topic creation
+		if err := createTopicIfNotExists(ctx, client, TopicEvaluate, 1, 1); err != nil {
+			slog.Warn("failed to create topic, it may already exist",
+				slog.String("topic", TopicEvaluate),
+				slog.Any("error", err))
+			// Don't fail if topic creation fails - it might already exist
+		}
 	}
 
 	slog.Info("redpanda producer created successfully")
@@ -74,6 +84,64 @@ func NewProducerWithTransactionalID(brokers []string, transactionalID string) (*
 		client:          client,
 		transactionChan: make(chan struct{}, 1), // Buffered channel for serializing transactions
 	}, nil
+}
+
+// EnqueueDLQ enqueues a job to the Dead Letter Queue
+func (p *Producer) EnqueueDLQ(ctx domain.Context, jobID string, dlqData []byte) error {
+	// Serialize the DLQ message
+	message := map[string]interface{}{
+		"job_id":    jobID,
+		"dlq_data":  dlqData,
+		"timestamp": time.Now().Unix(),
+		"type":      "dlq_job",
+	}
+
+	messageBytes, err := json.Marshal(message)
+	if err != nil {
+		slog.Error("failed to marshal DLQ message", slog.String("job_id", jobID), slog.Any("error", err))
+		return fmt.Errorf("marshal DLQ message: %w", err)
+	}
+
+	// Send to DLQ topic
+	record := &kgo.Record{
+		Key:   []byte(jobID),
+		Value: messageBytes,
+		Topic: "dlq-jobs",
+	}
+
+	// Use transactional producer for exactly-once semantics
+	select {
+	case p.transactionChan <- struct{}{}:
+		defer func() { <-p.transactionChan }()
+	default:
+		return fmt.Errorf("transaction channel is busy")
+	}
+
+	// Begin transaction
+	if err := p.client.BeginTransaction(); err != nil {
+		slog.Error("failed to begin transaction for DLQ", slog.String("job_id", jobID), slog.Any("error", err))
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+
+	// Produce the DLQ message
+	produceResult := p.client.ProduceSync(ctx, record)
+	if err := produceResult.FirstErr(); err != nil {
+		// Abort transaction on error
+		if abortErr := p.client.EndTransaction(ctx, kgo.TryAbort); abortErr != nil {
+			slog.Error("failed to abort transaction after produce error", slog.String("job_id", jobID), slog.Any("error", abortErr))
+		}
+		slog.Error("failed to produce DLQ message", slog.String("job_id", jobID), slog.Any("error", err))
+		return fmt.Errorf("produce DLQ message: %w", err)
+	}
+
+	// Commit transaction
+	if err := p.client.EndTransaction(ctx, kgo.TryCommit); err != nil {
+		slog.Error("failed to commit transaction for DLQ", slog.String("job_id", jobID), slog.Any("error", err))
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	slog.Info("DLQ message produced successfully", slog.String("job_id", jobID))
+	return nil
 }
 
 // EnqueueEvaluate enqueues an evaluation task with exactly-once semantics.

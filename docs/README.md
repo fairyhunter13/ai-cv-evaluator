@@ -26,6 +26,9 @@ docs/
 │   ├── FRONTEND_COMPONENTS.md
 │   ├── TEST_DATA_STRUCTURE.md
 │   ├── E2E_DEBUGGING.md
+│   ├── E2E_PERFORMANCE_ANALYSIS.md
+│   ├── QUEUE_OPTIMIZATION_IMPLEMENTATION.md
+│   ├── CONTEXT_DEADLINE_ROOT_CAUSE_ANALYSIS.md
 │   └── ADMIN_API.md
 ├── implementation/               # Implementation Details
 │   ├── AI_LLM_PIPELINE.md
@@ -37,7 +40,11 @@ docs/
 │   ├── EXACTLY_ONCE_IMPLEMENTATION.md
 │   ├── MIGRATION_SYSTEM.md
 │   ├── FREE_MODELS_IMPLEMENTATION.md
-│   └── RAG_QDRANT_IMPLEMENTATION.md
+│   ├── RAG_QDRANT_IMPLEMENTATION.md
+│   ├── AI_ENHANCED_FEATURES.md
+│   ├── RETRY_DLQ_SYSTEM.md
+│   ├── FREE_MODELS_SYSTEM.md
+│   └── DATA_RETENTION_SYSTEM.md
 ├── migration/                   # Migration Documentation
 │   └── REDPANDA_MIGRATION.md
 ├── ops/                         # Operations
@@ -101,6 +108,9 @@ docs/
 - **[Frontend Components](development/FRONTEND_COMPONENTS.md)** - Detailed Vue.js component documentation
 - **[Test Data Structure](development/TEST_DATA_STRUCTURE.md)** - Test data organization and helper functions
 - **[E2E Debugging](development/E2E_DEBUGGING.md)** - End-to-end testing debugging guide
+- **[E2E Performance Analysis](development/E2E_PERFORMANCE_ANALYSIS.md)** - Performance optimization and analysis
+- **[Queue Optimization](development/QUEUE_OPTIMIZATION_IMPLEMENTATION.md)** - Queue optimization and retry implementation
+- **[Context Deadline Analysis](development/CONTEXT_DEADLINE_ROOT_CAUSE_ANALYSIS.md)** - Root cause analysis for timeout issues
 - **[Admin API](development/ADMIN_API.md)** - Administrative API documentation
 - **[Directory Structure](directory-structure.md)** - Project structure overview
 
@@ -115,6 +125,10 @@ docs/
 - **[Migration System](implementation/MIGRATION_SYSTEM.md)** - Containerized database migration system
 - **[Free Models Implementation](implementation/FREE_MODELS_IMPLEMENTATION.md)** - Free AI models implementation
 - **[RAG & Qdrant Implementation](implementation/RAG_QDRANT_IMPLEMENTATION.md)** - RAG and vector database implementation
+- **[AI Enhanced Features](implementation/AI_ENHANCED_FEATURES.md)** - Advanced AI features: refusal detection, response validation, model switching
+- **[Retry and DLQ System](implementation/RETRY_DLQ_SYSTEM.md)** - Comprehensive retry and Dead Letter Queue implementation
+- **[Free Models System](implementation/FREE_MODELS_SYSTEM.md)** - Cost-effective AI processing with free models
+- **[Data Retention System](implementation/DATA_RETENTION_SYSTEM.md)** - Automatic data lifecycle management and cleanup
 
 ### 🔄 Migration & Operations
 - **[Redpanda Migration](migration/REDPANDA_MIGRATION.md)** - Complete migration guide and status

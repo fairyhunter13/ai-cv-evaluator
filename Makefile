@@ -343,7 +343,10 @@ E2E_START_SERVICES ?= false
 E2E_BASE_URL ?= 
 E2E_TIMEOUT ?= 3m
 E2E_LOG_DIR ?= 
-E2E_PARALLEL ?= 4 
+E2E_PARALLEL ?= 8
+E2E_WORKER_REPLICAS ?= 4
+E2E_AI_TIMEOUT ?= 30s
+E2E_POLL_INTERVAL ?= 100ms 
 
 # Consolidated E2E test target that can be reused
 # Usage: make run-e2e-tests E2E_START_SERVICES=true E2E_BASE_URL=http://localhost:8080/v1
@@ -417,11 +420,12 @@ endef
 define run_e2e_tests
 	$(call log_info,Loading .env file...); \
 	$(call load_env); \
-	$(call log_info,Running E2E tests with parallel=$(E2E_PARALLEL)...); \
+	$(call log_info,Running E2E tests with parallel=$(E2E_PARALLEL) and $(E2E_WORKER_REPLICAS) workers...); \
+	$(call log_info,AI timeout: $(E2E_AI_TIMEOUT), Poll interval: $(E2E_POLL_INTERVAL)); \
 	if [ -n "$(E2E_BASE_URL)" ]; then \
-		E2E_BASE_URL="$(E2E_BASE_URL)" $(GO) test -tags=e2e -v -race -timeout=$(E2E_TIMEOUT) -failfast -count=1 -parallel=$(E2E_PARALLEL) ./test/e2e/...; \
+		E2E_BASE_URL="$(E2E_BASE_URL)" E2E_WORKER_REPLICAS="$(E2E_WORKER_REPLICAS)" E2E_AI_TIMEOUT="$(E2E_AI_TIMEOUT)" E2E_POLL_INTERVAL="$(E2E_POLL_INTERVAL)" $(GO) test -tags=e2e -v -race -timeout=$(E2E_TIMEOUT) -failfast -count=1 -parallel=$(E2E_PARALLEL) ./test/e2e/...; \
 	else \
-		$(GO) test -tags=e2e -v -race -timeout=$(E2E_TIMEOUT) -failfast -count=1 -parallel=$(E2E_PARALLEL) ./test/e2e/...; \
+		E2E_WORKER_REPLICAS="$(E2E_WORKER_REPLICAS)" E2E_AI_TIMEOUT="$(E2E_AI_TIMEOUT)" E2E_POLL_INTERVAL="$(E2E_POLL_INTERVAL)" $(GO) test -tags=e2e -v -race -timeout=$(E2E_TIMEOUT) -failfast -count=1 -parallel=$(E2E_PARALLEL) ./test/e2e/...; \
 	fi
 endef
 
@@ -550,6 +554,42 @@ ci-e2e:
 	APP_PORT=$${PORT:-8080}; \
 	$(MAKE) run-e2e-tests E2E_CLEAR_DUMP=true E2E_START_SERVICES=true E2E_BASE_URL="http://localhost:$$APP_PORT/v1" E2E_LOG_DIR="$$LOG_DIR"
 
+# Optimized E2E Test Target - Enhanced Parallelism
+ci-e2e-optimized:
+	@set -euo pipefail; \
+	LOG_DIR="artifacts/ci-e2e-optimized-logs-$$(date +%Y%m%d%H%M%S)"; \
+	APP_PORT=$${PORT:-8080}; \
+	$(call log_info,Starting optimized E2E tests with enhanced parallelism...); \
+	$(call log_info,Configuration: E2E_PARALLEL=$(E2E_PARALLEL), E2E_WORKER_REPLICAS=$(E2E_WORKER_REPLICAS)); \
+	$(call log_info,AI timeout: $(E2E_AI_TIMEOUT), Poll interval: $(E2E_POLL_INTERVAL)); \
+	$(call log_info,Using optimized Docker Compose configuration...); \
+	$(call log_info,---); \
+	if [ "$(E2E_CLEAR_DUMP)" = "true" ]; then \
+		$(call log_info,Clearing dump directory...); \
+		$(call clear_dump_dir); \
+	fi; \
+	$(call log_info,---); \
+	$(call log_info,Starting optimized services with queue optimization...); \
+	$(call setup_log_collection); \
+	$(DOCKER_COMPOSE) -f docker-compose.e2e-optimized.yml up -d --build; \
+	$(call log_info,Services started with queue optimization, setting up cleanup trap...); \
+	trap 'echo "==> E2E cleanup: Comprehensive cleanup..."; $(call comprehensive_cleanup); echo "==> E2E cleanup completed"' EXIT; \
+	$(call log_info,---); \
+	$(call wait_for_postgres); \
+	$(call log_info,Migrations will run automatically via docker-compose dependencies...); \
+	$(call verify_database_schema); \
+	$(call log_info,---); \
+	$(call wait_for_healthz); \
+	$(call log_info,---); \
+	$(call run_e2e_tests); \
+	$(call log_info,---); \
+	$(call collect_post_test_logs); \
+	$(call log_info,---); \
+	if [ "$(E2E_CLEAR_DUMP)" = "true" ]; then \
+		$(call log_info,E2E responses dumped to $(TEST_DUMP_DIR)/); \
+	fi; \
+	$(call log_info,Optimized E2E test execution completed successfully)
+
 # E2E Test Management Targets
 
 # Comprehensive Docker cleanup (removes containers, volumes, networks)
@@ -562,6 +602,7 @@ docker-cleanup:
 e2e-help:
 	@echo "E2E Test Commands:"
 	@echo "  make ci-e2e                    - Full CI E2E test with automatic cleanup"
+	@echo "  make ci-e2e-optimized          - Optimized E2E test with enhanced parallelism and queue optimization"
 	@echo "  make docker-cleanup            - Comprehensive Docker cleanup (containers, volumes, networks)"
 	@echo "  make run-e2e-tests             - Run E2E tests with custom parameters (includes cleanup)"
 	@echo ""
