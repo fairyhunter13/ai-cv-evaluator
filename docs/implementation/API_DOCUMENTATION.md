@@ -1,8 +1,8 @@
-# API Documentation
+# API Documentation and Standards
 
-This document provides comprehensive API documentation for the AI CV Evaluator system.
+This document provides comprehensive API documentation, contracts, and standards for the AI CV Evaluator system.
 
-## Overview
+## 🎯 API Overview
 
 The API follows RESTful principles and provides endpoints for:
 - **File Upload** - Upload CV and project files
@@ -11,12 +11,81 @@ The API follows RESTful principles and provides endpoints for:
 - **Health Checks** - System health monitoring
 - **Admin** - Administrative operations
 
+## 📋 API Standards
+
+### Core Endpoints
+The service provides three main endpoints for CV evaluation:
+- **POST `/v1/upload`** - Upload CV and project files
+- **POST `/v1/evaluate`** - Start evaluation job
+- **GET `/v1/result/{id}`** - Get evaluation results
+
 ## Base URL
 
 ```
 Production: https://api.ai-cv-evaluator.com/v1
 Development: http://localhost:8080/v1
 ```
+
+## 🔒 Input Security and Validation
+
+### File Upload Security
+- **Allowlist approach**: Only allow `.txt`, `.pdf`, `.docx`
+- **Content sniffing**: Detect MIME type by content, not extension
+- **Size limits**: 10MB per file (configurable)
+- **Content sanitization**: Strip control characters and malicious content
+
+### Input Validation
+```go
+// File type validation
+func validateFileType(filename string, content []byte) error {
+    // Check extension
+    ext := strings.ToLower(filepath.Ext(filename))
+    if !contains(allowedExtensions, ext) {
+        return ErrUnsupportedFileType
+    }
+    
+    // Check MIME type by content
+    mimeType := http.DetectContentType(content)
+    if !contains(allowedMimeTypes, mimeType) {
+        return ErrUnsupportedMimeType
+    }
+    
+    return nil
+}
+```
+
+## 🚨 Error Model
+
+### Unified Error Response
+```json
+{
+  "error": {
+    "code": "string",
+    "message": "string", 
+    "details": {}
+  }
+}
+```
+
+### HTTP Status Code Mapping
+- **400 Bad Request**: `INVALID_ARGUMENT` - Bad or missing inputs
+- **404 Not Found**: `NOT_FOUND` - Missing uploads/jobs/results
+- **409 Conflict**: `CONFLICT` - Idempotency conflict or invalid state
+- **413 Payload Too Large**: `INVALID_ARGUMENT` - File too large
+- **415 Unsupported Media Type**: `INVALID_ARGUMENT` - Unsupported file type
+- **429 Too Many Requests**: `RATE_LIMITED` - Rate limit exceeded
+- **503 Service Unavailable**: `UPSTREAM_TIMEOUT`, `UPSTREAM_RATE_LIMIT`, `SCHEMA_INVALID`
+- **500 Internal Server Error**: `INTERNAL` - Unexpected condition
+
+### Error Codes
+- `INVALID_ARGUMENT` - Bad or missing inputs, invariant violations
+- `NOT_FOUND` - Missing uploads/jobs/results
+- `CONFLICT` - Idempotency conflict or invalid state transition
+- `RATE_LIMITED` - Local or upstream rate limiting
+- `UPSTREAM_TIMEOUT` - LLM/embeddings/Vector DB timeout
+- `UPSTREAM_RATE_LIMIT` - Upstream 429 response
+- `SCHEMA_INVALID` - LLM JSON invalid against schema
+- `INTERNAL` - Unexpected condition
 
 ## Authentication
 

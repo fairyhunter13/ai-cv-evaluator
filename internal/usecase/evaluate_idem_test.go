@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
 func TestEvaluate_Idempotency_ReturnsExistingJob(t *testing.T) {
-	jobRepo := domainmocks.NewJobRepository(t)
-	queue := domainmocks.NewQueue(t)
-	uploadRepo := domainmocks.NewUploadRepository(t)
+	jobRepo := mocks.NewMockJobRepository(t)
+	queue := mocks.NewMockQueue(t)
+	uploadRepo := mocks.NewMockUploadRepository(t)
 
 	// Set up mock expectations - job should be found by idempotency key
 	jobRepo.On("FindByIdempotencyKey", mock.Anything, "idem-1").Return(domain.Job{ID: "existing"}, nil)

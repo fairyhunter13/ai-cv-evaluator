@@ -49,6 +49,21 @@ func (w *FreeModelWrapper) ChatJSON(ctx context.Context, systemPrompt, userPromp
 	return result, nil
 }
 
+// ChatJSONWithRetry implements domain.AIClient using free models with retry logic and model fallback.
+func (w *FreeModelWrapper) ChatJSONWithRetry(ctx context.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	// Use the enhanced retry method with model fallback
+	result, err := w.client.ChatJSONWithRetry(ctx, systemPrompt, userPrompt, maxTokens)
+	if err != nil {
+		slog.Warn("free model request with retry failed", slog.Any("error", err))
+		return "", err
+	}
+
+	slog.Info("successfully used free model with retry",
+		slog.Int("result_length", len(result)))
+
+	return result, nil
+}
+
 // Embed delegates to the underlying client (embeddings are typically free).
 func (w *FreeModelWrapper) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	return w.client.Embed(ctx, texts)

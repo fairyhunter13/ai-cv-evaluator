@@ -15,7 +15,7 @@ The system requires LLM services for CV evaluation and project scoring. Key requ
 
 ## Decision
 
-We will use **OpenRouter** as our primary AI provider for chat/completions (default model: `openrouter/auto` unless overridden), with **OpenAI** as the embeddings provider. End-to-end tests use live providers only; no mock/stub modes.
+We will use **OpenRouter** as our primary AI provider for chat/completions (free models are auto-selected), with **OpenAI** as the embeddings provider. End-to-end tests use live providers only; no mock/stub modes.
 
 ## Consequences
 
@@ -63,7 +63,7 @@ We will use **OpenRouter** as our primary AI provider for chat/completions (defa
 
 ## Implementation Strategy
 
-1. **Primary (Chat)**: OpenRouter with default `openrouter/auto`; allow overriding `CHAT_MODEL` when needed.
+1. **Primary (Chat)**: OpenRouter with free models auto-selection; no specific model defaults.
 2. **Embeddings**: OpenAI `text-embedding-3-small` by default (configurable via `EMBEDDINGS_MODEL`).
 3. **Testing**: E2E tests run against live providers; unit tests may mock interfaces locally.
 4. **Monitoring**: Track costs, latency, and error rates per provider.

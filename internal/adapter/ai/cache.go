@@ -66,6 +66,10 @@ func (c *embedCacheClient) ChatJSON(ctx domain.Context, systemPrompt, userPrompt
 	return c.base.ChatJSON(ctx, systemPrompt, userPrompt, maxTokens)
 }
 
+func (c *embedCacheClient) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	return c.base.ChatJSONWithRetry(ctx, systemPrompt, userPrompt, maxTokens)
+}
+
 func (c *embedCacheClient) CleanCoTResponse(ctx domain.Context, response string) (string, error) {
 	return c.base.CleanCoTResponse(ctx, response)
 }

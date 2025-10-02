@@ -326,7 +326,7 @@ verify-cv:
 	govulncheck ./...
 
  test:
-	@pkgs=$$($(GO) list ./... | grep -v "/cmd/" | grep -v "/mocks" | grep -v "/test/e2e" | grep -v "/internal/adapter/queue/shared"); \
+	@pkgs=$$($(GO) list ./... | grep -v "/cmd/" | grep -v "/mocks" | grep -v "/test/e2e"); \
 	$(GO) test -v -race -timeout=300s -failfast -parallel=4 -count=1 -coverprofile=coverage/coverage.unit.out $$pkgs
 
  test-e2e:

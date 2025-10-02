@@ -31,12 +31,7 @@ const (
 // Upload represents stored text and metadata for CV or Project
 // Invariants: Type in {cv, project}; Size <= Max; Text sanitized and non-empty
 //
-//go:generate mockery --name=UploadRepository --with-expecter --filename=upload_repository_mock.go --dir=mocks
-//go:generate mockery --name=JobRepository --with-expecter --filename=job_repository_mock.go --dir=mocks
-//go:generate mockery --name=ResultRepository --with-expecter --filename=result_repository_mock.go --dir=mocks
-//go:generate mockery --name=Queue --with-expecter --filename=queue_mock.go --dir=mocks
-//go:generate mockery --name=AIClient --with-expecter --filename=aiclient_mock.go --dir=mocks
-//go:generate mockery --name=TextExtractor --with-expecter --filename=text_extractor_mock.go --dir=mocks
+//go:generate mockery --config=.mockery.yml
 type Upload struct {
 	// ID is the unique identifier for the upload.
 	ID string
@@ -138,6 +133,10 @@ type JobRepository interface {
 	CountByStatus(ctx Context, status JobStatus) (int64, error)
 	// List returns a paginated list of jobs.
 	List(ctx Context, offset, limit int) ([]Job, error)
+	// ListWithFilters returns a paginated list of jobs with search and status filtering.
+	ListWithFilters(ctx Context, offset, limit int, search, status string) ([]Job, error)
+	// CountWithFilters returns the total count of jobs with search and status filtering.
+	CountWithFilters(ctx Context, search, status string) (int64, error)
 	// GetAverageProcessingTime returns the average processing time for completed jobs.
 	GetAverageProcessingTime(ctx Context) (float64, error)
 }
@@ -166,6 +165,8 @@ type AIClient interface {
 	Embed(ctx Context, texts []string) ([][]float32, error)
 	// ChatJSON returns a JSON strictly matching provided schema instruction; deterministic in mock mode
 	ChatJSON(ctx Context, systemPrompt, userPrompt string, maxTokens int) (string, error)
+	// ChatJSONWithRetry returns a JSON with retry logic and model fallback for better reliability
+	ChatJSONWithRetry(ctx Context, systemPrompt, userPrompt string, maxTokens int) (string, error)
 	// CleanCoTResponse cleans chain-of-thought leakage from AI responses
 	CleanCoTResponse(ctx Context, response string) (string, error)
 }

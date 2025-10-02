@@ -82,6 +82,7 @@ services:
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - CONSUMER_MAX_CONCURRENCY=8
     restart: unless-stopped
 
   db:

@@ -23,7 +23,10 @@ func (sdAI) Embed(_ domain.Context, texts []string) ([][]float32, error) {
 	return vecs, nil
 }
 func (sdAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, error) { return "{}", nil }
-func (sdAI) CleanCoTResponse(_ domain.Context, response string) (string, error)   { return response, nil }
+func (sdAI) ChatJSONWithRetry(_ domain.Context, _ string, _ string, _ int) (string, error) {
+	return "{}", nil
+}
+func (sdAI) CleanCoTResponse(_ domain.Context, response string) (string, error) { return response, nil }
 
 func TestSeedDefault_Smoke(t *testing.T) {
 	// Ensure relative files exist for SeedDefault

@@ -26,6 +26,9 @@ func (s errAI) Embed(_ domain.Context, texts []string) ([][]float32, error) {
 func (s errAI) ChatJSON(_ domain.Context, _ string, _ string, _ int) (string, error) {
 	return "{}", nil
 }
+func (s errAI) ChatJSONWithRetry(_ domain.Context, _ string, _ string, _ int) (string, error) {
+	return "{}", nil
+}
 func (s errAI) CleanCoTResponse(_ domain.Context, response string) (string, error) {
 	return response, nil
 }

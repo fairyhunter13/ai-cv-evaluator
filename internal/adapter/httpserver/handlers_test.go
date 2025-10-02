@@ -20,8 +20,8 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
-func createMockUploadRepo(t *testing.T) *domainmocks.UploadRepository {
-	mockRepo := domainmocks.NewUploadRepository(t)
+func createMockUploadRepo(t *testing.T) *domainmocks.MockUploadRepository {
+	mockRepo := domainmocks.NewMockUploadRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ domain.Context, u domain.Upload) (string, error) {
 		if u.Type == domain.UploadTypeCV {
 			return "cv-" + strings.TrimSpace(u.Filename), nil
@@ -36,8 +36,8 @@ func createMockUploadRepo(t *testing.T) *domainmocks.UploadRepository {
 	return mockRepo
 }
 
-func createMockJobRepo(t *testing.T) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepo(t *testing.T) *domainmocks.MockJobRepository {
+	mockRepo := domainmocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).RunAndReturn(func(_ domain.Context, id string) (domain.Job, error) {
@@ -51,8 +51,8 @@ func createMockJobRepo(t *testing.T) *domainmocks.JobRepository {
 	return mockRepo
 }
 
-func createMockQueue(t *testing.T) *domainmocks.Queue {
-	mockRepo := domainmocks.NewQueue(t)
+func createMockQueue(t *testing.T) *domainmocks.MockQueue {
+	mockRepo := domainmocks.NewMockQueue(t)
 	mockRepo.EXPECT().EnqueueEvaluate(mock.Anything, mock.Anything).Return("t-1", nil).Maybe()
 	return mockRepo
 }

@@ -15,7 +15,6 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/queue/shared"
 	qdrantcli "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/vector/qdrant"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 	"go.opentelemetry.io/otel"
@@ -195,14 +194,21 @@ func (c *Consumer) scaleWorkers(ctx context.Context) {
 	queueLen := len(c.jobQueue)
 	activeWorkers := c.getActiveWorkers()
 
-	// Scale up if queue has jobs and we haven't reached max workers
+	// FIXED: Only scale up if we have capacity and jobs to process
+	// Ensure we never exceed max workers
 	if queueLen > 0 && activeWorkers < c.maxWorkers {
 		workersToAdd := minInt(queueLen, c.maxWorkers-activeWorkers)
 		if workersToAdd > 0 {
+			// FIXED: Track workers properly and ensure we don't exceed max
 			for i := 0; i < workersToAdd; i++ {
-				go c.worker(ctx, activeWorkers+i)
+				// Check again before creating each worker to prevent race conditions
+				if c.getActiveWorkers() < c.maxWorkers {
+					// Increment active workers before starting the worker
+					c.incrementActiveWorkers()
+					go c.worker(ctx, c.getActiveWorkers())
+				}
 			}
-			slog.Info("scaled up workers", slog.Int("added", workersToAdd), slog.Int("queue_length", queueLen), slog.Int("total_active", activeWorkers+workersToAdd))
+			slog.Info("scaled up workers", slog.Int("added", workersToAdd), slog.Int("queue_length", queueLen), slog.Int("total_active", c.getActiveWorkers()))
 		}
 	}
 
@@ -232,8 +238,8 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 				slog.String("topic", c.topic),
 				slog.String("group_id", c.groupID))
 
-			// Add timeout to prevent hanging on connection issues
-			fetchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			// FIXED: Increased timeout for AI processing (was 10s, now 30s)
+			fetchCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			slog.Info("calling session.PollFetches", slog.String("topic", c.topic))
 			fetches := c.session.PollFetches(fetchCtx)
 			cancel()
@@ -264,9 +270,23 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 						return
 					}
 				}
-				// Continue polling on timeout or temporary errors
-				slog.Info("continuing polling after errors", slog.Duration("sleep_duration", 2*time.Second))
-				time.Sleep(2 * time.Second)
+				// FIXED: Better error recovery with exponential backoff for context deadline exceeded
+				backoffDuration := 2 * time.Second
+				for _, err := range errs {
+					if err.Err != nil && err.Err.Error() == "context deadline exceeded" {
+						// Exponential backoff for context deadline exceeded errors
+						backoffDuration = time.Duration(pollCount) * 2 * time.Second
+						if backoffDuration > 30*time.Second {
+							backoffDuration = 30 * time.Second
+						}
+						slog.Warn("context deadline exceeded, using exponential backoff",
+							slog.Duration("backoff_duration", backoffDuration),
+							slog.Int("poll_count", pollCount))
+						break
+					}
+				}
+				slog.Info("continuing polling after errors", slog.Duration("sleep_duration", backoffDuration))
+				time.Sleep(backoffDuration)
 				continue
 			}
 
@@ -337,9 +357,8 @@ func (c *Consumer) worker(ctx context.Context, workerID int) {
 				slog.String("topic", record.Topic),
 				slog.Int("partition", int(record.Partition)))
 
-			// Increment active workers when processing starts
-			c.incrementActiveWorkers()
-
+			// FIXED: Don't increment/decrement active workers here
+			// The worker is already active, we just process the job
 			slog.Info("worker processing job",
 				slog.Int("worker_id", workerID),
 				slog.Int64("offset", record.Offset),
@@ -360,9 +379,6 @@ func (c *Consumer) worker(ctx context.Context, workerID int) {
 					slog.String("topic", record.Topic),
 					slog.Int("partition", int(record.Partition)))
 			}
-
-			// Decrement active workers when processing completes
-			c.decrementActiveWorkers()
 		}
 	}
 }
@@ -378,12 +394,6 @@ func (c *Consumer) incrementActiveWorkers() {
 	c.workerMu.Lock()
 	defer c.workerMu.Unlock()
 	c.activeWorkers++
-}
-
-func (c *Consumer) decrementActiveWorkers() {
-	c.workerMu.Lock()
-	defer c.workerMu.Unlock()
-	c.activeWorkers--
 }
 
 // Helper function for min
@@ -433,9 +443,9 @@ func (c *Consumer) processRecord(ctx context.Context, record *kgo.Record) error 
 		slog.String("cv_id", payload.CVID),
 		slog.String("project_id", payload.ProjectID))
 
-	// Call the shared evaluation handler (defaults: two-pass + chaining enabled)
-	slog.Info("calling shared.HandleEvaluate", slog.String("job_id", payload.JobID))
-	err := shared.HandleEvaluate(ctx, c.jobs, c.uploads, c.results, c.ai, c.q, payload)
+	// Call the local evaluation handler (defaults: two-pass + chaining enabled)
+	slog.Info("calling HandleEvaluate", slog.String("job_id", payload.JobID))
+	err := HandleEvaluate(ctx, c.jobs, c.uploads, c.results, c.ai, c.q, payload)
 	if err != nil {
 		slog.Error("evaluate task failed",
 			slog.String("job_id", payload.JobID),

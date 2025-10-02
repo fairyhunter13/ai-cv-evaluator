@@ -11,13 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
 func TestUpload_Ingest_Success(t *testing.T) {
 	t.Parallel()
-	repo := domainmocks.NewUploadRepository(t)
+	repo := mocks.NewMockUploadRepository(t)
 	svc := usecase.NewUploadService(repo)
 
 	// Set up expectations for two Create calls
@@ -36,7 +36,7 @@ func TestUpload_Ingest_Success(t *testing.T) {
 
 func TestUpload_Ingest_EmptyRejected(t *testing.T) {
 	t.Parallel()
-	repo := domainmocks.NewUploadRepository(t)
+	repo := mocks.NewMockUploadRepository(t)
 	svc := usecase.NewUploadService(repo)
 	_, _, err := svc.Ingest(context.Background(), "", "hello pr", "cv.txt", "pr.txt")
 	require.Error(t, err)
@@ -44,7 +44,7 @@ func TestUpload_Ingest_EmptyRejected(t *testing.T) {
 
 func TestUpload_Ingest_EmptyProjectRejected(t *testing.T) {
 	t.Parallel()
-	repo := domainmocks.NewUploadRepository(t)
+	repo := mocks.NewMockUploadRepository(t)
 	svc := usecase.NewUploadService(repo)
 	_, _, err := svc.Ingest(context.Background(), "hello cv", "", "cv.txt", "pr.txt")
 	require.Error(t, err)
@@ -52,7 +52,7 @@ func TestUpload_Ingest_EmptyProjectRejected(t *testing.T) {
 
 func TestUpload_Ingest_BothEmptyRejected(t *testing.T) {
 	t.Parallel()
-	repo := domainmocks.NewUploadRepository(t)
+	repo := mocks.NewMockUploadRepository(t)
 	svc := usecase.NewUploadService(repo)
 	_, _, err := svc.Ingest(context.Background(), "", "", "cv.txt", "pr.txt")
 	require.Error(t, err)
@@ -60,7 +60,7 @@ func TestUpload_Ingest_BothEmptyRejected(t *testing.T) {
 
 func TestUpload_Ingest_RepositoryError(t *testing.T) {
 	t.Parallel()
-	repo := domainmocks.NewUploadRepository(t)
+	repo := mocks.NewMockUploadRepository(t)
 	svc := usecase.NewUploadService(repo)
 
 	// Set up expectation for first Create call to fail
@@ -74,7 +74,7 @@ func TestUpload_Ingest_RepositoryError(t *testing.T) {
 
 func TestUpload_Ingest_WithDifferentFileTypes(t *testing.T) {
 	t.Parallel()
-	repo := domainmocks.NewUploadRepository(t)
+	repo := mocks.NewMockUploadRepository(t)
 	svc := usecase.NewUploadService(repo)
 
 	// Set up expectations for two Create calls

@@ -115,7 +115,7 @@ func main() {
 
 	// Usecases
 	uploadSvc := usecase.NewUploadService(upRepo)
-	evalSvc := usecase.NewEvaluateService(jobRepo, qClient, upRepo)
+	evalSvc := usecase.NewEvaluateServiceWithHealthChecks(jobRepo, qClient, upRepo, aicl, qcli)
 	resultSvc := usecase.NewResultService(jobRepo, resRepo)
 
 	// Bootstrap Qdrant collections (idempotent) and optional seeding

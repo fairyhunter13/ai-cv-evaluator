@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	tc "github.com/testcontainers/testcontainers-go"
 	"github.com/twmb/franz-go/pkg/kgo"
 
@@ -34,15 +35,16 @@ func generateUniqueGroupID(prefix string) string {
 }
 
 // setupMocksForSuccessScenario sets up mockery mocks for success scenario
-func setupMocksForSuccessScenario(t *testing.T) (*mocks.AIClient, *mocks.UploadRepository, *mocks.JobRepository, *mocks.ResultRepository, chan struct{}) {
-	aiMock := mocks.NewAIClient(t)
-	uploadMock := mocks.NewUploadRepository(t)
-	jobMock := mocks.NewJobRepository(t)
-	resultMock := mocks.NewResultRepository(t)
+func setupMocksForSuccessScenario(t *testing.T) (*mocks.MockAIClient, *mocks.MockUploadRepository, *mocks.MockJobRepository, *mocks.MockResultRepository, chan struct{}) {
+	aiMock := mocks.NewMockAIClient(t)
+	uploadMock := mocks.NewMockUploadRepository(t)
+	jobMock := mocks.NewMockJobRepository(t)
+	resultMock := mocks.NewMockResultRepository(t)
 
 	// Setup AI mock for success
 	aiMock.EXPECT().Embed(mock.Anything, mock.Anything).Return([][]float32{{0.1, 0.2, 0.3}}, nil).Maybe()
 	aiMock.EXPECT().ChatJSON(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(`{"cv_match_rate":0.7,"cv_feedback":"ok","project_score":8.2,"project_feedback":"ok","overall_summary":"ok"}`, nil).Maybe()
+	aiMock.EXPECT().ChatJSONWithRetry(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(`{"cv_match_rate":0.7,"cv_feedback":"ok","project_score":8.2,"project_feedback":"ok","overall_summary":"ok"}`, nil).Maybe()
 
 	// Setup upload mock - make it flexible for any CV/project ID
 	uploadMock.EXPECT().Get(mock.Anything, mock.AnythingOfType("string")).Return(domain.Upload{ID: "test-cv", Type: domain.UploadTypeCV, Text: "cv text"}, nil).Maybe()
@@ -68,15 +70,16 @@ func setupMocksForSuccessScenario(t *testing.T) (*mocks.AIClient, *mocks.UploadR
 }
 
 // setupMocksForFailureScenario sets up mockery mocks for failure scenario
-func setupMocksForFailureScenario(t *testing.T) (*mocks.AIClient, *mocks.UploadRepository, *mocks.JobRepository, *mocks.ResultRepository) {
-	aiMock := mocks.NewAIClient(t)
-	uploadMock := mocks.NewUploadRepository(t)
-	jobMock := mocks.NewJobRepository(t)
-	resultMock := mocks.NewResultRepository(t)
+func setupMocksForFailureScenario(t *testing.T) (*mocks.MockAIClient, *mocks.MockUploadRepository, *mocks.MockJobRepository, *mocks.MockResultRepository) {
+	aiMock := mocks.NewMockAIClient(t)
+	uploadMock := mocks.NewMockUploadRepository(t)
+	jobMock := mocks.NewMockJobRepository(t)
+	resultMock := mocks.NewMockResultRepository(t)
 
 	// Setup AI mock for failure
 	aiMock.EXPECT().Embed(mock.Anything, mock.Anything).Return([][]float32{{0.1, 0.2, 0.3}}, nil).Maybe()
 	aiMock.EXPECT().ChatJSON(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("", fmt.Errorf("ai failure")).Maybe()
+	aiMock.EXPECT().ChatJSONWithRetry(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("", fmt.Errorf("ai failure")).Maybe()
 
 	// Setup upload mock - make it flexible for any CV/project ID
 	uploadMock.EXPECT().Get(mock.Anything, mock.AnythingOfType("string")).Return(domain.Upload{ID: "test-cv", Type: domain.UploadTypeCV, Text: "cv text"}, nil).Maybe()
@@ -430,7 +433,7 @@ func TestProducerAndConsumer_ComprehensiveIntegration(t *testing.T) {
 
 // TestProducer_EnqueueEvaluate_WithRealRedpanda tests producer with real Redpanda connection
 func TestProducer_EnqueueEvaluate_WithRealRedpanda(t *testing.T) {
-	t.Parallel() // Enable parallel execution
+	t.Parallel()
 	_, broker, _, _, topicName := startRedpandaWithConfig(t, "producer-enqueue")
 
 	// Create the topic first
@@ -474,7 +477,7 @@ func TestProducer_EnqueueEvaluate_WithRealRedpanda(t *testing.T) {
 
 // TestConsumer_Start_WithRealRedpanda tests consumer with real Redpanda connection
 func TestConsumer_Start_WithRealRedpanda(t *testing.T) {
-	t.Parallel() // Enable parallel execution
+	t.Parallel()
 	_, broker, _, groupID, topicName := startRedpandaWithConfig(t, "consumer-start")
 
 	// Setup mocks
@@ -540,7 +543,7 @@ func TestConsumer_Start_WithRealRedpanda(t *testing.T) {
 
 // TestCreateTopicIfNotExists_WithRealRedpanda tests topic creation with real Redpanda
 func TestCreateTopicIfNotExists_WithRealRedpanda(t *testing.T) {
-	t.Parallel() // Enable parallel execution
+	t.Parallel()
 	_, broker, _, _, _ := startRedpandaWithConfig(t, "test")
 
 	cli, err := kgo.NewClient(kgo.SeedBrokers(broker))
@@ -568,10 +571,10 @@ func TestCreateTopicIfNotExists_WithRealRedpanda(t *testing.T) {
 
 // TestProducer_TransactionHandling_WithRealRedpanda tests transaction handling with real Redpanda
 func TestProducer_TransactionHandling_WithRealRedpanda(t *testing.T) {
-	t.Parallel() // Enable parallel execution
+	t.Parallel()
 	_, broker, _, _, _ := startRedpandaWithConfig(t, "test")
 
-	producer, err := NewProducer([]string{broker})
+	producer, err := NewProducerWithTransactionalID([]string{broker}, generateUniqueTransactionalID("producer-transaction"))
 	if err != nil {
 		t.Fatalf("NewProducer error: %v", err)
 	}
@@ -787,7 +790,7 @@ func TestConsumer_Close_WithRealRedpanda(t *testing.T) {
 }
 
 func TestCreateTopicIfNotExists_Idempotent(t *testing.T) {
-	t.Parallel() // Enable parallel execution
+	t.Parallel()
 
 	_, broker, _, _, _ := startRedpandaWithConfig(t, "test")
 	// No cleanup needed - using shared container
@@ -815,7 +818,7 @@ func TestCreateTopicIfNotExists_Idempotent(t *testing.T) {
 
 // TestProducer_JSONMarshalError_WithRealRedpanda tests JSON marshal error handling
 func TestProducer_JSONMarshalError_WithRealRedpanda(t *testing.T) {
-	t.Parallel() // Enable parallel execution
+	t.Parallel()
 	_, broker, _, _, _ := startRedpandaWithConfig(t, "test")
 
 	producer, err := NewProducerWithTransactionalID([]string{broker}, generateUniqueTransactionalID("producer-json"))
@@ -1572,7 +1575,7 @@ func TestProducer_ContextCancellation_WithRealRedpanda(t *testing.T) {
 
 // TestProducerAndConsumer_IntegrationWithUniqueTopics tests producer and consumer integration with unique topics
 func TestProducerAndConsumer_IntegrationWithUniqueTopics(t *testing.T) {
-	t.Parallel() // Enable parallel execution
+	t.Parallel()
 	_, broker, _, groupID, topicName := startRedpandaWithConfig(t, "integration-unique")
 
 	// Setup mocks
@@ -1670,13 +1673,81 @@ func TestConsumer_ContextCancellation_WithRealRedpanda(t *testing.T) {
 
 // TestMain handles setup and cleanup for all integration tests
 func TestMain(m *testing.M) {
-	// Run tests
+	// Setup: Initialize container pool but don't create container yet
+	// This allows tests to create containers on-demand with proper isolation
+	pool := GetContainerPool()
+
+	// Run tests with proper parallel execution support
 	code := m.Run()
 
-	// Cleanup container pool
-	pool := GetContainerPool()
+	// Cleanup: Only cleanup if container was actually created
+	// This prevents premature cleanup during parallel execution
 	pool.CleanupPool()
 
 	// Exit with the same code as the tests
 	os.Exit(code)
+}
+
+// TestContainerPool_ReturnContainer tests the ReturnContainer function
+func TestContainerPool_ReturnContainer(_ *testing.T) {
+	pool := GetContainerPool()
+
+	// Create a mock container info
+	containerInfo := ContainerInfo{
+		Container: nil, // Mock container
+		Broker:    "localhost:9092",
+		ID:        1,
+	}
+
+	// Test that ReturnContainer doesn't panic and completes successfully
+	// Since it's a no-op, we just verify it can be called
+	pool.ReturnContainer(containerInfo)
+
+	// Verify the function completes without error
+	// (Since it's a no-op, there's no state to verify)
+}
+
+// TestContainerPool_CleanupPool tests the CleanupPool function
+func TestContainerPool_CleanupPool(t *testing.T) {
+	pool := GetContainerPool()
+
+	// Test cleanup when no container was created
+	pool.CleanupPool()
+
+	// Test cleanup when container was created
+	// First, get a container to ensure one is created
+	containerInfo, err := pool.GetContainer(t)
+	require.NoError(t, err)
+	require.NotNil(t, containerInfo)
+
+	// Now test cleanup
+	pool.CleanupPool()
+
+	// Verify cleanup completed without error
+	// (The actual cleanup is handled by testcontainers)
+}
+
+// TestContainerPool_GetRefCount tests the GetRefCount function
+func TestContainerPool_GetRefCount(t *testing.T) {
+	pool := GetContainerPool()
+
+	// Test initial reference count (may be non-zero due to parallel tests)
+	initialCount := pool.GetRefCount()
+	assert.GreaterOrEqual(t, initialCount, 0)
+
+	// Get a container to increment reference count
+	containerInfo, err := pool.GetContainer(t)
+	require.NoError(t, err)
+	require.NotNil(t, containerInfo)
+
+	// Check that reference count increased
+	countAfterGet := pool.GetRefCount()
+	assert.Greater(t, countAfterGet, initialCount)
+
+	// Return container to decrement reference count
+	pool.ReturnContainer(containerInfo)
+
+	// Check that reference count decreased
+	countAfterReturn := pool.GetRefCount()
+	assert.Less(t, countAfterReturn, countAfterGet)
 }

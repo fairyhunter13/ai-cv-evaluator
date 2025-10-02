@@ -1,15 +1,17 @@
-# Observability & Monitoring
+# Observability and Operations
 
-This document describes the observability and monitoring capabilities of the AI CV Evaluator system.
+This document describes the comprehensive observability strategy, monitoring, and operational procedures for the AI CV Evaluator service.
 
-## Overview
+## 🎯 Observability Overview
 
-The system implements comprehensive observability through:
+The observability framework provides:
+- **Structured logging** with correlation IDs
+- **Metrics collection** via Prometheus
+- **Distributed tracing** via OpenTelemetry
+- **Alerting** and incident response
+- **Performance monitoring** and optimization
 - **Circuit Breakers** for fault tolerance
 - **Score Drift Detection** for AI model monitoring
-- **Metrics Collection** with Prometheus
-- **Distributed Tracing** with OpenTelemetry
-- **Health Checks** for service dependencies
 
 ## Circuit Breaker Pattern
 
@@ -37,6 +39,130 @@ cb := NewCircuitBreaker("ai-service", 5, 30*time.Second)
 err := cb.Call(func() error {
     return aiService.ProcessRequest()
 })
+```
+
+## 📊 Structured Logging
+
+### Logging Configuration
+```go
+// Logging configuration
+func setupLogging() *slog.Logger {
+    handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        Level: slog.LevelInfo,
+        AddSource: true,
+    })
+    
+    return slog.New(handler)
+}
+
+// Context-aware logging
+func logWithContext(ctx context.Context, logger *slog.Logger) *slog.Logger {
+    return logger.With(
+        slog.String("request_id", getRequestID(ctx)),
+        slog.String("trace_id", getTraceID(ctx)),
+        slog.String("span_id", getSpanID(ctx)),
+    )
+}
+```
+
+### Log Fields
+```go
+// Standard log fields
+type LogFields struct {
+    Timestamp   time.Time `json:"ts"`
+    Level       string    `json:"level"`
+    Message     string    `json:"msg"`
+    Logger      string    `json:"logger"`
+    Service     string    `json:"service"`
+    Environment string    `json:"env"`
+    RequestID   string    `json:"request_id"`
+    TraceID     string    `json:"trace_id"`
+    SpanID      string    `json:"span_id"`
+    Route       string    `json:"route"`
+    Method      string    `json:"method"`
+    Status      int       `json:"status"`
+    Latency     int64     `json:"latency_ms"`
+    RemoteIP    string    `json:"remote_ip"`
+}
+```
+
+## 📈 Metrics Collection
+
+### Prometheus Metrics
+```go
+// HTTP metrics
+var (
+    httpRequestsTotal = prometheus.NewCounterVec(
+        prometheus.CounterOpts{
+            Name: "http_requests_total",
+            Help: "Total number of HTTP requests",
+        },
+        []string{"route", "method", "status"},
+    )
+    
+    httpRequestDuration = prometheus.NewHistogramVec(
+        prometheus.HistogramOpts{
+            Name:    "http_request_duration_seconds",
+            Help:    "HTTP request duration in seconds",
+            Buckets: prometheus.DefBuckets,
+        },
+        []string{"route", "method"},
+    )
+)
+```
+
+### Queue Metrics
+```go
+// Job queue metrics
+var (
+    jobsEnqueued = prometheus.NewCounterVec(
+        prometheus.CounterOpts{
+            Name: "jobs_enqueued_total",
+            Help: "Total number of jobs enqueued",
+        },
+        []string{"type"},
+    )
+    
+    jobsProcessing = prometheus.NewGaugeVec(
+        prometheus.GaugeOpts{
+            Name: "jobs_processing",
+            Help: "Number of jobs currently processing",
+        },
+        []string{"type"},
+    )
+)
+```
+
+## 🔍 Distributed Tracing
+
+### OpenTelemetry Setup
+```go
+// Tracing configuration
+func setupTracing() (func(), error) {
+    exporter, err := otlptracehttp.New(
+        context.Background(),
+        otlptracehttp.WithEndpoint(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")),
+        otlptracehttp.WithInsecure(),
+    )
+    if err != nil {
+        return nil, err
+    }
+    
+    tp := trace.NewTracerProvider(
+        trace.WithBatcher(exporter),
+        trace.WithResource(resource.NewWithAttributes(
+            semconv.SchemaURL,
+            semconv.ServiceNameKey.String("ai-cv-evaluator"),
+            semconv.ServiceVersionKey.String("1.0.0"),
+        )),
+    )
+    
+    otel.SetTracerProvider(tp)
+    
+    return func() {
+        tp.Shutdown(context.Background())
+    }, nil
+}
 ```
 
 ## Score Drift Detection
