@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
@@ -21,13 +21,13 @@ func TestUploadService_Count(t *testing.T) {
 		name          string
 		expectedCount int64
 		expectedError bool
-		setupMock     func(*domainmocks.UploadRepository)
+		setupMock     func(*mocks.MockUploadRepository)
 	}{
 		{
 			name:          "successful count",
 			expectedCount: 100,
 			expectedError: false,
-			setupMock: func(repo *domainmocks.UploadRepository) {
+			setupMock: func(repo *mocks.MockUploadRepository) {
 				repo.EXPECT().Count(mock.Anything).Return(int64(100), nil).Once()
 			},
 		},
@@ -35,7 +35,7 @@ func TestUploadService_Count(t *testing.T) {
 			name:          "repository error",
 			expectedCount: 0,
 			expectedError: true,
-			setupMock: func(repo *domainmocks.UploadRepository) {
+			setupMock: func(repo *mocks.MockUploadRepository) {
 				repo.EXPECT().Count(mock.Anything).Return(int64(0), errors.New("database error")).Once()
 			},
 		},
@@ -43,7 +43,7 @@ func TestUploadService_Count(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := domainmocks.NewUploadRepository(t)
+			repo := mocks.NewMockUploadRepository(t)
 			tt.setupMock(repo)
 			service := usecase.NewUploadService(repo)
 			count, err := service.Count(context.Background())
@@ -66,14 +66,14 @@ func TestUploadService_CountByType(t *testing.T) {
 		uploadType    string
 		expectedCount int64
 		expectedError bool
-		setupMock     func(*domainmocks.UploadRepository)
+		setupMock     func(*mocks.MockUploadRepository)
 	}{
 		{
 			name:          "successful count by type - CV",
 			uploadType:    domain.UploadTypeCV,
 			expectedCount: 50,
 			expectedError: false,
-			setupMock: func(repo *domainmocks.UploadRepository) {
+			setupMock: func(repo *mocks.MockUploadRepository) {
 				repo.EXPECT().CountByType(mock.Anything, domain.UploadTypeCV).Return(int64(50), nil).Once()
 			},
 		},
@@ -82,7 +82,7 @@ func TestUploadService_CountByType(t *testing.T) {
 			uploadType:    domain.UploadTypeProject,
 			expectedCount: 30,
 			expectedError: false,
-			setupMock: func(repo *domainmocks.UploadRepository) {
+			setupMock: func(repo *mocks.MockUploadRepository) {
 				repo.EXPECT().CountByType(mock.Anything, domain.UploadTypeProject).Return(int64(30), nil).Once()
 			},
 		},
@@ -91,7 +91,7 @@ func TestUploadService_CountByType(t *testing.T) {
 			uploadType:    domain.UploadTypeCV,
 			expectedCount: 0,
 			expectedError: true,
-			setupMock: func(repo *domainmocks.UploadRepository) {
+			setupMock: func(repo *mocks.MockUploadRepository) {
 				repo.EXPECT().CountByType(mock.Anything, domain.UploadTypeCV).Return(int64(0), errors.New("database error")).Once()
 			},
 		},
@@ -99,7 +99,7 @@ func TestUploadService_CountByType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			repo := domainmocks.NewUploadRepository(t)
+			repo := mocks.NewMockUploadRepository(t)
 			tt.setupMock(repo)
 			service := usecase.NewUploadService(repo)
 			count, err := service.CountByType(context.Background(), tt.uploadType)

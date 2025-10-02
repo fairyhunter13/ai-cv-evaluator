@@ -46,7 +46,7 @@ KAFKA_BROKERS=redpanda-1:9092,redpanda-2:9092,redpanda-3:9092
 # OpenRouter API configuration
 OPENROUTER_API_KEY=your_openrouter_api_key
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1    # Default
-CHAT_MODEL=openrouter/auto                          # Default (auto-select)
+CHAT_MODEL=                                       # Not used - free models are auto-selected
 CHAT_FALLBACK_MODELS=model1,model2,model3         # Optional fallbacks
 ```
 

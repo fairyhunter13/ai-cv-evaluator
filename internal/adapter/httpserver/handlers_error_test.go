@@ -24,8 +24,8 @@ import (
 )
 
 // Mock creation functions
-func createMockUploadRepoError(t *testing.T) *domainmocks.UploadRepository {
-	mockRepo := domainmocks.NewUploadRepository(t)
+func createMockUploadRepoError(t *testing.T) *domainmocks.MockUploadRepository {
+	mockRepo := domainmocks.NewMockUploadRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("upload-1", nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(domain.Upload{ID: "upload-1"}, nil).Maybe()
 	mockRepo.EXPECT().Count(mock.Anything).Return(int64(0), nil).Maybe()
@@ -33,8 +33,8 @@ func createMockUploadRepoError(t *testing.T) *domainmocks.UploadRepository {
 	return mockRepo
 }
 
-func createMockJobRepoError(t *testing.T) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepoError(t *testing.T) *domainmocks.MockJobRepository {
+	mockRepo := domainmocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(domain.Job{ID: "job-1"}, nil).Maybe()
@@ -46,14 +46,14 @@ func createMockJobRepoError(t *testing.T) *domainmocks.JobRepository {
 	return mockRepo
 }
 
-func createMockQueueError(t *testing.T) *domainmocks.Queue {
-	mockRepo := domainmocks.NewQueue(t)
+func createMockQueueError(t *testing.T) *domainmocks.MockQueue {
+	mockRepo := domainmocks.NewMockQueue(t)
 	mockRepo.EXPECT().EnqueueEvaluate(mock.Anything, mock.Anything).Return("t-1", nil).Maybe()
 	return mockRepo
 }
 
-func createMockJobRepoNotFound(t *testing.T) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepoNotFound(t *testing.T) *domainmocks.MockJobRepository {
+	mockRepo := domainmocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(domain.Job{}, domain.ErrNotFound).Maybe()

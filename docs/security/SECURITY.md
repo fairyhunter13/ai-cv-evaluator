@@ -1,13 +1,219 @@
-# Security Policy
+# Security and Compliance
 
-## Supported Versions
+This document outlines the comprehensive security measures, compliance requirements, and best practices for the AI CV Evaluator service.
+
+## 🎯 Security Overview
+
+The security framework ensures:
+- **Input validation** and sanitization
+- **Secure data handling** and storage
+- **Authentication** and authorization
+- **Network security** and encryption
+- **Compliance** with security standards
+
+## 🔒 Input Security
+
+### File Upload Security
+- **Allowlist approach**: Only allow `.txt`, `.pdf`, `.docx`
+- **Content sniffing**: Detect MIME type by content, not extension
+- **Size limits**: 10MB per file (configurable)
+- **Virus scanning**: Optional integration with ClamAV
+- **Content sanitization**: Strip control characters and malicious content
+
+### Input Validation
+```go
+// File type validation
+func validateFileType(filename string, content []byte) error {
+    // Check extension
+    ext := strings.ToLower(filepath.Ext(filename))
+    if !contains(allowedExtensions, ext) {
+        return ErrUnsupportedFileType
+    }
+    
+    // Check MIME type by content
+    mimeType := http.DetectContentType(content)
+    if !contains(allowedMimeTypes, mimeType) {
+        return ErrUnsupportedMimeType
+    }
+    
+    return nil
+}
+```
+
+## 🔐 Authentication and Authorization
+
+### Admin Authentication
+- **Username/password** authentication
+- **Argon2id** password hashing
+- **Session management** with secure cookies
+- **CSRF protection** for form submissions
+- **Login throttling** to prevent brute force
+
+### Password Security
+```go
+// Argon2id password hashing
+func HashPassword(password string) (string, error) {
+    salt := make([]byte, 16)
+    if _, err := rand.Read(salt); err != nil {
+        return "", err
+    }
+    
+    hash := argon2.IDKey([]byte(password), salt, 3, 64*1024, 2, 32)
+    
+    return fmt.Sprintf("argon2id$%d$%d$%d$%s$%s",
+        3, 64*1024, 2,
+        base64.RawStdEncoding.EncodeToString(salt),
+        base64.RawStdEncoding.EncodeToString(hash)), nil
+}
+```
+
+## 🌐 Network Security
+
+### HTTP Security Headers
+```go
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // Prevent MIME type sniffing
+        w.Header().Set("X-Content-Type-Options", "nosniff")
+        
+        // Prevent clickjacking
+        w.Header().Set("X-Frame-Options", "DENY")
+        
+        // Content Security Policy
+        w.Header().Set("Content-Security-Policy", "default-src 'none'")
+        
+        // Referrer policy
+        w.Header().Set("Referrer-Policy", "no-referrer")
+        
+        // HSTS (HTTPS only)
+        if r.TLS != nil {
+            w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+        }
+        
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+## 🔐 Secrets Management
+
+### Environment Variables
+```bash
+# Production secrets (never commit)
+OPENROUTER_API_KEY=your-api-key
+OPENAI_API_KEY=your-api-key
+DB_PASSWORD=secure-password
+SESSION_SECRET=random-secret-key
+CSRF_SECRET=random-csrf-key
+```
+
+### SOPS Encryption
+```bash
+# Encrypt secrets file
+sops -e -i .env.prod
+
+# Decrypt for deployment
+sops -d .env.prod.sops > .env.prod
+```
+
+## 🛡️ Data Protection
+
+### Encryption at Rest
+- **Database encryption** via PostgreSQL
+- **Vector store encryption** via Qdrant
+- **File system encryption** on VPS
+- **Backup encryption** for data retention
+
+### Encryption in Transit
+- **TLS 1.2+** for all HTTP connections
+- **Database connections** via SSL
+- **API communications** via HTTPS
+- **Internal service** communication secured
+
+## 🔍 Security Monitoring
+
+### Audit Logging
+```go
+// Security event logging
+func LogSecurityEvent(ctx context.Context, event SecurityEvent) {
+    logger := slog.FromContext(ctx)
+    logger.Info("security_event",
+        slog.String("event_type", event.Type),
+        slog.String("user_id", event.UserID),
+        slog.String("ip_address", event.IPAddress),
+        slog.String("user_agent", event.UserAgent),
+        slog.Any("details", event.Details),
+    )
+}
+```
+
+### Vulnerability Scanning
+```bash
+# Container vulnerability scanning
+trivy image ghcr.io/owner/ai-cv-evaluator:latest
+
+# Dependency vulnerability scanning
+govulncheck ./...
+
+# SAST scanning
+golangci-lint run --enable gosec ./...
+```
+
+## 📋 Compliance Requirements
+
+### Data Privacy
+- **GDPR compliance** for EU users
+- **Data minimization** principles
+- **Right to deletion** implementation
+- **Data portability** support
+
+### Security Standards
+- **OWASP Top 10** compliance
+- **CIS benchmarks** implementation
+- **Security headers** validation
+- **Input validation** comprehensive
+
+## 🚨 Incident Response
+
+### Security Incident Playbook
+1. **Detection**: Automated monitoring and alerting
+2. **Assessment**: Severity and impact analysis
+3. **Containment**: Isolate affected systems
+4. **Investigation**: Root cause analysis
+5. **Recovery**: Restore normal operations
+6. **Lessons learned**: Process improvement
+
+## 📊 Security Metrics
+
+### Key Performance Indicators
+- **Vulnerability count** by severity
+- **Security incidents** per month
+- **Mean time to detection** (MTTD)
+- **Mean time to resolution** (MTTR)
+
+## ✅ Definition of Done (Security)
+
+### Implementation Requirements
+- **Security headers** implemented
+- **Input validation** comprehensive
+- **Authentication** working
+- **Encryption** in place
+- **Monitoring** active
+
+### Compliance Requirements
+- **OWASP Top 10** addressed
+- **Security standards** met
+- **Audit logging** functional
+- **Incident response** tested
+
+## 🔒 Supported Versions
 
 | Version | Supported          |
 | ------- | ------------------ |
 | 1.x.x   | :white_check_mark: |
 | < 1.0   | :x:                |
 
-## Reporting a Vulnerability
+## 🚨 Reporting a Vulnerability
 
 We take security seriously. If you discover a security vulnerability, please follow these steps:
 

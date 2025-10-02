@@ -2,7 +2,9 @@ package redpanda
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +19,7 @@ func TestNewProducer_Unit(t *testing.T) {
 
 	t.Run("valid brokers", func(t *testing.T) {
 		broker := getContainerBroker(t)
-		producer, err := NewProducer([]string{broker})
+		producer, err := NewProducerWithTransactionalID([]string{broker}, fmt.Sprintf("test-producer-valid-%d", time.Now().UnixNano()))
 		assert.NoError(t, err)
 		assert.NotNil(t, producer)
 		defer func() { _ = producer.Close() }()
@@ -79,7 +81,7 @@ func TestProducer_EnqueueEvaluate_Unit(t *testing.T) {
 
 	t.Run("context cancellation", func(t *testing.T) {
 		broker := getContainerBroker(t)
-		producer, err := NewProducer([]string{broker})
+		producer, err := NewProducerWithTransactionalID([]string{broker}, fmt.Sprintf("test-producer-cancel-%d", time.Now().UnixNano()))
 		require.NoError(t, err)
 		defer func() { _ = producer.Close() }()
 
@@ -101,7 +103,7 @@ func TestProducer_EnqueueEvaluate_Unit(t *testing.T) {
 
 	t.Run("empty payload", func(t *testing.T) {
 		broker := getContainerBroker(t)
-		producer, err := NewProducer([]string{broker})
+		producer, err := NewProducerWithTransactionalID([]string{broker}, fmt.Sprintf("test-producer-empty-%d", time.Now().UnixNano()))
 		require.NoError(t, err)
 		defer func() { _ = producer.Close() }()
 
@@ -162,7 +164,7 @@ func TestProducer_Close_Unit(t *testing.T) {
 	t.Parallel()
 
 	broker := getContainerBroker(t)
-	producer, err := NewProducer([]string{broker})
+	producer, err := NewProducerWithTransactionalID([]string{broker}, fmt.Sprintf("test-producer-close-%d", time.Now().UnixNano()))
 	require.NoError(t, err)
 
 	// Test that Close doesn't panic

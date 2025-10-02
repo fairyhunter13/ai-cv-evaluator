@@ -15,6 +15,14 @@ type EvaluateService struct {
 	Jobs    domain.JobRepository
 	Queue   domain.Queue
 	Uploads domain.UploadRepository
+	AI      domain.AIClient
+	Vector  VectorDBHealthChecker
+}
+
+// VectorDBHealthChecker interface for checking vector database health
+type VectorDBHealthChecker interface {
+	// Ping checks if the vector database is accessible
+	Ping(ctx domain.Context) error
 }
 
 // ReadinessCheck represents a single readiness probe result used by handlers.
@@ -27,6 +35,11 @@ type ReadinessCheck struct {
 // NewEvaluateService constructs an EvaluateService with its dependencies.
 func NewEvaluateService(j domain.JobRepository, q domain.Queue, u domain.UploadRepository) EvaluateService {
 	return EvaluateService{Jobs: j, Queue: q, Uploads: u}
+}
+
+// NewEvaluateServiceWithHealthChecks constructs an EvaluateService with health check dependencies.
+func NewEvaluateServiceWithHealthChecks(j domain.JobRepository, q domain.Queue, u domain.UploadRepository, ai domain.AIClient, vector VectorDBHealthChecker) EvaluateService {
+	return EvaluateService{Jobs: j, Queue: q, Uploads: u, AI: ai, Vector: vector}
 }
 
 // Enqueue validates inputs, creates a job, and enqueues the evaluation task.
@@ -58,10 +71,69 @@ func (s EvaluateService) Enqueue(ctx domain.Context, cvID, projectID, jobDesc, s
 	return jobID, nil
 }
 
-// Readiness returns static readiness checks; actual external checks are in internal/app.
-func (s EvaluateService) Readiness(_ domain.Context) []ReadinessCheck {
-	// Placeholder: In real impl, ping DB/Qdrant
-	return []ReadinessCheck{{Name: "db", OK: true}, {Name: "qdrant", OK: true}}
+// Readiness returns comprehensive readiness checks for all dependencies.
+func (s EvaluateService) Readiness(ctx domain.Context) []ReadinessCheck {
+	checks := []ReadinessCheck{}
+
+	// Check database connectivity
+	dbCheck := ReadinessCheck{Name: "database", OK: false, Details: "Database connection check"}
+	if s.Jobs != nil {
+		if _, err := s.Jobs.Count(ctx); err != nil {
+			dbCheck.Details = fmt.Sprintf("Database error: %v", err)
+		} else {
+			dbCheck.OK = true
+			dbCheck.Details = "Database connection successful"
+		}
+	} else {
+		dbCheck.Details = "Database not configured"
+	}
+	checks = append(checks, dbCheck)
+
+	// Check AI service connectivity
+	aiCheck := ReadinessCheck{Name: "ai_service", OK: false, Details: "AI service connection check"}
+	if s.AI != nil {
+		// Test AI service with a simple embedding request
+		_, err := s.AI.Embed(ctx, []string{"health check"})
+		if err != nil {
+			aiCheck.Details = fmt.Sprintf("AI service error: %v", err)
+		} else {
+			aiCheck.OK = true
+			aiCheck.Details = "AI service connection successful"
+		}
+	} else {
+		aiCheck.Details = "AI service not configured"
+	}
+	checks = append(checks, aiCheck)
+
+	// Check vector database connectivity
+	vectorCheck := ReadinessCheck{Name: "vector_database", OK: false, Details: "Vector database connection check"}
+	if s.Vector != nil {
+		if err := s.Vector.Ping(ctx); err != nil {
+			vectorCheck.Details = fmt.Sprintf("Vector database error: %v", err)
+		} else {
+			vectorCheck.OK = true
+			vectorCheck.Details = "Vector database connection successful"
+		}
+	} else {
+		vectorCheck.Details = "Vector database not configured"
+	}
+	checks = append(checks, vectorCheck)
+
+	// Check upload repository
+	uploadCheck := ReadinessCheck{Name: "upload_repository", OK: false, Details: "Upload repository check"}
+	if s.Uploads != nil {
+		if _, err := s.Uploads.Count(ctx); err != nil {
+			uploadCheck.Details = fmt.Sprintf("Upload repository error: %v", err)
+		} else {
+			uploadCheck.OK = true
+			uploadCheck.Details = "Upload repository connection successful"
+		}
+	} else {
+		uploadCheck.Details = "Upload repository not configured"
+	}
+	checks = append(checks, uploadCheck)
+
+	return checks
 }
 
 func hash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }

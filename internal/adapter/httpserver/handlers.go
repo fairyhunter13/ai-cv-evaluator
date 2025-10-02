@@ -527,13 +527,8 @@ func (s *Server) getJobs(ctx context.Context, page, limit, search, status string
 	// Calculate offset
 	offset := (pageNum - 1) * limitNum
 
-	// TODO: Implement search and status filtering in the repository layer
-	// For now, we ignore the search and status parameters
-	_ = search
-	_ = status
-
-	// Get jobs from database
-	jobs, err := s.Evaluate.Jobs.List(ctx, offset, limitNum)
+	// Get jobs from database with filtering
+	jobs, err := s.Evaluate.Jobs.ListWithFilters(ctx, offset, limitNum, search, status)
 	if err != nil {
 		// Return error response with proper format
 		return map[string]any{
@@ -553,8 +548,8 @@ func (s *Server) getJobs(ctx context.Context, page, limit, search, status string
 		}
 	}
 
-	// Get total count for pagination
-	totalCount, err := s.Evaluate.Jobs.Count(ctx)
+	// Get total count for pagination with filters
+	totalCount, err := s.Evaluate.Jobs.CountWithFilters(ctx, search, status)
 	if err != nil {
 		// Use fallback count
 		totalCount = int64(len(jobs))

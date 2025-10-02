@@ -12,7 +12,7 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/httpserver"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
@@ -197,8 +197,8 @@ func TestAdminJobsHandler_Pagination(t *testing.T) {
 }
 
 // Mock creation functions for testing
-func createMockUploadRepoForAdmin(t *testing.T) *domainmocks.UploadRepository {
-	mockRepo := domainmocks.NewUploadRepository(t)
+func createMockUploadRepoForAdmin(t *testing.T) *mocks.MockUploadRepository {
+	mockRepo := mocks.NewMockUploadRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("upload-1", nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(domain.Upload{ID: "upload-1"}, nil).Maybe()
 	mockRepo.EXPECT().Count(mock.Anything).Return(int64(0), nil).Maybe()
@@ -206,37 +206,39 @@ func createMockUploadRepoForAdmin(t *testing.T) *domainmocks.UploadRepository {
 	return mockRepo
 }
 
-func createMockJobRepoForAdmin(t *testing.T) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepoForAdmin(t *testing.T) *mocks.MockJobRepository {
+	mockRepo := mocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(domain.Job{ID: "job-1"}, nil).Maybe()
 	mockRepo.EXPECT().FindByIdempotencyKey(mock.Anything, mock.Anything).Return(domain.Job{}, domain.ErrNotFound).Maybe()
 	mockRepo.EXPECT().Count(mock.Anything).Return(int64(0), nil).Maybe()
 	mockRepo.EXPECT().CountByStatus(mock.Anything, mock.Anything).Return(int64(0), nil).Maybe()
-	mockRepo.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).Return([]domain.Job{}, nil).Maybe()
+	mockRepo.EXPECT().ListWithFilters(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]domain.Job{}, nil).Maybe()
+	mockRepo.EXPECT().CountWithFilters(mock.Anything, mock.Anything, mock.Anything).Return(int64(0), nil).Maybe()
 	mockRepo.EXPECT().GetAverageProcessingTime(mock.Anything).Return(float64(0), nil).Maybe()
 	return mockRepo
 }
 
-func createMockJobRepoWithJobsForAdmin(t *testing.T) *domainmocks.JobRepository {
-	mockRepo := domainmocks.NewJobRepository(t)
+func createMockJobRepoWithJobsForAdmin(t *testing.T) *mocks.MockJobRepository {
+	mockRepo := mocks.NewMockJobRepository(t)
 	mockRepo.EXPECT().Create(mock.Anything, mock.Anything).Return("job-1", nil).Maybe()
 	mockRepo.EXPECT().UpdateStatus(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().Get(mock.Anything, mock.Anything).Return(domain.Job{ID: "job-1"}, nil).Maybe()
 	mockRepo.EXPECT().FindByIdempotencyKey(mock.Anything, mock.Anything).Return(domain.Job{}, domain.ErrNotFound).Maybe()
 	mockRepo.EXPECT().Count(mock.Anything).Return(int64(2), nil).Maybe()
 	mockRepo.EXPECT().CountByStatus(mock.Anything, mock.Anything).Return(int64(1), nil).Maybe()
-	mockRepo.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).Return([]domain.Job{
+	mockRepo.EXPECT().ListWithFilters(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return([]domain.Job{
 		{ID: "job-1", Status: domain.JobCompleted},
 		{ID: "job-2", Status: domain.JobProcessing},
 	}, nil).Maybe()
+	mockRepo.EXPECT().CountWithFilters(mock.Anything, mock.Anything, mock.Anything).Return(int64(2), nil).Maybe()
 	mockRepo.EXPECT().GetAverageProcessingTime(mock.Anything).Return(1.5, nil).Maybe()
 	return mockRepo
 }
 
-func createMockResultRepoForAdmin(t *testing.T) *domainmocks.ResultRepository {
-	mockRepo := domainmocks.NewResultRepository(t)
+func createMockResultRepoForAdmin(t *testing.T) *mocks.MockResultRepository {
+	mockRepo := mocks.NewMockResultRepository(t)
 	mockRepo.EXPECT().Upsert(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().GetByJobID(mock.Anything, mock.Anything).Return(domain.Result{}, domain.ErrNotFound).Maybe()
 	return mockRepo

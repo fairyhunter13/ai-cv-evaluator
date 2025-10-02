@@ -433,3 +433,106 @@ func TestJobRepo_GetAverageProcessingTime(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "op=job.avg_processing_time")
 }
+
+func TestJobRepo_ListWithFilters(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful list with no filters
+	mockRows := mocks.NewMockRows(t)
+	mockRows.On("Next").Return(true).Once()
+	mockRows.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		*(dest[0].(*string)) = "job-1"
+		*(dest[1].(*domain.JobStatus)) = domain.JobCompleted
+		*(dest[2].(*string)) = ""
+		*(dest[3].(*time.Time)) = time.Now()
+		*(dest[4].(*time.Time)) = time.Now()
+		*(dest[5].(*string)) = "cv-1"
+		*(dest[6].(*string)) = "proj-1"
+		*(dest[7].(**string)) = nil
+	}).Return(nil).Once()
+	mockRows.On("Next").Return(false).Once()
+	mockRows.On("Close").Return().Once()
+	mockRows.On("Err").Return(nil).Once()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+
+	jobs, err := repo.ListWithFilters(ctx, 0, 10, "", "")
+	require.NoError(t, err)
+	assert.Len(t, jobs, 1)
+	assert.Equal(t, "job-1", jobs[0].ID)
+
+	// Test database error
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, assert.AnError).Once()
+	_, err = repo.ListWithFilters(ctx, 0, 10, "", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.list_with_filters")
+}
+
+func TestJobRepo_CountWithFilters(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	// Test successful count with no filters
+	mockRow := mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		count := int64(5)
+		*(dest[0].(*int64)) = count
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRow).Once()
+	count, err := repo.CountWithFilters(ctx, "", "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), count)
+
+	// Test successful count with search filter
+	mockRow = mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		count := int64(2)
+		*(dest[0].(*int64)) = count
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRow).Once()
+	count, err = repo.CountWithFilters(ctx, "job-1", "")
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+
+	// Test successful count with status filter
+	mockRow = mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		count := int64(3)
+		*(dest[0].(*int64)) = count
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRow).Once()
+	count, err = repo.CountWithFilters(ctx, "", "completed")
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), count)
+
+	// Test successful count with both filters
+	mockRow = mocks.NewMockRow(t)
+	mockRow.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
+		dest := args[0].([]any)
+		count := int64(1)
+		*(dest[0].(*int64)) = count
+	}).Return(nil).Once()
+
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRow).Once()
+	count, err = repo.CountWithFilters(ctx, "job-1", "completed")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), count)
+
+	// Test database error
+	mockRowErr := mocks.NewMockRow(t)
+	mockRowErr.On("Scan", mock.Anything).Return(assert.AnError).Once()
+	pool.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockRowErr).Once()
+	_, err = repo.CountWithFilters(ctx, "", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op=job.count_with_filters")
+}

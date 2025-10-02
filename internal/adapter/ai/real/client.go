@@ -66,8 +66,8 @@ func New(cfg config.Config) *Client {
 
 	// If running in dev environment, use reasonable timeouts for E2E tests
 	if cfg.AppEnv == "dev" {
-		chatTimeout = 120 * time.Second // Increased for free model reliability
-		embedTimeout = 30 * time.Second
+		chatTimeout = 300 * time.Second // Increased for free model reliability (5 minutes)
+		embedTimeout = 60 * time.Second // Increased for embeddings
 	}
 
 	// Initialize free models service
@@ -95,20 +95,36 @@ func (c *Client) getBackoffConfig() *backoff.ExponentialBackOff {
 }
 
 // ChatJSON calls OpenRouter (OpenAI-compatible) chat completions and returns the message content.
+// This method implements retry logic with model fallback for better reliability.
 func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
 	if c.cfg.OpenRouterAPIKey == "" {
 		slog.Error("OpenRouter API key missing", slog.String("provider", "openrouter"))
 		return "", fmt.Errorf("%w: OPENROUTER_API_KEY missing", domain.ErrInvalidArgument)
 	}
 
-	// Get free models from the service
+	// Get free models from the service with retry logic
 	slog.Debug("calling free models service to get available models")
 	freeModels, err := c.freeModelsSvc.GetFreeModels(ctx)
 	if err != nil {
 		slog.Error("failed to get free models from service",
 			slog.Any("error", err),
 			slog.String("service", "freemodels"))
-		return "", fmt.Errorf("failed to get free models: %w", err)
+
+		// Try to refresh models and retry once
+		slog.Info("attempting to refresh free models and retry")
+		if refreshErr := c.freeModelsSvc.Refresh(ctx); refreshErr != nil {
+			slog.Error("failed to refresh free models", slog.Any("error", refreshErr))
+			return "", fmt.Errorf("failed to get free models: %w", err)
+		}
+
+		// Retry after refresh
+		freeModels, err = c.freeModelsSvc.GetFreeModels(ctx)
+		if err != nil {
+			slog.Error("failed to get free models after refresh",
+				slog.Any("error", err),
+				slog.String("service", "freemodels"))
+			return "", fmt.Errorf("failed to get free models after refresh: %w", err)
+		}
 	}
 
 	slog.Debug("free models service returned models",
@@ -119,10 +135,17 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		return "", fmt.Errorf("no free models available from OpenRouter API")
 	}
 
-	// Select model using round-robin rotation
+	// Select model using round-robin rotation with fallback
 	modelIndex := atomic.AddInt64(&c.modelCounter, 1) % int64(len(freeModels))
 	selectedModel := freeModels[modelIndex]
 	model := selectedModel.ID
+
+	// Log available models for debugging
+	modelIDs := make([]string, len(freeModels))
+	for i, m := range freeModels {
+		modelIDs[i] = m.ID
+	}
+	slog.Debug("available free models", slog.Any("models", modelIDs))
 
 	slog.Info("using free model from OpenRouter API (round-robin)",
 		slog.String("model", model),
@@ -255,6 +278,178 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		slog.Int("choices_count", len(out.Choices)),
 		slog.String("requested_model", model),
 		slog.String("actual_model", actualModel))
+	return out.Choices[0].Message.Content, nil
+}
+
+// ChatJSONWithRetry calls OpenRouter with retry logic and model fallback for better reliability.
+func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	if c.cfg.OpenRouterAPIKey == "" {
+		slog.Error("OpenRouter API key missing", slog.String("provider", "openrouter"))
+		return "", fmt.Errorf("%w: OPENROUTER_API_KEY missing", domain.ErrInvalidArgument)
+	}
+
+	// Get free models from the service with retry logic
+	slog.Debug("calling free models service to get available models")
+	freeModels, err := c.freeModelsSvc.GetFreeModels(ctx)
+	if err != nil {
+		slog.Error("failed to get free models from service",
+			slog.Any("error", err),
+			slog.String("service", "freemodels"))
+
+		// Try to refresh models and retry once
+		slog.Info("attempting to refresh free models")
+		if refreshErr := c.freeModelsSvc.Refresh(ctx); refreshErr != nil {
+			slog.Error("failed to refresh free models", slog.Any("error", refreshErr))
+			return "", fmt.Errorf("get free models: %w", err)
+		}
+
+		// Retry getting models after refresh
+		freeModels, err = c.freeModelsSvc.GetFreeModels(ctx)
+		if err != nil {
+			slog.Error("failed to get free models after refresh", slog.Any("error", err))
+			return "", fmt.Errorf("get free models after refresh: %w", err)
+		}
+	}
+
+	slog.Info("retrieved free models from service",
+		slog.String("provider", "openrouter"),
+		slog.Int("count", len(freeModels)))
+
+	if len(freeModels) == 0 {
+		slog.Error("no free models available", slog.String("provider", "openrouter"))
+		return "", fmt.Errorf("no free models available from OpenRouter API")
+	}
+
+	// Try each model sequentially with retry logic
+	maxRetries := 2
+	for modelIndex, model := range freeModels {
+		slog.Info("trying model with retry logic",
+			slog.String("model", model.ID),
+			slog.String("model_name", model.Name),
+			slog.Int("model_index", modelIndex),
+			slog.Int("total_models", len(freeModels)))
+
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			slog.Info("model attempt",
+				slog.String("model", model.ID),
+				slog.Int("attempt", attempt),
+				slog.Int("max_retries", maxRetries))
+
+			result, err := c.callOpenRouterWithModel(ctx, model.ID, systemPrompt, userPrompt, maxTokens)
+			if err == nil {
+				slog.Info("model succeeded",
+					slog.String("model", model.ID),
+					slog.Int("attempt", attempt))
+				return result, nil
+			}
+
+			slog.Warn("model attempt failed",
+				slog.String("model", model.ID),
+				slog.Int("attempt", attempt),
+				slog.Any("error", err))
+
+			// If this is not the last attempt for this model, wait before retrying
+			if attempt < maxRetries {
+				backoffDuration := time.Duration(attempt) * time.Second
+				slog.Info("waiting before model retry",
+					slog.String("model", model.ID),
+					slog.Duration("backoff", backoffDuration))
+				time.Sleep(backoffDuration)
+			}
+		}
+
+		slog.Warn("model failed after all retries, trying next model",
+			slog.String("model", model.ID),
+			slog.Int("model_index", modelIndex),
+			slog.Int("total_models", len(freeModels)))
+	}
+
+	return "", fmt.Errorf("all models failed after retries")
+}
+
+// callOpenRouterWithModel makes a single call to OpenRouter with a specific model.
+func (c *Client) callOpenRouterWithModel(ctx domain.Context, model, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	body := map[string]any{
+		"model":       model,
+		"temperature": 0.2,
+		"max_tokens":  maxTokens,
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": userPrompt},
+		},
+	}
+
+	b, _ := json.Marshal(body)
+	slog.Debug("OpenRouter API request body", slog.String("body", string(b)))
+
+	var out struct {
+		Model   string `json:"model"`
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	op := func() error {
+		start := time.Now()
+		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
+		r.Header.Set("Authorization", "Bearer "+c.cfg.OpenRouterAPIKey)
+		r.Header.Set("Content-Type", "application/json")
+		resp, err := c.chatHC.Do(r)
+		observability.AIRequestsTotal.WithLabelValues("openrouter", "chat_retry").Inc()
+		observability.AIRequestDuration.WithLabelValues("openrouter", "chat_retry").Observe(time.Since(start).Seconds())
+		if err != nil {
+			return err
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			slog.Error("failed to read response body", slog.String("provider", "openrouter"), slog.Any("error", err))
+			return err
+		}
+
+		if resp.StatusCode == 429 {
+			slog.Warn("ai provider rate limited", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode))
+			return fmt.Errorf("rate limited: 429")
+		}
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			bodySnippet := string(bodyBytes)
+			if len(bodySnippet) > 512 {
+				bodySnippet = bodySnippet[:512]
+			}
+			slog.Warn("ai provider 4xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
+			return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			bodySnippet := string(bodyBytes)
+			if len(bodySnippet) > 512 {
+				bodySnippet = bodySnippet[:512]
+			}
+			slog.Error("ai provider non-2xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
+			return fmt.Errorf("chat status %d", resp.StatusCode)
+		}
+		if err := json.Unmarshal(bodyBytes, &out); err != nil {
+			slog.Error("ai provider decode error", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.Any("error", err))
+			return err
+		}
+		return nil
+	}
+
+	expo := c.getBackoffConfig()
+	bo := backoff.WithContext(expo, ctx)
+
+	if err := backoff.Retry(op, bo); err != nil {
+		slog.Error("OpenRouter API failed after retries", slog.String("provider", "openrouter"), slog.String("model", model), slog.Any("error", err))
+		return "", fmt.Errorf("openrouter api failed for model %s: %w", model, err)
+	}
+
+	if len(out.Choices) == 0 {
+		slog.Error("OpenRouter API returned empty choices", slog.String("provider", "openrouter"), slog.String("model", model))
+		return "", fmt.Errorf("openrouter api returned empty choices for model %s", model)
+	}
+
 	return out.Choices[0].Message.Content, nil
 }
 

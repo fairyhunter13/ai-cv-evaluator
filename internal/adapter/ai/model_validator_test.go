@@ -5,35 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-// mockAIClient is a mock implementation of domain.AIClient for model validator tests
-type mockAIClientValidator struct {
-	mock.Mock
-}
-
-func (m *mockAIClientValidator) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
-	args := m.Called(ctx, systemPrompt, userPrompt, maxTokens)
-	return args.String(0), args.Error(1)
-}
-
-func (m *mockAIClientValidator) Embed(ctx domain.Context, texts []string) ([][]float32, error) {
-	args := m.Called(ctx, texts)
-	return args.Get(0).([][]float32), args.Error(1)
-}
-
-func (m *mockAIClientValidator) CleanCoTResponse(ctx domain.Context, originalResponse string) (string, error) {
-	args := m.Called(ctx, originalResponse)
-	return args.String(0), args.Error(1)
-}
-
 func TestNewModelValidator(t *testing.T) {
 	t.Parallel()
 
-	mockAI := &mockAIClientValidator{}
+	mockAI := domainmocks.NewMockAIClient(t)
 	validator := NewModelValidator(mockAI)
 
 	assert.NotNil(t, validator)
@@ -45,33 +25,33 @@ func TestModelValidator_ValidateModelHealth(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		mockSetup     func(*mockAIClientValidator)
+		mockSetup     func(*domainmocks.MockAIClient)
 		expectedError bool
 	}{
 		{
 			name: "successful_health_check",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return(`{"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}`, nil).Once()
 			},
 			expectedError: false,
 		},
 		{
 			name: "ai_error",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return("", assert.AnError).Once()
 			},
 			expectedError: true,
 		},
 		{
 			name: "invalid_json_response",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return("invalid json", nil).Once()
 			},
 			expectedError: true,
 		},
 		{
 			name: "unhealthy_status",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return(`{"status": "unhealthy", "timestamp": "2024-01-01T00:00:00Z"}`, nil).Once()
 			},
 			expectedError: true,
@@ -83,7 +63,7 @@ func TestModelValidator_ValidateModelHealth(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			mockAI := &mockAIClientValidator{}
+			mockAI := domainmocks.NewMockAIClient(t)
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockAI)
 			}
@@ -107,40 +87,40 @@ func TestModelValidator_ValidateJSONResponse(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		mockSetup     func(*mockAIClientValidator)
+		mockSetup     func(*domainmocks.MockAIClient)
 		expectedError bool
 	}{
 		{
 			name: "valid_json",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"name": "test", "value": 123, "active": true}`, nil).Once()
 			},
 			expectedError: false,
 		},
 		{
 			name: "invalid_json",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`invalid json`, nil).Once()
 			},
 			expectedError: true,
 		},
 		{
 			name: "empty_response",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return("", nil).Once()
 			},
 			expectedError: true,
 		},
 		{
 			name: "valid_array",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`[{"id": 1}, {"id": 2}]`, nil).Once()
 			},
 			expectedError: true, // Implementation expects map, not array
 		},
 		{
 			name: "malformed_json",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"status": "success",}`, nil).Once()
 			},
 			expectedError: true,
@@ -152,7 +132,7 @@ func TestModelValidator_ValidateJSONResponse(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			mockAI := &mockAIClientValidator{}
+			mockAI := domainmocks.NewMockAIClient(t)
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockAI)
 			}
@@ -176,12 +156,12 @@ func TestModelValidator_ValidateModelStability(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		mockSetup     func(*mockAIClientValidator)
+		mockSetup     func(*domainmocks.MockAIClient)
 		expectedError bool
 	}{
 		{
 			name: "stable_responses",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				// Mock multiple calls returning consistent responses
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"status": "success"}`, nil).Times(3)
 			},
@@ -189,7 +169,7 @@ func TestModelValidator_ValidateModelStability(t *testing.T) {
 		},
 		{
 			name: "unstable_responses",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				// Mock calls returning different responses - but implementation doesn't check consistency
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"status": "success"}`, nil).Once()
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"status": "error"}`, nil).Once()
@@ -199,7 +179,7 @@ func TestModelValidator_ValidateModelStability(t *testing.T) {
 		},
 		{
 			name: "ai_error",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return("", assert.AnError).Once()
 			},
 			expectedError: true,
@@ -211,7 +191,7 @@ func TestModelValidator_ValidateModelStability(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			mockAI := &mockAIClientValidator{}
+			mockAI := domainmocks.NewMockAIClient(t)
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockAI)
 			}
@@ -235,12 +215,12 @@ func TestModelValidator_ValidateModelComprehensive(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		mockSetup     func(*mockAIClientValidator)
+		mockSetup     func(*domainmocks.MockAIClient)
 		expectedError bool
 	}{
 		{
 			name: "comprehensive_validation_success",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				// Mock health check (uses 100)
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return(`{"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}`, nil).Once()
 				// Mock JSON response validation (uses 200)
@@ -252,14 +232,14 @@ func TestModelValidator_ValidateModelComprehensive(t *testing.T) {
 		},
 		{
 			name: "health_check_fails",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return("", assert.AnError).Once()
 			},
 			expectedError: true,
 		},
 		{
 			name: "stability_check_fails",
-			mockSetup: func(ai *mockAIClientValidator) {
+			mockSetup: func(ai *domainmocks.MockAIClient) {
 				// Mock health check success (uses 100)
 				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return(`{"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}`, nil).Once()
 				// Mock JSON response validation (uses 200)
@@ -278,7 +258,7 @@ func TestModelValidator_ValidateModelComprehensive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			mockAI := &mockAIClientValidator{}
+			mockAI := domainmocks.NewMockAIClient(t)
 			if tt.mockSetup != nil {
 				tt.mockSetup(mockAI)
 			}
@@ -300,7 +280,7 @@ func TestModelValidator_ValidateModelComprehensive(t *testing.T) {
 func TestModelValidator_ContextTimeout(t *testing.T) {
 	t.Parallel()
 
-	mockAI := &mockAIClientValidator{}
+	mockAI := domainmocks.NewMockAIClient(t)
 	validator := NewModelValidator(mockAI)
 
 	// Create a context that's already cancelled
@@ -320,7 +300,7 @@ func TestModelValidator_ContextTimeout(t *testing.T) {
 func TestModelValidator_TimeoutBehavior(t *testing.T) {
 	t.Parallel()
 
-	mockAI := &mockAIClientValidator{}
+	mockAI := domainmocks.NewMockAIClient(t)
 	validator := NewModelValidator(mockAI)
 
 	// Create a context with a very short timeout

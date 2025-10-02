@@ -34,6 +34,8 @@ type ContainerPool struct {
 	created   chan struct{} // Channel to signal container is ready
 	once      sync.Once
 	mu        sync.RWMutex // Protect container access
+	refCount  int          // Reference counter to track active users
+	cleanupMu sync.Mutex   // Mutex to prevent concurrent cleanup
 }
 
 var (
@@ -74,13 +76,8 @@ func GetContainerPool() *ContainerPool {
 			created: make(chan struct{}),
 		}
 
-		// Register cleanup on process exit
-		// This ensures containers are cleaned up even if tests don't call CleanupPool
-		go func() {
-			// Wait for a signal or timeout
-			time.Sleep(5 * time.Minute)
-			globalPool.CleanupPool()
-		}()
+		// Note: Removed automatic cleanup goroutine to prevent race conditions
+		// with parallel tests. Cleanup is now handled by TestMain only.
 	})
 	return globalPool
 }
@@ -141,19 +138,25 @@ func (p *ContainerPool) GetContainer(_ *testing.T) (ContainerInfo, error) {
 	// Wait for container to be ready
 	select {
 	case <-p.created:
-		// Container is ready, return it
-		p.mu.RLock()
-		defer p.mu.RUnlock()
-		return p.container, nil
+		// Container is ready, increment reference counter
+		p.mu.Lock()
+		p.refCount++
+		container := p.container
+		p.mu.Unlock()
+		return container, nil
 	case <-time.After(2 * time.Minute):
 		return ContainerInfo{}, fmt.Errorf("timeout waiting for container initialization")
 	}
 }
 
-// ReturnContainer is a no-op for single container approach
+// ReturnContainer decrements the reference counter
 func (p *ContainerPool) ReturnContainer(_ ContainerInfo) {
-	// No-op: Single container is shared across all tests
-	// No need to return anything since all tests use the same container
+	// Decrement reference counter when test is done with container
+	p.mu.Lock()
+	if p.refCount > 0 {
+		p.refCount--
+	}
+	p.mu.Unlock()
 }
 
 // createContainer creates a single Redpanda container
@@ -291,6 +294,10 @@ func (p *ContainerPool) createContainerAttempt(ctx context.Context, id int) (tc.
 
 // CleanupPool terminates the shared container
 func (p *ContainerPool) CleanupPool() {
+	// Prevent concurrent cleanup
+	p.cleanupMu.Lock()
+	defer p.cleanupMu.Unlock()
+
 	// Check if container was ever created
 	select {
 	case <-p.created:
@@ -300,13 +307,24 @@ func (p *ContainerPool) CleanupPool() {
 		return
 	}
 
+	// Wait a bit for any active tests to finish
+	// This gives parallel tests time to complete
+	time.Sleep(1 * time.Second)
+
+	// Check reference count - only cleanup if no active users
+	p.mu.RLock()
+	refCount := p.refCount
+	container := p.container
+	p.mu.RUnlock()
+
+	if refCount > 0 {
+		fmt.Printf("Warning: %d active references to container, skipping cleanup\n", refCount)
+		return
+	}
+
 	// Terminate the single shared container
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-
-	p.mu.RLock()
-	container := p.container
-	p.mu.RUnlock()
 
 	if container.Container != nil {
 		if err := container.Container.Terminate(ctx); err != nil {
@@ -328,4 +346,11 @@ func (p *ContainerPool) GetPoolStats() (available, total int) {
 		// Container not ready yet
 		return 0, 1 // Single container total
 	}
+}
+
+// GetRefCount returns the current reference count for debugging
+func (p *ContainerPool) GetRefCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.refCount
 }

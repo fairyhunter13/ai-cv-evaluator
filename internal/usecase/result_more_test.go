@@ -10,13 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
 func TestResult_InProgress_NotModified(t *testing.T) {
-	jobRepo := domainmocks.NewJobRepository(t)
-	resultRepo := domainmocks.NewResultRepository(t)
+	jobRepo := mocks.NewMockJobRepository(t)
+	resultRepo := mocks.NewMockResultRepository(t)
 
 	// Set up mock expectations
 	jobRepo.On("Get", mock.Anything, "j1").Return(domain.Job{ID: "j1", Status: domain.JobProcessing, CreatedAt: time.Now()}, nil)
@@ -36,8 +36,8 @@ func TestResult_InProgress_NotModified(t *testing.T) {
 }
 
 func TestResult_Completed_NotModified(t *testing.T) {
-	jobRepo := domainmocks.NewJobRepository(t)
-	resultRepo := domainmocks.NewResultRepository(t)
+	jobRepo := mocks.NewMockJobRepository(t)
+	resultRepo := mocks.NewMockResultRepository(t)
 
 	// Set up mock expectations
 	jobRepo.On("Get", mock.Anything, "j2").Return(domain.Job{ID: "j2", Status: domain.JobCompleted}, nil)
@@ -54,8 +54,8 @@ func TestResult_Completed_NotModified(t *testing.T) {
 }
 
 func TestResult_ErrorCode_Mapping_Timeout(t *testing.T) {
-	jobRepo := domainmocks.NewJobRepository(t)
-	resultRepo := domainmocks.NewResultRepository(t)
+	jobRepo := mocks.NewMockJobRepository(t)
+	resultRepo := mocks.NewMockResultRepository(t)
 
 	// Set up mock expectations
 	jobRepo.On("Get", mock.Anything, "j3").Return(domain.Job{ID: "j3", Status: domain.JobFailed, Error: "upstream timeout while calling ai"}, nil)

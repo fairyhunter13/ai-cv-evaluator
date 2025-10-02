@@ -19,34 +19,38 @@ docs/
 ├── contributing/                 # Contribution Guidelines
 │   └── CONTRIBUTING.md
 ├── development/                 # Development Guides
+│   ├── GO_DEVELOPMENT_STANDARDS.md
+│   ├── TESTING.md
+│   ├── DOCKER_AND_LOCAL_DEVELOPMENT.md
 │   ├── FRONTEND_DEVELOPMENT.md
 │   ├── FRONTEND_COMPONENTS.md
 │   ├── TEST_DATA_STRUCTURE.md
 │   ├── E2E_DEBUGGING.md
-│   ├── ADMIN_API.md
-│   └── TESTING.md
+│   └── ADMIN_API.md
 ├── implementation/               # Implementation Details
+│   ├── AI_LLM_PIPELINE.md
+│   ├── STORAGE_AND_QUEUEING.md
+│   ├── API_DOCUMENTATION.md
 │   ├── AI_EVALUATION_SYSTEM.md
 │   ├── PROGRAMMATIC_TOPIC_CREATION.md
 │   ├── EXACTLY_ONCE_ANALYSIS.md
 │   ├── EXACTLY_ONCE_IMPLEMENTATION.md
 │   ├── MIGRATION_SYSTEM.md
 │   ├── FREE_MODELS_IMPLEMENTATION.md
-│   ├── RAG_QDRANT_IMPLEMENTATION.md
-│   └── API_DOCUMENTATION.md
+│   └── RAG_QDRANT_IMPLEMENTATION.md
 ├── migration/                   # Migration Documentation
 │   └── REDPANDA_MIGRATION.md
 ├── ops/                         # Operations
-│   ├── github-optional-secrets.md
-│   ├── github-secrets.md
+│   ├── CI_CD_GITHUB_ACTIONS.md
+│   ├── OBSERVABILITY.md
+│   ├── GITHUB_SECRETS.md
 │   ├── TROUBLESHOOTING.md
 │   ├── PERFORMANCE.md
 │   ├── SECURITY_AUDIT.md
 │   ├── INCIDENT_RESPONSE.md
 │   ├── MAINTENANCE_PROCEDURES.md
 │   ├── BACKUP_RECOVERY.md
-│   ├── SCALING_GUIDE.md
-│   └── OBSERVABILITY.md
+│   └── SCALING_GUIDE.md
 ├── planning/                    # Project Planning
 │   └── PROJECT_STATUS.md
 ├── rfc/                         # Request for Comments
@@ -57,10 +61,9 @@ docs/
 ├── configuration/               # Configuration Documentation
 │   └── ENVIRONMENT_VARIABLES.md
 ├── README.md                    # This file
+├── MAINTENANCE.md               # Documentation maintenance protocols
 ├── DEVELOPER_QUICK_REFERENCE.md # Quick reference guide
 ├── directory-structure.md       # Project structure
-├── DOCUMENTATION_MAINTENANCE.md # Documentation maintenance protocols
-├── DOCUMENTATION_STATUS.md      # Documentation status and coverage
 ├── project.md                   # Project overview
 └── STUDY_CASE.md               # Study case documentation
 ```
@@ -91,15 +94,20 @@ docs/
 
 ### 💻 Development
 - **[Developer Quick Reference](DEVELOPER_QUICK_REFERENCE.md)** - Quick start guide
+- **[Go Development Standards](development/GO_DEVELOPMENT_STANDARDS.md)** - Comprehensive Go development standards and best practices
+- **[Testing Strategy](development/TESTING.md)** - Comprehensive testing strategy and standards
+- **[Docker and Local Development](development/DOCKER_AND_LOCAL_DEVELOPMENT.md)** - Containerization and local development setup
 - **[Frontend Development](development/FRONTEND_DEVELOPMENT.md)** - Comprehensive frontend development with HMR
 - **[Frontend Components](development/FRONTEND_COMPONENTS.md)** - Detailed Vue.js component documentation
 - **[Test Data Structure](development/TEST_DATA_STRUCTURE.md)** - Test data organization and helper functions
 - **[E2E Debugging](development/E2E_DEBUGGING.md)** - End-to-end testing debugging guide
 - **[Admin API](development/ADMIN_API.md)** - Administrative API documentation
-- **[Testing](development/TESTING.md)** - Comprehensive testing strategy and best practices
 - **[Directory Structure](directory-structure.md)** - Project structure overview
 
 ### 🔧 Implementation
+- **[AI and LLM Pipeline](implementation/AI_LLM_PIPELINE.md)** - AI pipeline design, prompt engineering, and RAG implementation
+- **[Storage and Queueing](implementation/STORAGE_AND_QUEUEING.md)** - Database schema, queue system, and data management
+- **[API Documentation](implementation/API_DOCUMENTATION.md)** - Comprehensive API documentation, contracts, and standards
 - **[AI Evaluation System](implementation/AI_EVALUATION_SYSTEM.md)** - AI evaluation system implementation
 - **[Programmatic Topic Creation](implementation/PROGRAMMATIC_TOPIC_CREATION.md)** - Redpanda topic creation implementation
 - **[Exactly-Once Analysis](implementation/EXACTLY_ONCE_ANALYSIS.md)** - Critical analysis of exactly-once semantics
@@ -107,12 +115,12 @@ docs/
 - **[Migration System](implementation/MIGRATION_SYSTEM.md)** - Containerized database migration system
 - **[Free Models Implementation](implementation/FREE_MODELS_IMPLEMENTATION.md)** - Free AI models implementation
 - **[RAG & Qdrant Implementation](implementation/RAG_QDRANT_IMPLEMENTATION.md)** - RAG and vector database implementation
-- **[API Documentation](implementation/API_DOCUMENTATION.md)** - Comprehensive API documentation
 
 ### 🔄 Migration & Operations
 - **[Redpanda Migration](migration/REDPANDA_MIGRATION.md)** - Complete migration guide and status
-- **[GitHub Secrets](ops/github-secrets.md)** - GitHub secrets management
-- **[GitHub Optional Secrets](ops/github-optional-secrets.md)** - Optional secrets configuration
+- **[CI/CD and GitHub Actions](ops/CI_CD_GITHUB_ACTIONS.md)** - Continuous integration and deployment pipeline
+- **[Observability](ops/OBSERVABILITY.md)** - Comprehensive observability and monitoring guide
+- **[GitHub Secrets](ops/GITHUB_SECRETS.md)** - Comprehensive GitHub secrets management
 - **[Troubleshooting Guide](ops/TROUBLESHOOTING.md)** - Comprehensive troubleshooting and debugging guide
 - **[Performance](ops/PERFORMANCE.md)** - Performance monitoring and optimization guide
 - **[Security Audit](ops/SECURITY_AUDIT.md)** - Security audit procedures and compliance
@@ -120,7 +128,6 @@ docs/
 - **[Maintenance Procedures](ops/MAINTENANCE_PROCEDURES.md)** - System maintenance and optimization
 - **[Backup & Recovery](ops/BACKUP_RECOVERY.md)** - Backup and disaster recovery procedures
 - **[Scaling Guide](ops/SCALING_GUIDE.md)** - System scaling and capacity planning
-- **[Observability](ops/OBSERVABILITY.md)** - Comprehensive observability and monitoring guide
 
 ### 📋 Planning & RFCs
 - **[Project Status](planning/PROJECT_STATUS.md)** - Current project status and recent changes
@@ -128,7 +135,7 @@ docs/
 - **[RFC Submission](rfc/rfc-submission.md)** - Submission RFC
 
 ### 🔒 Security & Compliance
-- **[Security Policy](security/SECURITY.md)** - Security guidelines and procedures
+- **[Security and Compliance](security/SECURITY.md)** - Comprehensive security measures, compliance requirements, and best practices
 - **[Contributing Guidelines](contributing/CONTRIBUTING.md)** - How to contribute
 
 ### ⚙️ Configuration
@@ -139,8 +146,7 @@ docs/
 - **[Project Overview](project.md)** - Project overview and goals
 
 ### 🔧 Documentation Maintenance
-- **[Documentation Maintenance](DOCUMENTATION_MAINTENANCE.md)** - Maintenance protocols and cleanup procedures
-- **[Documentation Status](DOCUMENTATION_STATUS.md)** - Documentation status and coverage overview
+- **[Documentation Maintenance](MAINTENANCE.md)** - Comprehensive maintenance protocols and cleanup procedures
 
 ## 🎯 Key Features
 

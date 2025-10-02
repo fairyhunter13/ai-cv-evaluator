@@ -25,6 +25,10 @@ func (f *fakeAI) CleanCoTResponse(_ domain.Context, response string) (string, er
 	return response, nil
 }
 
+func (f *fakeAI) ChatJSONWithRetry(_ domain.Context, _ string, _ string, _ int) (string, error) {
+	return "{}", nil
+}
+
 func Test_NewEmbedCache_UsesCache(t *testing.T) {
 	base := &fakeAI{}
 	wrapped := NewEmbedCache(base, 8)

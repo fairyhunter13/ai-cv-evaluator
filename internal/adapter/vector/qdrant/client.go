@@ -119,6 +119,27 @@ func (c *Client) Search(ctx context.Context, collection string, vector []float32
 	return out.Result, nil
 }
 
+// Ping checks if the Qdrant service is accessible.
+func (c *Client) Ping(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/collections", c.baseURL), nil)
+	if err != nil {
+		return fmt.Errorf("create ping request: %w", err)
+	}
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("ping request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("ping failed with status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func (c *Client) setHeaders(req *http.Request) {
 	if c.apiKey != "" {
 		req.Header.Set("api-key", c.apiKey)

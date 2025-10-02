@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 )
 
 func TestResult_FailedShape_ReturnsErrorObject(t *testing.T) {
-	jobRepo := domainmocks.NewJobRepository(t)
-	resultRepo := domainmocks.NewResultRepository(t)
+	jobRepo := mocks.NewMockJobRepository(t)
+	resultRepo := mocks.NewMockResultRepository(t)
 
 	// Set up mock expectations
 	jobRepo.On("Get", mock.Anything, "job1").Return(domain.Job{ID: "job1", Status: domain.JobFailed, Error: "schema invalid: missing field"}, nil)

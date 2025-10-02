@@ -162,6 +162,15 @@ func (s *Service) fetchModelsFromAPI(ctx context.Context) ([]Model, error) {
 			slog.Int("status_code", resp.StatusCode),
 			slog.String("response_body", string(body)),
 			slog.String("url", url))
+
+		// Handle specific error cases
+		if resp.StatusCode == 429 {
+			return nil, fmt.Errorf("OpenRouter API rate limited (429): %s", string(body))
+		}
+		if resp.StatusCode == 401 {
+			return nil, fmt.Errorf("OpenRouter API authentication failed (401): %s", string(body))
+		}
+
 		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -237,17 +246,27 @@ func (s *Service) isFreeModel(model Model) bool {
 	// All pricing must be free
 	allFree := isPromptFree && isCompletionFree && isRequestFree && isImageFree
 
-	// Additional check: exclude known paid model patterns
+	// STRICT BAN: Explicitly exclude openrouter/auto and other problematic models
 	modelID := strings.ToLower(model.ID)
+
+	// First check: explicit ban on openrouter/auto
+	if modelID == "openrouter/auto" {
+		slog.Warn("BANNED MODEL DETECTED: openrouter/auto is strictly prohibited",
+			slog.String("model_id", model.ID),
+			slog.String("reason", "openrouter/auto causes API timeouts and failures"))
+		return false
+	}
+
+	// Additional check: exclude known paid model patterns
 	excludedPatterns := []string{
 		"gpt-4", "gpt-5", "claude-3", "gemini-pro", "mistral-large",
 		"mixtral-8x", "llama-2-70b", "llama-2-13b", "command-",
-		"auto", // openrouter/auto
+		"auto", // openrouter/auto and similar auto-select models
 	}
 
 	for _, pattern := range excludedPatterns {
 		if strings.Contains(modelID, pattern) {
-			slog.Debug("excluding model with paid pattern",
+			slog.Debug("excluding model with paid/problematic pattern",
 				slog.String("model_id", model.ID),
 				slog.String("pattern", pattern))
 			return false

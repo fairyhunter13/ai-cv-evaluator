@@ -233,7 +233,7 @@ Environment variables (see `.env.sample`):
 - Frontend: `FRONTEND_SEPARATED` (enables API-only mode)
 
 Notes:
-- Chat model default is `openrouter/auto` when `CHAT_MODEL` is unset.
+- Chat model uses free models from OpenRouter API (no default model specified).
 - Embeddings are performed via OpenAI; set `OPENAI_API_KEY` and `EMBEDDINGS_MODEL` (default `text-embedding-3-small`). If `OPENAI_API_KEY` is not set, embeddings and RAG are skipped.
 - E2E tests run against live providers (no stub/mock). Ensure `OPENROUTER_API_KEY` (and `OPENAI_API_KEY` for RAG) are present before running E2E.
 - Frontend separation: Set `FRONTEND_SEPARATED=true` to enable API-only backend mode.

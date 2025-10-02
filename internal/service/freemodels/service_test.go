@@ -158,6 +158,31 @@ func TestFilterFreeModels(t *testing.T) {
 			expectedCount: 0,
 			expectedIDs:   []string{},
 		},
+		{
+			name: "openrouter_auto_strictly_banned",
+			models: []Model{
+				{
+					ID: "openrouter/auto",
+					Pricing: Pricing{
+						Prompt:     "0",
+						Completion: "0",
+						Request:    "0",
+						Image:      "0",
+					},
+				},
+				{
+					ID: "free-model-1",
+					Pricing: Pricing{
+						Prompt:     "0",
+						Completion: "0",
+						Request:    "0",
+						Image:      "0",
+					},
+				},
+			},
+			expectedCount: 1,
+			expectedIDs:   []string{"free-model-1"},
+		},
 	}
 
 	for _, tt := range tests {
