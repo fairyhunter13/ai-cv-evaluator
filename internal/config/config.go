@@ -49,6 +49,16 @@ type Config struct {
 	AIBackoffMultiplier      float64       `env:"AI_BACKOFF_MULTIPLIER" envDefault:"1.5"`
 	// Queue Consumer Configuration
 	ConsumerMaxConcurrency int `env:"CONSUMER_MAX_CONCURRENCY" envDefault:"8"`
+	// Retry Configuration
+	RetryMaxRetries   int           `env:"RETRY_MAX_RETRIES" envDefault:"3"`
+	RetryInitialDelay time.Duration `env:"RETRY_INITIAL_DELAY" envDefault:"2s"`
+	RetryMaxDelay     time.Duration `env:"RETRY_MAX_DELAY" envDefault:"30s"`
+	RetryMultiplier   float64       `env:"RETRY_MULTIPLIER" envDefault:"2.0"`
+	RetryJitter       bool          `env:"RETRY_JITTER" envDefault:"true"`
+	// DLQ Configuration
+	DLQEnabled         bool          `env:"DLQ_ENABLED" envDefault:"true"`
+	DLQMaxAge          time.Duration `env:"DLQ_MAX_AGE" envDefault:"168h"`
+	DLQCleanupInterval time.Duration `env:"DLQ_CLEANUP_INTERVAL" envDefault:"24h"`
 }
 
 // AdminEnabled returns true if admin features should be enabled

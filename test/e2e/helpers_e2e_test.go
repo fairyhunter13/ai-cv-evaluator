@@ -124,10 +124,21 @@ func waitForCompleted(t *testing.T, client *http.Client, jobID string, maxWait t
 			t.Logf("Job %s still processing... (poll %d, status: %s)", jobID, pollCount, status)
 		}
 
-		// Use optimized polling interval - start very fast, then moderate
-		pollInterval := 200 * time.Millisecond
-		if pollCount > 20 {
+		// Optimized adaptive polling strategy for better performance
+		var pollInterval time.Duration
+		switch {
+		case pollCount <= 10:
+			// Fast polling for initial attempts (100ms)
+			pollInterval = 100 * time.Millisecond
+		case pollCount <= 30:
+			// Moderate polling for middle attempts (300ms)
+			pollInterval = 300 * time.Millisecond
+		case pollCount <= 60:
+			// Slower polling for longer waits (500ms)
 			pollInterval = 500 * time.Millisecond
+		default:
+			// Slow polling for very long waits (1s)
+			pollInterval = 1 * time.Second
 		}
 		time.Sleep(pollInterval)
 	}

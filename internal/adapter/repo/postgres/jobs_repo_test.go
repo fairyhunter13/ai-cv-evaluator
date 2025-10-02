@@ -47,19 +47,30 @@ func TestJobRepo_UpdateStatus(t *testing.T) {
 	repo := postgres.NewJobRepo(pool)
 	ctx := context.Background()
 
+	// Create a mock transaction
+	mockTx := mocks.NewMockTx(t)
+
 	// Test successful update
-	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	pool.EXPECT().BeginTx(mock.Anything, mock.Anything).Return(mockTx, nil).Once()
+	mockTx.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	mockTx.EXPECT().Commit(mock.Anything).Return(nil).Once()
+	mockTx.EXPECT().Rollback(mock.Anything).Return(nil).Once() // Rollback is called in defer after commit
 	err := repo.UpdateStatus(ctx, "job-1", domain.JobCompleted, nil)
 	require.NoError(t, err)
 
 	// Test with error message
 	errorMsg := "test error"
-	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	pool.EXPECT().BeginTx(mock.Anything, mock.Anything).Return(mockTx, nil).Once()
+	mockTx.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	mockTx.EXPECT().Commit(mock.Anything).Return(nil).Once()
+	mockTx.EXPECT().Rollback(mock.Anything).Return(nil).Once() // Rollback is called in defer after commit
 	err = repo.UpdateStatus(ctx, "job-1", domain.JobFailed, &errorMsg)
 	require.NoError(t, err)
 
 	// Test database error
-	pool.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, assert.AnError).Once()
+	pool.EXPECT().BeginTx(mock.Anything, mock.Anything).Return(mockTx, nil).Once()
+	mockTx.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, assert.AnError).Once()
+	mockTx.EXPECT().Rollback(mock.Anything).Return(nil).Once() // Rollback on error
 	err = repo.UpdateStatus(ctx, "job-1", domain.JobCompleted, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "op=job.update_status")

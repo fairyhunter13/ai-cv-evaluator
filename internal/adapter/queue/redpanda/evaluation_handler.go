@@ -130,25 +130,51 @@ func HandleEvaluate(
 			slog.String("job_id", payload.JobID),
 			slog.Int("attempts", maxRetries),
 			slog.Any("error", lastErr))
+
+		// Create retry info for the failed job
+		retryInfo := &domain.RetryInfo{
+			AttemptCount:  maxRetries,
+			MaxAttempts:   maxRetries,
+			LastAttemptAt: time.Now(),
+			RetryStatus:   domain.RetryStatusExhausted,
+			LastError:     lastErr.Error(),
+			ErrorHistory:  []string{lastErr.Error()},
+			CreatedAt:     time.Now(),
+			UpdatedAt:     time.Now(),
+		}
+
+		// Update retry info with all attempts
+		for attempt := 1; attempt <= maxRetries; attempt++ {
+			retryInfo.ErrorHistory = append(retryInfo.ErrorHistory, fmt.Sprintf("attempt %d failed", attempt))
+		}
+
+		// Mark as exhausted
+		retryInfo.MarkAsExhausted()
+
+		// The retry manager will handle moving to DLQ if needed
+		// For now, just mark as failed
 		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr("enhanced evaluation failed after retries"))
 		return fmt.Errorf("enhanced evaluation failed after %d attempts: %w", maxRetries, lastErr)
 	}
 
 	// Store the result FIRST
+	slog.Info("storing evaluation result", slog.String("job_id", payload.JobID))
 	if err := results.Upsert(ctx, result); err != nil {
 		slog.Error("failed to store result", slog.String("job_id", payload.JobID), slog.Any("error", err))
 		return fmt.Errorf("store result: %w", err)
 	}
+	slog.Info("evaluation result stored successfully", slog.String("job_id", payload.JobID))
 
 	// Update job status to completed AFTER storing result
+	slog.Info("updating job status to completed", slog.String("job_id", payload.JobID))
 	if err := jobs.UpdateStatus(ctx, payload.JobID, domain.JobCompleted, nil); err != nil {
 		slog.Error("failed to update job status to completed", slog.String("job_id", payload.JobID), slog.Any("error", err))
 		return fmt.Errorf("update job status: %w", err)
 	}
+	slog.Info("job status updated to completed successfully", slog.String("job_id", payload.JobID))
 	observability.CompleteJob("evaluate")
 	slog.Info("job completed", slog.String("job_id", payload.JobID))
 	return nil
 }
 
 // ptr returns a pointer to the given string.
-func ptr(s string) *string { return &s }

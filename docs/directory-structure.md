@@ -1,4 +1,4 @@
-# Directory Structure Documentation
+# Directory Structure
 
 This document describes the organized directory structure for the AI CV Evaluator project.
 
@@ -7,21 +7,9 @@ This document describes the organized directory structure for the AI CV Evaluato
 ```
 ai-cv-evaluator/
 ├── admin-frontend/         # Vue 3 + Vite frontend application
-│   ├── src/               # Frontend source code
-│   │   ├── views/         # Page components
-│   │   ├── stores/        # Pinia state management
-│   │   └── main.ts        # Application entry point
-│   ├── public/            # Static assets
-│   ├── package.json       # Frontend dependencies
-│   ├── vite.config.ts     # Vite configuration
-│   ├── tailwind.config.js # Tailwind CSS configuration
-│   ├── Dockerfile         # Development Docker image
-│   └── Dockerfile.prod    # Production Docker image
 ├── api/                    # OpenAPI specifications
 ├── build/                  # Build artifacts and compiled binaries
-├── cmd/                    # Application entry points
-│   ├── server/            # Server application
-│   └── worker/            # Worker application
+├── cmd/                    # Application entry points (server, worker)
 ├── configs/               # Configuration files
 ├── coverage/              # Test coverage reports
 ├── deploy/                # Deployment configurations

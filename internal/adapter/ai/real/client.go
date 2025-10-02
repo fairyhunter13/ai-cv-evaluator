@@ -3,11 +3,13 @@ package real
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -195,11 +197,28 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 	}
 	op := func() error {
 		start := time.Now()
+		connectionStart := time.Now()
 		// Recreate request each attempt to avoid reusing consumed bodies
 		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
 		r.Header.Set("Authorization", "Bearer "+c.cfg.OpenRouterAPIKey)
 		r.Header.Set("Content-Type", "application/json")
+
+		// Log connection start
+		slog.Debug("starting OpenRouter API connection",
+			slog.String("model", model),
+			slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"),
+			slog.Time("connection_start", connectionStart))
+
 		resp, err := c.chatHC.Do(r)
+		connectionDuration := time.Since(connectionStart)
+
+		// Log connection duration
+		slog.Info("OpenRouter API connection completed",
+			slog.String("model", model),
+			slog.Duration("connection_duration", connectionDuration),
+			slog.Int("status_code", resp.StatusCode),
+			slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
+
 		observability.AIRequestsTotal.WithLabelValues("openrouter", "chat").Inc()
 		observability.AIRequestDuration.WithLabelValues("openrouter", "chat").Observe(time.Since(start).Seconds())
 		if err != nil {
@@ -320,51 +339,157 @@ func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt 
 		return "", fmt.Errorf("no free models available from OpenRouter API")
 	}
 
-	// Try each model sequentially with retry logic
-	maxRetries := 2
+	// Use enhanced model switching with timeout handling
+	return c.chatJSONWithEnhancedModelSwitching(ctx, systemPrompt, userPrompt, maxTokens, freeModels)
+}
+
+// chatJSONWithEnhancedModelSwitching implements intelligent model switching with timeout handling.
+func (c *Client) chatJSONWithEnhancedModelSwitching(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int, freeModels []freemodels.Model) (string, error) {
+	// Configuration for enhanced model switching
+	const (
+		maxRetriesPerModel      = 2
+		modelTimeout            = 60 * time.Second // 60 seconds per model attempt
+		circuitBreakerThreshold = 3                // Switch after 3 consecutive failures
+	)
+
+	// Track model performance for intelligent selection
+	modelFailures := make(map[string]int)
+	modelSuccesses := make(map[string]int)
+
+	// Try each model with enhanced timeout and circuit breaker logic
 	for modelIndex, model := range freeModels {
-		slog.Info("trying model with retry logic",
-			slog.String("model", model.ID),
-			slog.String("model_name", model.Name),
+		modelID := model.ID
+		modelName := model.Name
+
+		// Skip models that have failed too many times (circuit breaker)
+		if modelFailures[modelID] >= circuitBreakerThreshold {
+			slog.Warn("model circuit breaker triggered, skipping model",
+				slog.String("model", modelID),
+				slog.String("model_name", modelName),
+				slog.Int("failures", modelFailures[modelID]),
+				slog.Int("threshold", circuitBreakerThreshold))
+			continue
+		}
+
+		slog.Info("trying model with enhanced switching",
+			slog.String("model", modelID),
+			slog.String("model_name", modelName),
 			slog.Int("model_index", modelIndex),
-			slog.Int("total_models", len(freeModels)))
+			slog.Int("total_models", len(freeModels)),
+			slog.Int("previous_failures", modelFailures[modelID]),
+			slog.Int("previous_successes", modelSuccesses[modelID]))
 
-		for attempt := 1; attempt <= maxRetries; attempt++ {
-			slog.Info("model attempt",
-				slog.String("model", model.ID),
+		// Try this model with retry logic and timeout handling
+		for attempt := 1; attempt <= maxRetriesPerModel; attempt++ {
+			slog.Info("model attempt with timeout",
+				slog.String("model", modelID),
 				slog.Int("attempt", attempt),
-				slog.Int("max_retries", maxRetries))
+				slog.Int("max_retries", maxRetriesPerModel),
+				slog.Duration("timeout", modelTimeout))
 
-			result, err := c.callOpenRouterWithModel(ctx, model.ID, systemPrompt, userPrompt, maxTokens)
-			if err == nil {
-				slog.Info("model succeeded",
-					slog.String("model", model.ID),
-					slog.Int("attempt", attempt))
-				return result, nil
+			// Create a timeout context for this specific model attempt
+			modelCtx, cancel := context.WithTimeout(ctx, modelTimeout)
+
+			// Use a channel to detect if the call completes or times out
+			resultChan := make(chan struct {
+				result string
+				err    error
+			}, 1)
+
+			// Make the AI call in a goroutine to handle timeouts properly
+			go func() {
+				result, err := c.callOpenRouterWithModel(modelCtx, modelID, systemPrompt, userPrompt, maxTokens)
+				resultChan <- struct {
+					result string
+					err    error
+				}{result, err}
+			}()
+
+			// Wait for either completion or timeout
+			select {
+			case result := <-resultChan:
+				cancel() // Clean up the timeout context
+
+				if result.err == nil {
+					// Enhanced refusal detection with comprehensive validation
+					refusalDetected, refusalReason := c.detectRefusalWithValidation(ctx, result.result)
+					if refusalDetected {
+						slog.Warn("model returned refusal response, switching to next model",
+							slog.String("model", modelID),
+							slog.String("model_name", modelName),
+							slog.String("refusal_reason", refusalReason),
+							slog.String("response_preview", truncateString(result.result, 100)))
+						modelFailures[modelID]++
+						break // Skip to next model immediately
+					}
+
+					// Success! Update success counter and return
+					modelSuccesses[modelID]++
+					slog.Info("model succeeded with enhanced switching",
+						slog.String("model", modelID),
+						slog.String("model_name", modelName),
+						slog.Int("attempt", attempt),
+						slog.Int("response_length", len(result.result)),
+						slog.Int("total_successes", modelSuccesses[modelID]))
+					return result.result, nil
+				}
+
+				// Handle different types of errors
+				slog.Warn("model attempt failed with enhanced switching",
+					slog.String("model", modelID),
+					slog.String("model_name", modelName),
+					slog.Int("attempt", attempt),
+					slog.Any("error", result.err))
+
+				// Check if it's a timeout error
+				if modelCtx.Err() == context.DeadlineExceeded {
+					slog.Warn("model timeout exceeded",
+						slog.String("model", modelID),
+						slog.String("model_name", modelName),
+						slog.Duration("timeout", modelTimeout))
+					modelFailures[modelID]++
+				} else {
+					// Other types of errors
+					modelFailures[modelID]++
+				}
+
+			case <-modelCtx.Done():
+				// Timeout occurred
+				cancel()
+				modelFailures[modelID]++
+				slog.Warn("model timeout exceeded, switching to next model",
+					slog.String("model", modelID),
+					slog.String("model_name", modelName),
+					slog.Duration("timeout", modelTimeout),
+					slog.Int("failures", modelFailures[modelID]))
 			}
 
-			slog.Warn("model attempt failed",
-				slog.String("model", model.ID),
-				slog.Int("attempt", attempt),
-				slog.Any("error", err))
-
 			// If this is not the last attempt for this model, wait before retrying
-			if attempt < maxRetries {
-				backoffDuration := time.Duration(attempt) * time.Second
+			if attempt < maxRetriesPerModel {
+				backoffDuration := time.Duration(attempt) * 2 * time.Second
 				slog.Info("waiting before model retry",
-					slog.String("model", model.ID),
+					slog.String("model", modelID),
 					slog.Duration("backoff", backoffDuration))
 				time.Sleep(backoffDuration)
 			}
 		}
 
 		slog.Warn("model failed after all retries, trying next model",
-			slog.String("model", model.ID),
+			slog.String("model", modelID),
+			slog.String("model_name", modelName),
 			slog.Int("model_index", modelIndex),
-			slog.Int("total_models", len(freeModels)))
+			slog.Int("total_models", len(freeModels)),
+			slog.Int("total_failures", modelFailures[modelID]),
+			slog.Int("total_successes", modelSuccesses[modelID]))
 	}
 
-	return "", fmt.Errorf("all models failed after retries")
+	// Log final statistics
+	slog.Error("all models failed with enhanced switching",
+		slog.Int("total_models_tried", len(freeModels)),
+		slog.Any("model_failures", modelFailures),
+		slog.Any("model_successes", modelSuccesses))
+
+	return "", fmt.Errorf("all models failed after enhanced switching (tried %d models)", len(freeModels))
 }
 
 // callOpenRouterWithModel makes a single call to OpenRouter with a specific model.
@@ -393,10 +518,27 @@ func (c *Client) callOpenRouterWithModel(ctx domain.Context, model, systemPrompt
 
 	op := func() error {
 		start := time.Now()
+		connectionStart := time.Now()
 		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
 		r.Header.Set("Authorization", "Bearer "+c.cfg.OpenRouterAPIKey)
 		r.Header.Set("Content-Type", "application/json")
+
+		// Log connection start for model switching
+		slog.Debug("starting OpenRouter API connection (model switching)",
+			slog.String("model", model),
+			slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"),
+			slog.Time("connection_start", connectionStart))
+
 		resp, err := c.chatHC.Do(r)
+		connectionDuration := time.Since(connectionStart)
+
+		// Log connection duration for model switching
+		slog.Info("OpenRouter API connection completed (model switching)",
+			slog.String("model", model),
+			slog.Duration("connection_duration", connectionDuration),
+			slog.Int("status_code", resp.StatusCode),
+			slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
+
 		observability.AIRequestsTotal.WithLabelValues("openrouter", "chat_retry").Inc()
 		observability.AIRequestDuration.WithLabelValues("openrouter", "chat_retry").Observe(time.Since(start).Seconds())
 		if err != nil {
@@ -473,11 +615,28 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 	}
 	op := func() error {
 		start := time.Now()
+		connectionStart := time.Now()
 		// Recreate request each attempt to avoid reusing consumed bodies
 		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenAIBaseURL+"/embeddings", bytes.NewReader(b))
 		r.Header.Set("Authorization", "Bearer "+c.cfg.OpenAIAPIKey)
 		r.Header.Set("Content-Type", "application/json")
+
+		// Log connection start for embeddings
+		slog.Debug("starting OpenAI API connection (embeddings)",
+			slog.String("model", c.cfg.EmbeddingsModel),
+			slog.String("endpoint", c.cfg.OpenAIBaseURL+"/embeddings"),
+			slog.Time("connection_start", connectionStart))
+
 		resp, err := c.embedHC.Do(r)
+		connectionDuration := time.Since(connectionStart)
+
+		// Log connection duration for embeddings
+		slog.Info("OpenAI API connection completed (embeddings)",
+			slog.String("model", c.cfg.EmbeddingsModel),
+			slog.Duration("connection_duration", connectionDuration),
+			slog.Int("status_code", resp.StatusCode),
+			slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
+
 		observability.AIRequestsTotal.WithLabelValues("openai", "embed").Inc()
 		observability.AIRequestDuration.WithLabelValues("openai", "embed").Observe(time.Since(start).Seconds())
 		if err != nil {
@@ -661,4 +820,191 @@ Original response to clean:
 		slog.String("cleaning_model", out.Model))
 
 	return cleanedResponse, nil
+}
+
+// isRefusalResponse detects if the AI model response is a refusal to process the request.
+func isRefusalResponse(response string) bool {
+	// Enhanced refusal detection with multiple categories
+	refusalPatterns := map[string][]string{
+		"apology_phrases": {
+			"i'm sorry", "i apologize", "i regret", "unfortunately",
+			"i'm afraid", "i'm unable to help", "i cannot help",
+		},
+		"capability_denials": {
+			"i cannot", "i can't", "i am unable", "i'm unable",
+			"i am not able", "i'm not able", "i don't have access",
+			"i don't have the ability", "i lack the capability",
+		},
+		"security_concerns": {
+			"access or reveal", "internal system instructions",
+			"system instructions", "security concerns",
+			"potentially harmful", "safety guidelines",
+			"content policy", "usage guidelines",
+		},
+		"request_rejections": {
+			"legitimate query", "can't assist with", "cannot assist with",
+			"i cannot fulfill", "i cannot provide", "i cannot generate",
+			"i cannot create", "i cannot write", "i cannot analyze",
+		},
+		"ethical_concerns": {
+			"ethical guidelines", "responsible ai", "ai safety",
+			"harmful content", "inappropriate", "unethical",
+			"violates guidelines", "against policy",
+		},
+		"technical_limitations": {
+			"technical limitations", "system limitations",
+			"processing error", "unable to process",
+			"request too complex", "input too short",
+		},
+	}
+
+	lowerResponse := strings.ToLower(response)
+
+	// Check each category
+	for category, phrases := range refusalPatterns {
+		for _, phrase := range phrases {
+			if strings.Contains(lowerResponse, phrase) {
+				slog.Debug("refusal response detected",
+					slog.String("category", category),
+					slog.String("phrase", phrase),
+					slog.String("response_preview", truncateString(response, 200)))
+				return true
+			}
+		}
+	}
+
+	// Additional pattern-based detection
+	if isRefusalByPattern(response) {
+		return true
+	}
+
+	return false
+}
+
+// isRefusalByPattern detects refusal responses using advanced pattern matching
+func isRefusalByPattern(response string) bool {
+	// Very short responses (likely refusals)
+	if len(strings.TrimSpace(response)) < 50 {
+		lowerResponse := strings.ToLower(response)
+		shortRefusalIndicators := []string{
+			"i can't", "i cannot", "sorry", "unable", "no",
+		}
+		for _, indicator := range shortRefusalIndicators {
+			if strings.Contains(lowerResponse, indicator) {
+				return true
+			}
+		}
+	}
+
+	// Responses that start with apologies
+	trimmed := strings.TrimSpace(response)
+	if len(trimmed) > 10 {
+		firstWords := strings.ToLower(trimmed[:minInt(50, len(trimmed))])
+		apologyStarters := []string{
+			"i'm sorry", "i apologize", "unfortunately", "i'm afraid",
+		}
+		for _, starter := range apologyStarters {
+			if strings.HasPrefix(firstWords, starter) {
+				return true
+			}
+		}
+	}
+
+	// Responses that contain policy/guideline references
+	lowerResponse := strings.ToLower(response)
+	policyIndicators := []string{
+		"policy", "guidelines", "terms", "conditions", "rules",
+		"restrictions", "limitations", "boundaries",
+	}
+	for _, indicator := range policyIndicators {
+		if strings.Contains(lowerResponse, indicator) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// min returns the minimum of two integers
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// detectRefusalWithValidation performs comprehensive refusal detection using multiple methods.
+func (c *Client) detectRefusalWithValidation(_ context.Context, response string) (bool, string) {
+	// Method 1: Fast code-based detection (immediate)
+	if isRefusalResponse(response) {
+		return true, "code-based pattern detection"
+	}
+
+	// Method 2: AI-powered detection (more accurate but slower)
+	// Note: This would require the RefusalDetector, but we'll keep it simple for now
+	// In a full implementation, you would use the RefusalDetector here
+
+	// Method 3: Response quality checks
+	if c.isLowQualityResponse(response) {
+		return true, "low quality response detected"
+	}
+
+	return false, ""
+}
+
+// isLowQualityResponse detects low-quality responses that might indicate refusal.
+func (c *Client) isLowQualityResponse(response string) bool {
+	// Very short responses
+	if len(strings.TrimSpace(response)) < 30 {
+		return true
+	}
+
+	// Responses that are mostly punctuation or whitespace
+	trimmed := strings.TrimSpace(response)
+	if len(trimmed) < 10 {
+		return true
+	}
+
+	// Responses that contain only common words without substance
+	words := strings.Fields(strings.ToLower(trimmed))
+	if len(words) < 5 {
+		return true
+	}
+
+	// Check for responses that are just repeated words
+	if c.hasExcessiveRepetition(words) {
+		return true
+	}
+
+	return false
+}
+
+// hasExcessiveRepetition checks if the response has excessive word repetition.
+func (c *Client) hasExcessiveRepetition(words []string) bool {
+	if len(words) < 10 {
+		return false
+	}
+
+	wordCount := make(map[string]int)
+	for _, word := range words {
+		wordCount[word]++
+	}
+
+	// If any word appears more than 30% of the time, it's likely repetitive
+	maxCount := 0
+	for _, count := range wordCount {
+		if count > maxCount {
+			maxCount = count
+		}
+	}
+
+	return maxCount > len(words)/3
+}
+
+// truncateString truncates a string to the specified length.
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }

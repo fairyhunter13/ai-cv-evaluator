@@ -7,6 +7,7 @@ package postgres
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,22 +40,100 @@ func (r *JobRepo) Create(ctx domain.Context, j domain.Job) (string, error) {
 	return id, nil
 }
 
-// UpdateStatus updates a job's status and optional error message.
+// UpdateStatus updates a job's status and optional error message with explicit transaction management.
 func (r *JobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobStatus, errMsg *string) error {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.UpdateStatus")
 	defer span.End()
+
+	// Log the operation start
+	slog.Info("starting job status update with explicit transaction",
+		slog.String("job_id", id),
+		slog.String("status", string(status)))
+
 	// Map nil errMsg to empty string to satisfy NOT NULL constraint on error column
-	// CRITICAL: Pass empty string directly, not via COALESCE, to avoid NULL issues
 	errVal := ""
 	if errMsg != nil {
 		errVal = *errMsg
 	}
-	q := `UPDATE jobs SET status=$2, error=$3, updated_at=$4 WHERE id=$1`
-	_, err := r.Pool.Exec(ctx, q, id, status, errVal, time.Now().UTC())
+
+	// Use explicit transaction with proper isolation level
+	tx, err := r.Pool.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel: pgx.ReadCommitted, // Ensure read committed isolation
+	})
 	if err != nil {
-		return fmt.Errorf("op=job.update_status: %w", err)
+		slog.Error("failed to begin transaction for job status update",
+			slog.String("job_id", id),
+			slog.String("status", string(status)),
+			slog.Any("error", err),
+			slog.String("error_type", fmt.Sprintf("%T", err)))
+		return fmt.Errorf("op=job.update_status.begin_tx: %w", err)
 	}
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			slog.Error("failed to rollback transaction",
+				slog.String("job_id", id),
+				slog.Any("error", err))
+		}
+	}()
+
+	// Execute the update within the transaction
+	q := `UPDATE jobs SET status=$2, error=$3, updated_at=$4 WHERE id=$1`
+	updateStart := time.Now()
+	result, err := tx.Exec(ctx, q, id, status, errVal, time.Now().UTC())
+	updateDuration := time.Since(updateStart)
+
+	if err != nil {
+		slog.Error("failed to execute job status update within transaction",
+			slog.String("job_id", id),
+			slog.String("status", string(status)),
+			slog.Duration("update_duration", updateDuration),
+			slog.Any("error", err),
+			slog.String("error_type", fmt.Sprintf("%T", err)),
+			slog.String("sql_query", q))
+		return fmt.Errorf("op=job.update_status.exec: %w", err)
+	}
+
+	// Log the update result
+	rowsAffected := result.RowsAffected()
+	slog.Info("job status update executed successfully within transaction",
+		slog.String("job_id", id),
+		slog.String("status", string(status)),
+		slog.Int64("rows_affected", rowsAffected),
+		slog.Duration("update_duration", updateDuration))
+
+	// Check if any rows were affected
+	if rowsAffected == 0 {
+		slog.Warn("job status update affected 0 rows - job may not exist",
+			slog.String("job_id", id),
+			slog.String("status", string(status)))
+	}
+
+	// Commit the transaction
+	commitStart := time.Now()
+	err = tx.Commit(ctx)
+	commitDuration := time.Since(commitStart)
+
+	if err != nil {
+		slog.Error("failed to commit transaction for job status update",
+			slog.String("job_id", id),
+			slog.String("status", string(status)),
+			slog.Duration("commit_duration", commitDuration),
+			slog.Any("error", err),
+			slog.String("error_type", fmt.Sprintf("%T", err)))
+		return fmt.Errorf("op=job.update_status.commit: %w", err)
+	}
+
+	// Log successful completion
+	totalDuration := time.Since(updateStart)
+	slog.Info("job status update completed successfully with explicit transaction",
+		slog.String("job_id", id),
+		slog.String("status", string(status)),
+		slog.Int64("rows_affected", rowsAffected),
+		slog.Duration("update_duration", updateDuration),
+		slog.Duration("commit_duration", commitDuration),
+		slog.Duration("total_duration", totalDuration))
+
 	return nil
 }
 
