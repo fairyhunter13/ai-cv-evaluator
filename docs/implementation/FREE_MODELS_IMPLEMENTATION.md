@@ -117,35 +117,16 @@ func (s *Service) GetFreeModels(ctx context.Context) ([]Model, error) {
 
 The wrapper implements intelligent load balancing:
 
-1. **Round-Robin Selection**: Distributes requests across available models
+1. **Rate-Limit-Aware Round-Robin**: Distributes requests across models that are not currently rate-limited; when all are blocked, selects the one with the shortest remaining wait
 2. **Failure Tracking**: Tracks failures per model
-3. **Blacklisting**: Temporarily removes failed models
-4. **Recovery**: Resets blacklist when all models fail
+3. **Rate Limit Cache**: Parses `Retry-After` header on 429 to set per-model cooldowns and skips them until unblocked
+4. **Recovery**: Automatically reintroduces models when cooldown expires; resets when all models fail
 
 ```go
-func (w *FreeModelWrapper) selectFreeModel(ctx context.Context) (string, error) {
-    models, err := w.freeModelsSvc.GetFreeModels(ctx)
-    if err != nil {
-        return "", fmt.Errorf("failed to get free models: %w", err)
-    }
-
-    w.mu.Lock()
-    defer w.mu.Unlock()
-
-    // Filter out blacklisted models
-    var availableModels []string
-    for _, model := range models {
-        if w.modelFailures[model.ID] < w.maxFailures {
-            availableModels = append(availableModels, model.ID)
-        }
-    }
-
-    // Round-robin selection
-    selectedModel := availableModels[w.roundRobinIdx%len(availableModels)]
-    w.roundRobinIdx++
-    
-    return selectedModel, nil
-}
+// Selection is performed inside the real client using RateLimitCache signals:
+// 1) Build buckets: unblocked models, blocked models sorted by RemainingBlockDuration
+// 2) Round-robin within the unblocked bucket; add fallbacks from the remainder
+// 3) If all blocked, choose the shortest-wait model first
 ```
 
 ### Failure Handling

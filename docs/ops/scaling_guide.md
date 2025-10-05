@@ -464,11 +464,11 @@ redpanda:
 
 ### 1. Horizontal Worker Scaling
 
-#### 1.1 Worker Deployment
-```yaml
-# docker-compose.workers.yml
-version: '3.8'
+**Note**: The system now uses a single optimized worker with high internal concurrency instead of multiple worker containers. For horizontal scaling in production, consider scaling the entire application stack rather than individual workers.
 
+#### 1.1 Worker Deployment (Single Optimized Worker)
+```yaml
+# docker-compose.yml
 services:
   worker:
     build: .
@@ -476,16 +476,15 @@ services:
     environment:
       - DB_HOST=db
       - KAFKA_BROKERS=redpanda:9092
-      - AI_MODEL=meta-llama/llama-3.1-8b-instruct:free
+      - CONSUMER_MAX_CONCURRENCY=24  # High internal concurrency
     deploy:
-      replicas: 8
-    resources:
-      limits:
-        memory: 1G
-        cpus: '1.0'
-      reservations:
-        memory: 512M
-        cpus: '0.5'
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 30s
@@ -493,7 +492,7 @@ services:
       retries: 3
 ```
 
-#### 1.2 Kubernetes Worker Scaling
+#### 1.2 Kubernetes Worker Scaling (Single Optimized Worker per Pod)
 ```yaml
 # k8s-worker-deployment.yml
 apiVersion: apps/v1
@@ -501,7 +500,7 @@ kind: Deployment
 metadata:
   name: ai-cv-evaluator-worker
 spec:
-  replicas: 8
+  replicas: 3  # Scale pods, not workers per pod
   selector:
     matchLabels:
       app: ai-cv-evaluator-worker
@@ -516,16 +515,18 @@ spec:
         command: ["./worker"]
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "500m"
-          limits:
             memory: "1Gi"
             cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
         env:
         - name: DB_HOST
           value: "db"
         - name: KAFKA_BROKERS
           value: "redpanda:9092"
+        - name: CONSUMER_MAX_CONCURRENCY
+          value: "24"  # High internal concurrency
 ---
 apiVersion: v1
 kind: Service
@@ -541,28 +542,25 @@ spec:
 
 ### 2. Vertical Worker Scaling
 
-#### 2.1 Worker Configuration
+#### 2.1 Worker Configuration (Internal Concurrency)
 ```go
-// Worker configuration for scaling
-type WorkerConfig struct {
-    Concurrency    int           `yaml:"concurrency"`
-    BatchSize     int           `yaml:"batch_size"`
-    FlushInterval time.Duration `yaml:"flush_interval"`
-    Timeout       time.Duration `yaml:"timeout"`
-    RetryCount    int           `yaml:"retry_count"`
-    RetryDelay    time.Duration `yaml:"retry_delay"`
-}
-
-func NewWorker(config *WorkerConfig) *Worker {
-    return &Worker{
-        concurrency:    config.Concurrency,
-        batchSize:      config.BatchSize,
-        flushInterval:  config.FlushInterval,
-        timeout:        config.Timeout,
-        retryCount:     config.RetryCount,
-        retryDelay:     config.RetryDelay,
-    }
-}
+// Worker configuration for scaling via internal concurrency
+// Controlled by CONSUMER_MAX_CONCURRENCY environment variable
+// Default: 24 concurrent goroutines
+// 
+// The worker automatically scales its internal pool based on:
+// - Queue depth
+// - Available resources
+// - Processing latency
+//
+// Configuration in docker-compose.yml:
+// environment:
+//   - CONSUMER_MAX_CONCURRENCY=24  # Adjust based on workload
+//
+// For higher throughput:
+//   - CONSUMER_MAX_CONCURRENCY=32
+//   - Increase CPU: cpus: '4.0'
+//   - Increase Memory: memory: 4G
 ```
 
 ## Vector Database Scaling
