@@ -251,7 +251,7 @@ curl http://localhost:3001
 
 - [Complete Documentation](README.md)
 - [Architecture Details](architecture/ARCHITECTURE.md)
-- [Production Setup](production-split-architecture.md)
+- [Production Setup](architecture/ARCHITECTURE.md)
 - [Contributing Guide](contributing/CONTRIBUTING.md)
 - [Security Policy](security/SECURITY.md)
 

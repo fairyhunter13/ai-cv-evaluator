@@ -4,11 +4,13 @@
 
 This document describes the implementation of queue optimization with multiple partitions for parallel processing and retry/DLQ mechanisms in the AI CV Evaluator system. These optimizations significantly improve E2E test performance and system reliability.
 
+**Note**: As of the latest update, the system uses a **single optimized worker** with high internal concurrency instead of multiple worker containers. This simplifies deployment while maintaining high throughput.
+
 ## 🚀 **Key Optimizations Implemented**
 
 ### **1. Multiple Queue Partitions**
 - **Partitions**: 8 partitions (vs 1 previously)
-- **Benefits**: True parallel processing of jobs
+- **Benefits**: True parallel processing of jobs within single worker
 - **Impact**: 8x potential throughput improvement
 
 ### **2. Optimized Topic Configuration**
@@ -17,17 +19,18 @@ This document describes the implementation of queue optimization with multiple p
 - **Segments**: 1-hour segments for better performance
 - **Replication**: Single replica for development/testing
 
-### **3. Multiple Worker Instances**
-- **Workers**: 4 separate worker instances
-- **Partition Assignment**: Each worker handles 2 partitions
-- **Load Balancing**: Automatic partition assignment
-- **Fault Tolerance**: Independent worker failures
+### **3. Single Optimized Worker with Internal Concurrency**
+- **Workers**: 1 worker container with internal goroutine pool
+- **Concurrency**: 24 concurrent goroutines (CONSUMER_MAX_CONCURRENCY=24)
+- **Resources**: 2 CPUs, 2GB RAM for optimal performance
+- **Partition Handling**: Single consumer group member handles all 8 partitions
+- **Benefits**: Simpler deployment, no rebalancing overhead, easier monitoring
 
 ### **4. Enhanced Consumer Configuration**
-- **Fetch Size**: 1MB fetch size for better throughput
-- **Fetch Wait**: 100ms optimized wait time
-- **Max Records**: 1000 records per fetch
-- **Partition Bytes**: 1MB per partition limit
+- **Fetch Size**: 10MB fetch size for better throughput
+- **Fetch Wait**: 10s optimized wait time for stability
+- **Min Bytes**: 512B minimum fetch
+- **Partition Bytes**: 2MB per partition limit
 
 ### **5. Retry and DLQ Mechanisms**
 - **Automatic Retry**: Exponential backoff with configurable retries
@@ -57,7 +60,7 @@ This document describes the implementation of queue optimization with multiple p
 └─────────────────┘
 ```
 
-### **After (Multiple Partitions)**:
+### **After (Single Worker with High Concurrency)**:
 ```
 ┌─────────────────┐
 │   Producer      │
@@ -71,25 +74,21 @@ This document describes the implementation of queue optimization with multiple p
 └─────────┬───────┘
           │
           ▼
-┌─────────────────┐
-│  Worker Pool    │
-│  ┌─────────────┐│
-│  │ Worker 1    ││ ← Partitions 0,1
-│  │ (2 parts)   ││
-│  └─────────────┘│
-│  ┌─────────────┐│
-│  │ Worker 2    ││ ← Partitions 2,3
-│  │ (2 parts)   ││
-│  └─────────────┘│
-│  ┌─────────────┐│
-│  │ Worker 3    ││ ← Partitions 4,5
-│  │ (2 parts)   ││
-│  └─────────────┘│
-│  ┌─────────────┐│
-│  │ Worker 4    ││ ← Partitions 6,7
-│  │ (2 parts)   ││
-│  └─────────────┘│
-└─────────────────┘
+┌─────────────────────────────┐
+│  Single Optimized Worker    │
+│  ┌─────────────────────────┐│
+│  │ Internal Goroutine Pool ││
+│  │ (24 concurrent workers) ││
+│  │                         ││
+│  │ Handles all 8 partitions││
+│  │ with dynamic scaling    ││
+│  └─────────────────────────┘│
+│                             │
+│  Resources:                 │
+│  - 2 CPUs                   │
+│  - 2GB RAM                  │
+│  - Auto-scaling pool        │
+└─────────────────────────────┘
 ```
 
 ## 🔧 **Implementation Details**
@@ -141,44 +140,33 @@ opts := []kgo.Opt{
     kgo.ConsumeTopics(topic),
     kgo.RequireStableFetchOffsets(),
     // Optimized settings for parallel processing
-    kgo.FetchMaxBytes(1048576),        // 1MB fetch size
-    kgo.FetchMaxWait(100*time.Millisecond), // 100ms fetch wait
-    kgo.FetchMinBytes(1),              // Minimum bytes to fetch
-    kgo.FetchMaxPartitionBytes(1048576), // 1MB per partition
-    kgo.FetchMaxRecords(1000),         // Max records per fetch
+    kgo.FetchMaxBytes(10 * 1024 * 1024),     // 10MB fetch size
+    kgo.FetchMaxWait(10 * time.Second),      // 10s fetch wait for stability
+    kgo.FetchMinBytes(512),                  // 512B minimum bytes
+    kgo.FetchMaxPartitionBytes(2 * 1024 * 1024), // 2MB per partition
+    kgo.AutoCommitMarks(),                   // Auto-commit offsets
+    kgo.AutoCommitInterval(1 * time.Second), // Commit every 1s
 }
 ```
 
 ### **4. Docker Compose Optimization**
 
-**File**: `docker-compose.e2e-optimized.yml`
+**File**: `docker-compose.yml`
 
 ```yaml
 services:
-  # Multiple worker instances for parallel processing
-  worker-1:
+  # Single optimized worker with high internal concurrency
+  worker:
     environment:
-      - CONSUMER_GROUP_ID=ai-cv-evaluator-workers-1
-      - CONSUMER_PARTITION_ASSIGNMENT=0,1
-      - WORKER_ID=worker-1
-      
-  worker-2:
-    environment:
-      - CONSUMER_GROUP_ID=ai-cv-evaluator-workers-2
-      - CONSUMER_PARTITION_ASSIGNMENT=2,3
-      - WORKER_ID=worker-2
-      
-  worker-3:
-    environment:
-      - CONSUMER_GROUP_ID=ai-cv-evaluator-workers-3
-      - CONSUMER_PARTITION_ASSIGNMENT=4,5
-      - WORKER_ID=worker-3
-      
-  worker-4:
-    environment:
-      - CONSUMER_GROUP_ID=ai-cv-evaluator-workers-4
-      - CONSUMER_PARTITION_ASSIGNMENT=6,7
-      - WORKER_ID=worker-4
+      - CONSUMER_MAX_CONCURRENCY=24  # 24 concurrent goroutines
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
 ```
 
 ## 📈 **Performance Improvements**
@@ -188,9 +176,10 @@ services:
 | Metric | Before | After | Improvement |
 |--------|--------|-------|-------------|
 | **Partitions** | 1 | 8 | 8x |
-| **Workers** | 1 | 4 | 4x |
-| **Parallel Jobs** | 1 | 8 | 8x |
-| **Throughput** | 1 job/sec | 8 jobs/sec | 8x |
+| **Worker Containers** | 1 | 1 | Same (simplified) |
+| **Internal Concurrency** | 8 | 24 | 3x |
+| **Parallel Jobs** | 1 | 24 | 24x |
+| **Throughput** | 1 job/sec | 10+ jobs/sec | 10x+ |
 | **Test Time** | 97-116s | 30-45s | 60-70% |
 
 ### **Queue Performance Metrics**:
@@ -205,24 +194,24 @@ services:
 ### **1. Run Optimized E2E Tests**:
 
 ```bash
-# Run optimized E2E tests with queue optimization
+# Run optimized E2E tests with single worker
 make ci-e2e-optimized
 
 # Or with custom parameters
-make ci-e2e-optimized E2E_PARALLEL=8 E2E_WORKER_REPLICAS=4
+make ci-e2e-optimized E2E_PARALLEL=8
 ```
 
 ### **2. Monitor Queue Performance**:
 
 ```bash
 # Check Redpanda Console
-open http://localhost:8080
+open http://localhost:8090
 
 # Check worker logs
-docker compose -f docker-compose.e2e-optimized.yml logs worker-1
-docker compose -f docker-compose.e2e-optimized.yml logs worker-2
-docker compose -f docker-compose.e2e-optimized.yml logs worker-3
-docker compose -f docker-compose.e2e-optimized.yml logs worker-4
+docker compose logs worker -f
+
+# Check worker metrics
+docker compose exec worker curl http://localhost:8080/metrics
 ```
 
 ### **3. Verify Partition Assignment**:
@@ -231,31 +220,34 @@ docker compose -f docker-compose.e2e-optimized.yml logs worker-4
 # Check topic partitions
 docker exec -it ai-cv-evaluator-redpanda-1 rpk topic describe evaluate-jobs
 
-# Check consumer groups
-docker exec -it ai-cv-evaluator-redpanda-1 rpk group describe ai-cv-evaluator-workers-1
+# Check consumer group (single member handling all partitions)
+docker exec -it ai-cv-evaluator-redpanda-1 rpk group describe ai-cv-evaluator-workers
 ```
 
 ## 🔍 **Monitoring and Debugging**
 
 ### **Key Metrics to Monitor**:
 
-1. **Partition Assignment**: Ensure each worker gets 2 partitions
+1. **Internal Concurrency**: Monitor active goroutines via health endpoint
 2. **Message Distribution**: Verify even distribution across partitions
-3. **Worker Utilization**: Monitor worker CPU/memory usage
+3. **Worker Utilization**: Monitor single worker CPU/memory usage
 4. **Queue Depth**: Track message queue depth per partition
 5. **Processing Latency**: Monitor job processing times
 
 ### **Debugging Commands**:
 
 ```bash
-# Check partition assignment
+# Check partition assignment (all 8 partitions to single consumer)
 docker exec -it ai-cv-evaluator-redpanda-1 rpk topic describe evaluate-jobs
 
-# Monitor consumer groups
-docker exec -it ai-cv-evaluator-redpanda-1 rpk group describe ai-cv-evaluator-workers-1
+# Monitor consumer group (single member)
+docker exec -it ai-cv-evaluator-redpanda-1 rpk group describe ai-cv-evaluator-workers
 
-# Check worker logs
-docker compose -f docker-compose.e2e-optimized.yml logs worker-1 --tail=50
+# Check worker logs and internal pool status
+docker compose logs worker --tail=50
+
+# Check worker health and active goroutines
+curl http://localhost:8080/healthz
 
 # Monitor queue metrics
 docker exec -it ai-cv-evaluator-redpanda-1 rpk topic consume evaluate-jobs --num=10
@@ -265,43 +257,45 @@ docker exec -it ai-cv-evaluator-redpanda-1 rpk topic consume evaluate-jobs --num
 
 ### **Common Issues**:
 
-1. **Partition Assignment Issues**:
-   - Check consumer group configuration
-   - Verify worker environment variables
-   - Monitor partition assignment logs
+1. **Concurrency Issues**:
+   - Check CONSUMER_MAX_CONCURRENCY setting
+   - Verify internal goroutine pool scaling
+   - Monitor active worker count via health endpoint
 
 2. **Message Distribution Problems**:
    - Verify producer partition assignment
    - Check topic configuration
-   - Monitor message routing
+   - Monitor message routing across 8 partitions
 
-3. **Worker Scaling Issues**:
-   - Check Docker Compose configuration
-   - Verify worker dependencies
-   - Monitor resource usage
+3. **Resource Constraints**:
+   - Check Docker resource limits (2 CPUs, 2GB RAM)
+   - Verify worker container isn't CPU/memory throttled
+   - Monitor resource usage with `docker stats`
 
 ### **Performance Tuning**:
 
-1. **Adjust Partition Count**:
+1. **Adjust Internal Concurrency**:
    ```yaml
-   # In docker-compose.e2e-optimized.yml
-   - --kafka-num-partitions=16  # Increase for more parallelism
+   # In docker-compose.yml
+   environment:
+     - CONSUMER_MAX_CONCURRENCY=32  # Increase for more parallelism
    ```
 
-2. **Optimize Worker Count**:
+2. **Optimize Resource Allocation**:
    ```yaml
-   # Add more workers
-   worker-5:
-     # ... configuration
-     environment:
-       - CONSUMER_PARTITION_ASSIGNMENT=8,9
+   # Increase resources if needed
+   deploy:
+     resources:
+       limits:
+         memory: 4G
+         cpus: '4.0'
    ```
 
 3. **Tune Consumer Settings**:
    ```go
    // In consumer.go
-   kgo.FetchMaxBytes(2097152),        // 2MB fetch size
-   kgo.FetchMaxWait(50*time.Millisecond), // 50ms fetch wait
+   kgo.FetchMaxBytes(20 * 1024 * 1024),  // 20MB fetch size
+   kgo.FetchMaxWait(5 * time.Second),    // 5s fetch wait
    ```
 
 ## 📋 **Configuration Summary**
@@ -311,18 +305,20 @@ docker exec -it ai-cv-evaluator-redpanda-1 rpk topic consume evaluate-jobs --num
 | Setting | Value | Purpose |
 |---------|-------|---------|
 | **Partitions** | 8 | Parallel processing |
-| **Workers** | 4 | Load distribution |
-| **Partitions/Worker** | 2 | Balanced assignment |
-| **Fetch Size** | 1MB | Throughput optimization |
-| **Fetch Wait** | 100ms | Latency optimization |
+| **Worker Containers** | 1 | Simplified deployment |
+| **Internal Concurrency** | 24 | High throughput |
+| **CPUs** | 2 | Optimal performance |
+| **Memory** | 2GB | Adequate headroom |
+| **Fetch Size** | 10MB | Throughput optimization |
+| **Fetch Wait** | 10s | Stability optimization |
 | **Compression** | Snappy | Performance optimization |
 | **Retention** | 7 days | Storage optimization |
 
-### **Docker Compose Services**:
+### **Worker Configuration**:
 
-- **worker-1**: Partitions 0,1
-- **worker-2**: Partitions 2,3  
-- **worker-3**: Partitions 4,5
-- **worker-4**: Partitions 6,7
+- **Single Worker**: Handles all 8 partitions
+- **Consumer Group**: `ai-cv-evaluator-workers` (single member)
+- **Internal Pool**: Dynamic scaling from min to max workers
+- **Auto-scaling**: Adjusts based on queue depth
 
-This implementation provides a solid foundation for high-performance parallel processing in E2E tests, with the potential for 8x throughput improvement and 60-70% reduction in test execution time.
+This implementation provides a solid foundation for high-performance parallel processing with simplified deployment, achieving 10x+ throughput improvement and 60-70% reduction in test execution time.

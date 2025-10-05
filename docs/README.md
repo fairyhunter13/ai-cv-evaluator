@@ -48,16 +48,16 @@ docs/
 ├── migration/                   # Migration Documentation
 │   └── REDPANDA_MIGRATION.md
 ├── ops/                         # Operations
-│   ├── CI_CD_GITHUB_ACTIONS.md
-│   ├── OBSERVABILITY.md
-│   ├── GITHUB_SECRETS.md
-│   ├── TROUBLESHOOTING.md
-│   ├── PERFORMANCE.md
-│   ├── SECURITY_AUDIT.md
-│   ├── INCIDENT_RESPONSE.md
-│   ├── MAINTENANCE_PROCEDURES.md
-│   ├── BACKUP_RECOVERY.md
-│   └── SCALING_GUIDE.md
+│   ├── ci_cd_github_actions.md
+│   ├── observability.md
+│   ├── github_secrets.md
+│   ├── troubleshooting.md
+│   ├── performance.md
+│   ├── security_audit.md
+│   ├── incident_response.md
+│   ├── maintenance_procedures.md
+│   ├── backup_recovery.md
+│   └── scaling_guide.md
 ├── planning/                    # Project Planning
 │   └── PROJECT_STATUS.md
 ├── rfc/                         # Request for Comments
@@ -70,7 +70,7 @@ docs/
 ├── README.md                    # This file
 ├── MAINTENANCE.md               # Documentation maintenance protocols
 ├── DEVELOPER_QUICK_REFERENCE.md # Quick reference guide
-├── directory-structure.md       # Project structure
+├── DIRECTORY_STRUCTURE.md       # Project structure
 ├── project.md                   # Project overview
 └── STUDY_CASE.md               # Study case documentation
 ```
@@ -112,7 +112,7 @@ docs/
 - **[Queue Optimization](development/QUEUE_OPTIMIZATION_IMPLEMENTATION.md)** - Queue optimization and retry implementation
 - **[Context Deadline Analysis](development/CONTEXT_DEADLINE_ROOT_CAUSE_ANALYSIS.md)** - Root cause analysis for timeout issues
 - **[Admin API](development/ADMIN_API.md)** - Administrative API documentation
-- **[Directory Structure](directory-structure.md)** - Project structure overview
+- **[Directory Structure](DIRECTORY_STRUCTURE.md)** - Project structure overview
 
 ### 🔧 Implementation
 - **[AI and LLM Pipeline](implementation/AI_LLM_PIPELINE.md)** - AI pipeline design, prompt engineering, and RAG implementation
@@ -132,16 +132,16 @@ docs/
 
 ### 🔄 Migration & Operations
 - **[Redpanda Migration](migration/REDPANDA_MIGRATION.md)** - Complete migration guide and status
-- **[CI/CD and GitHub Actions](ops/CI_CD_GITHUB_ACTIONS.md)** - Continuous integration and deployment pipeline
-- **[Observability](ops/OBSERVABILITY.md)** - Comprehensive observability and monitoring guide
-- **[GitHub Secrets](ops/GITHUB_SECRETS.md)** - Comprehensive GitHub secrets management
-- **[Troubleshooting Guide](ops/TROUBLESHOOTING.md)** - Comprehensive troubleshooting and debugging guide
-- **[Performance](ops/PERFORMANCE.md)** - Performance monitoring and optimization guide
-- **[Security Audit](ops/SECURITY_AUDIT.md)** - Security audit procedures and compliance
-- **[Incident Response](ops/INCIDENT_RESPONSE.md)** - Incident response procedures and protocols
-- **[Maintenance Procedures](ops/MAINTENANCE_PROCEDURES.md)** - System maintenance and optimization
-- **[Backup & Recovery](ops/BACKUP_RECOVERY.md)** - Backup and disaster recovery procedures
-- **[Scaling Guide](ops/SCALING_GUIDE.md)** - System scaling and capacity planning
+- **[CI/CD and GitHub Actions](ops/ci_cd_github_actions.md)** - Continuous integration and deployment pipeline
+- **[Observability](ops/observability.md)** - Comprehensive observability and monitoring guide
+- **[GitHub Secrets](ops/github_secrets.md)** - Comprehensive GitHub secrets management
+- **[Troubleshooting Guide](ops/troubleshooting.md)** - Comprehensive troubleshooting and debugging guide
+- **[Performance](ops/performance.md)** - Performance monitoring and optimization guide
+- **[Security Audit](ops/security_audit.md)** - Security audit procedures and compliance
+- **[Incident Response](ops/incident_response.md)** - Incident response procedures and protocols
+- **[Maintenance Procedures](ops/maintenance_procedures.md)** - System maintenance and optimization
+- **[Backup & Recovery](ops/backup_recovery.md)** - Backup and disaster recovery procedures
+- **[Scaling Guide](ops/scaling_guide.md)** - System scaling and capacity planning
 
 ### 📋 Planning & RFCs
 - **[Project Status](planning/PROJECT_STATUS.md)** - Current project status and recent changes
@@ -207,6 +207,6 @@ docs/
 ## 📞 Support
 
 For questions or issues with documentation:
-- Check the [Troubleshooting Guide](ops/TROUBLESHOOTING.md)
-- Review [Documentation Status](DOCUMENTATION_STATUS.md)
+- Check the [Troubleshooting Guide](ops/troubleshooting.md)
+- Review [Project Status](planning/PROJECT_STATUS.md)
 - Follow [Contributing Guidelines](contributing/CONTRIBUTING.md)
