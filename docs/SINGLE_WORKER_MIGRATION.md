@@ -285,7 +285,7 @@ If you need to rollback to the multi-worker setup:
 ## References
 
 - [Queue Optimization Implementation](./development/QUEUE_OPTIMIZATION_IMPLEMENTATION.md)
-- [Scaling Guide](./ops/SCALING_GUIDE.md)
+- [Scaling Guide](./ops/scaling_guide.md)
 - [Environment Variables](./configuration/ENVIRONMENT_VARIABLES.md)
 
 ---
