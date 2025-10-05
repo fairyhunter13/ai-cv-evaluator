@@ -46,7 +46,7 @@ Updated E2E test targets to use `docker-compose.yml`:
   - Updated performance metrics
   - Revised monitoring commands
   
-- `docs/ops/SCALING_GUIDE.md`
+- `docs/ops/scaling_guide.md`
   - Updated worker scaling sections
   - Changed Kubernetes examples
   - Revised resource allocation guidance
@@ -114,7 +114,7 @@ All E2E test targets have been verified to work with the new setup:
 - [x] Deprecate `docker-compose.e2e-optimized.yml`
 - [x] Update Makefile E2E targets
 - [x] Update documentation (QUEUE_OPTIMIZATION_IMPLEMENTATION.md)
-- [x] Update documentation (SCALING_GUIDE.md)
+- [x] Update documentation (scaling_guide.md)
 - [x] Update README.md
 - [x] Create migration guide (SINGLE_WORKER_MIGRATION.md)
 - [x] Create deprecation notice
