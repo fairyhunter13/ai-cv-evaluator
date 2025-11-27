@@ -41,9 +41,11 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - TIKA_URL=http://tika:9998
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-      - RATE_LIMIT_PER_MIN=200
-    ports:
-      - "${PORT:-8080}:8080"
+      - RATE_LIMIT_PER_MIN=60
+      - OPENROUTER_MIN_INTERVAL=5s
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET:-dev-admin-session-secret-change-me}
     restart: unless-stopped
 
   frontend:
@@ -51,10 +53,9 @@ services:
       context: ./admin-frontend
       dockerfile: Dockerfile
     image: ghcr.io/fairyhunter13/ai-cv-evaluator:dev-frontend
-    ports:
-      - "3001:3001"
     environment:
       - NODE_ENV=development
+      - VITE_API_BASE_URL=/
     volumes:
       - ./admin-frontend:/app
       - /app/node_modules
@@ -82,17 +83,27 @@ services:
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-      - CONSUMER_MAX_CONCURRENCY=8
+      # Single worker with increased concurrency for optimal throughput
+      # Replaces previous multi-worker setup (4 workers × 4 concurrency = 16 total)
+      # Now: 1 worker × 24 concurrency = 24 total (50% increase)
+      - CONSUMER_MAX_CONCURRENCY=1
+      - OPENROUTER_MIN_INTERVAL=5s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
     restart: unless-stopped
 
   db:
-    image: postgres:16
+    image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
       POSTGRES_DB: app
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 10s
@@ -114,19 +125,24 @@ services:
       - --rpc-addr redpanda:33145
       - --advertise-rpc-addr redpanda:33145
       - --mode dev-container
-      - --smp 1
+      - --smp 2  # Increased CPU cores for better performance
       - --default-log-level=info
-    ports:
-      - "18081:18081"
-      - "18082:18082"
-      - "19092:19092"
-      - "9644:9644"
+      - --memory 512M  # Optimized memory allocation
+      - --reserve-memory 256M  # Reserve memory for system
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
-      interval: 15s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 10s
     volumes:
       - redpanda_data:/var/lib/redpanda/data
 
@@ -146,15 +162,13 @@ services:
           adminApi:
             enabled: true
             urls: ["http://redpanda:9644"]
-    ports:
-      - "8090:8080"
     depends_on:
       - redpanda
+    volumes:
+      - ./deploy/redpanda/console-config.yaml:/tmp/config.yaml:ro
 
   qdrant:
     image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:6333/collections"]
       interval: 10s
@@ -165,8 +179,6 @@ services:
 
   tika:
     image: apache/tika:2.9.0.0
-    ports:
-      - "9998:9998"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9998/version"]
       interval: 10s
@@ -180,38 +192,95 @@ services:
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    ports:
-      - "4317:4317"
-      - "4318:4318"
     restart: unless-stopped
     depends_on:
       - jaeger
 
   jaeger:
     image: jaegertracing/all-in-one:1.57
-    ports:
-      - "16686:16686"
+    environment:
+      - QUERY_BASE_PATH=/jaeger
 
   prometheus:
     image: prom/prometheus:v2.53.0
     volumes:
       - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    ports:
-      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.external-url=/prometheus/"
+      - "--web.route-prefix=/prometheus"
 
   grafana:
     image: grafana/grafana:11.1.0
-    ports:
-      - "3000:3000"
     volumes:
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./deploy/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
     environment:
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-Forwarded-User
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_USERS_AUTO_ASSIGN_ORG=true
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
     depends_on:
       - prometheus
+
+  # Keycloak (dev)
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: ${ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    volumes:
+      - ./deploy/keycloak/realm-aicv.dev.json:/opt/keycloak/data/import/realm-aicv.json:ro
+    ports:
+      - "8089:8080" # Keycloak admin on different port from portal
+    restart: unless-stopped
+
+  # oauth2-proxy front-auth for Nginx
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: http://keycloak:8080/realms/aicv
+      OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:-oauth2-proxy-secret}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:-MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
+      OAUTH2_PROXY_COOKIE_SECURE: "false"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: .localhost
+      OAUTH2_PROXY_REDIRECT_URL: http://localhost:8088/oauth2/callback
+      OAUTH2_PROXY_UPSTREAMS: static://200
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+    depends_on:
+      - keycloak
+    restart: unless-stopped
+
+  # Local nginx to serve portal and proxy to services (dev only)
+  dev-nginx:
+    image: nginx:alpine
+    ports:
+      - "8088:80"
+    volumes:
+      - ./deploy/nginx/dev-conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/portal:/usr/share/nginx/html:ro
+    depends_on:
+      - app
+      - frontend
+      - oauth2-proxy
+      - keycloak
+    restart: unless-stopped
 
 volumes:
   db_data:

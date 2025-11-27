@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 // TestE2E_SmokeRandom uploads a random CV/project pair from testdata and ensures evaluate enqueues and result endpoint responds.
 func TestE2E_SmokeRandom(t *testing.T) {
 	// NO SKIPPING - E2E tests must always run
-	t.Parallel() // Enable parallel execution
 
 	// Clear dump directory before test
 	clearDumpDirectory(t)
@@ -25,16 +23,8 @@ func TestE2E_SmokeRandom(t *testing.T) {
 	httpTimeout := 2 * time.Second
 	client := &http.Client{Timeout: httpTimeout}
 
-	// quick health check using configurable baseURL
-	healthz := strings.TrimSuffix(baseURL, "/v1") + "/healthz"
-	if resp, err := client.Get(healthz); err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
-		if resp != nil {
-			resp.Body.Close()
-		}
-		t.Fatalf("App not available; healthz check failed: %v", err)
-	} else if resp != nil {
-		resp.Body.Close()
-	}
+	// Wait for app readiness using shared helper.
+	waitForAppReady(t, client, 60*time.Second)
 
 	// pick deterministic pair from test/testdata to avoid flakiness
 	pairs := availablePairs()

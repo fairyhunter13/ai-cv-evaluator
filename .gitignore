@@ -18,20 +18,13 @@ coverage.core.func.txt
 
 # E2E test JSON dumps
 test/testdata/golden/*_response.json
+test/testdata/cv_optimized_2025.md
 .DS_Store
 vendor
-cv/
-!secrets/cv
 test/dump
-
-
-# openrouter v1/models
-models.response.json
 
 # artifacts
 artifacts/
 
 # Project reports and submissions
-project_report.md
-rfc_submission_complete.md
-rfc_submission_complete.pdf
+submissions/

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 )
@@ -65,6 +66,58 @@ func TestChatJSON_UsesAutoAndFallbacks(t *testing.T) {
 		OpenRouterBaseURL: server.URL,
 	}
 	c := NewTestClient(cfg)
+	out, err := c.ChatJSON(context.Background(), "sys", "user", 64)
+	if err != nil {
+		t.Fatalf("chat err: %v", err)
+	}
+	if out != "{\"ok\":true}" {
+		t.Fatalf("unexpected chat out: %q", out)
+	}
+}
+
+func TestChatJSON_SkipsBlockedModel_ChoosesUnblocked(t *testing.T) {
+	// Prepare two free models A and B
+	const modelA = "meta-llama/llama-3.1-8b-instruct:free"
+	// Use a non-excluded free model id for availability in the service filter
+	const modelB = "mistralai/mistral-7b-instruct:free"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		if r.URL.Path == "/models" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": modelA, "pricing": map[string]string{"prompt": "0", "completion": "0", "request": "0", "image": "0"}},
+					{"id": modelB, "pricing": map[string]string{"prompt": "0", "completion": "0", "request": "0", "image": "0"}},
+				},
+			})
+			return
+		}
+
+		if r.URL.Path == "/chat/completions" {
+			var cr chatReq
+			_ = json.NewDecoder(r.Body).Decode(&cr)
+			if cr.Model != modelB {
+				t.Fatalf("expected unblocked model %q, got %q", modelB, cr.Model)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{{"message": map[string]any{"content": "{\"ok\":true}"}}},
+			})
+			return
+		}
+
+		t.Fatalf("unexpected path: %s", r.URL.Path)
+	}))
+	defer server.Close()
+
+	cfg := config.Config{
+		OpenRouterAPIKey:  "x",
+		OpenRouterBaseURL: server.URL,
+	}
+	c := NewTestClient(cfg)
+	// Block model A via the client's rate limit cache
+	c.rlc.RecordRateLimit(modelA, 10*time.Second)
+
 	out, err := c.ChatJSON(context.Background(), "sys", "user", 64)
 	if err != nil {
 		t.Fatalf("chat err: %v", err)

@@ -60,12 +60,24 @@ func main() {
 	resRepo := postgres.NewResultRepo(pool)
 
 	// Worker (Redpanda consumer) with dynamic worker pool
-	// Use CONSUMER_MAX_CONCURRENCY as max workers, with min workers as 2
-	minWorkers := 2
+	// Use CONSUMER_MAX_CONCURRENCY as max workers, with higher min workers for better throughput
+	minWorkers := cfg.ConsumerMaxConcurrency / 2 // Start with half the max workers
+	if cfg.ConsumerMaxConcurrency <= 1 {
+		// Strict single-worker mode for free-tier safety
+		minWorkers = 1
+	} else if minWorkers < 4 {
+		minWorkers = 4 // Minimum 4 workers for reasonable throughput
+	}
 	maxWorkers := cfg.ConsumerMaxConcurrency
 	if maxWorkers < minWorkers {
-		maxWorkers = minWorkers + 2 // Ensure we have at least 4 workers max
+		maxWorkers = minWorkers
 	}
+
+	slog.Info("worker scaling configuration",
+		slog.Int("min_workers", minWorkers),
+		slog.Int("max_workers", maxWorkers),
+		slog.Duration("scaling_interval", cfg.WorkerScalingInterval),
+		slog.Duration("idle_timeout", cfg.WorkerIdleTimeout))
 
 	worker, err := redpanda.NewConsumerWithConfig(
 		cfg.KafkaBrokers,

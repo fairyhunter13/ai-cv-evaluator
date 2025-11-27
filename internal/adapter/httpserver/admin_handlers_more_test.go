@@ -1,6 +1,7 @@
 package httpserver_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,35 +27,41 @@ func newAdminSrv(t *testing.T) (*httpserver.AdminServer, *chi.Mux) {
 		t.Fatalf("new admin: %v", err)
 	}
 	r := chi.NewRouter()
-	// Mount API routes instead of template routes
-	r.Post("/admin/login", admin.AdminLoginHandler())
-	r.Post("/admin/logout", admin.AdminLogoutHandler())
+	// Mount API routes
+	r.Post("/admin/token", admin.AdminTokenHandler())
 	r.Get("/admin/api/status", admin.AdminStatusHandler())
 	return admin, r
 }
 
-func loginAndGetCookies(t *testing.T, r *chi.Mux) []*http.Cookie {
+func loginAndGetToken(t *testing.T, r *chi.Mux) string {
 	t.Helper()
 	rw := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/admin/login", nil)
+	req := httptest.NewRequest("POST", "/admin/token", nil)
 	req.Form = map[string][]string{"username": {"admin"}, "password": {"secret"}}
 	r.ServeHTTP(rw, req)
 	if rw.Result().StatusCode != http.StatusOK {
 		t.Fatalf("login status: %d", rw.Result().StatusCode)
 	}
-	return rw.Result().Cookies()
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(rw.Body.Bytes(), &body); err != nil {
+		t.Fatalf("parse token response: %v", err)
+	}
+	if body.Token == "" {
+		t.Fatalf("empty token in response")
+	}
+	return body.Token
 }
 
 func Test_Admin_API_Endpoints(t *testing.T) {
 	_, r := newAdminSrv(t)
-	cookies := loginAndGetCookies(t, r)
+	token := loginAndGetToken(t, r)
 
-	// GET /admin/api/status (protected endpoint)
+	// GET /admin/api/status (protected endpoint, JWT bearer auth)
 	rw := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/admin/api/status", nil)
-	for _, c := range cookies {
-		req.AddCookie(c)
-	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	r.ServeHTTP(rw, req)
 	if rw.Result().StatusCode != http.StatusOK {
 		t.Fatalf("/admin/api/status: %d", rw.Result().StatusCode)

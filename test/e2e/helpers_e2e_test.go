@@ -6,10 +6,14 @@ package e2e_test
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +24,7 @@ var (
 	baseURL               string
 	defaultJobDescription = "Backend Developer - APIs, DBs, cloud, prompt design, chaining and RAG."
 	defaultStudyCaseBrief = "Mini Project: Evaluate CV and project via AI workflow with retries and observability."
+	adminJWTOnce          sync.Once
 )
 
 func init() {
@@ -33,6 +38,28 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func waitForAppReady(t *testing.T, client *http.Client, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	healthz := strings.TrimSuffix(baseURL, "/v1") + "/healthz"
+	var lastErr error
+	for {
+		resp, err := client.Get(healthz)
+		if err == nil && resp != nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			return
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		lastErr = err
+		if time.Now().After(deadline) {
+			t.Fatalf("App not available; healthz check failed after %v: %v", timeout, lastErr)
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // clearDumpDirectory removes all files from test/dump directory
@@ -71,18 +98,47 @@ func dumpJSON(t *testing.T, filename string, v any) {
 	t.Logf("dumped JSON to %s", p)
 }
 
-// maybeBasicAuth sets HTTP Basic Auth on the request if ADMIN_USERNAME and ADMIN_PASSWORD are present.
+func ensureAdminJWT(t *testing.T, client *http.Client) {
+	t.Helper()
+	adminJWTOnce.Do(func() {
+		if os.Getenv("ADMIN_JWT") != "" {
+			return
+		}
+		username := os.Getenv("ADMIN_USERNAME")
+		password := os.Getenv("ADMIN_PASSWORD")
+		if username == "" || password == "" {
+			t.Fatalf("ADMIN_USERNAME/ADMIN_PASSWORD must be set for E2E tests")
+		}
+		root := strings.TrimSuffix(baseURL, "/v1")
+		form := url.Values{}
+		form.Set("username", username)
+		form.Set("password", password)
+		req, err := http.NewRequest("POST", root+"/admin/token", strings.NewReader(form.Encode()))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("admin token request failed: status=%d body=%s", resp.StatusCode, string(body))
+		}
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&payload))
+		token, ok := payload["token"].(string)
+		require.True(t, ok && token != "", "admin token missing in response")
+		os.Setenv("ADMIN_JWT", token)
+	})
+}
+
+// maybeBasicAuth sets Authorization for admin-protected endpoints.
+// Priority: Bearer token from ADMIN_JWT, else HTTP Basic from ADMIN_USERNAME/PASSWORD.
 func maybeBasicAuth(req *http.Request) {
-	u := os.Getenv("ADMIN_USERNAME")
-	p := os.Getenv("ADMIN_PASSWORD")
-	// Fallback to defaults typically used in dev if not provided
-	if u == "" {
-		u = "admin"
+	if tok := os.Getenv("ADMIN_JWT"); tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+		return
 	}
-	if p == "" {
-		p = "admin123"
-	}
-	req.SetBasicAuth(u, p)
+	// Basic auth removed; require JWT for admin endpoints
 }
 
 // waitForCompleted polls GET /v1/result/{id} until status becomes "completed" or the maxWait expires.
@@ -147,6 +203,7 @@ func waitForCompleted(t *testing.T, client *http.Client, jobID string, maxWait t
 // uploadTestFiles uploads provided CV and project contents and returns ids.
 func uploadTestFiles(t *testing.T, client *http.Client, cvContent, projectContent string) map[string]any {
 	t.Helper()
+	ensureAdminJWT(t, client)
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
@@ -191,6 +248,7 @@ func uploadTestFiles(t *testing.T, client *http.Client, cvContent, projectConten
 // evaluateFiles enqueues evaluation and returns job response body.
 func evaluateFiles(t *testing.T, client *http.Client, cvID, projectID string) map[string]any {
 	t.Helper()
+	ensureAdminJWT(t, client)
 	payload := map[string]string{
 		"cv_id":            cvID,
 		"project_id":       projectID,

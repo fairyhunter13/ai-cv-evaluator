@@ -1,13 +1,13 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/app/',
   plugins: [vue()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': '/src',
     },
   },
   server: {
@@ -24,13 +24,8 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      // Proxy auth endpoints
-      '/admin/login': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/admin/logout': {
+      // Proxy auth endpoint (JWT issuance)
+      '/admin/token': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,

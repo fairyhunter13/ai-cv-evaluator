@@ -71,6 +71,8 @@ func BuildRouter(cfg config.Config, srv *httpserver.Server) http.Handler {
 		// If admin credentials are configured, require either session or Basic Auth
 		if cfg.AdminEnabled() {
 			wr.Use(srv.AdminAPIGuard())
+			// Enforce CSRF protection for unsafe methods via double-submit cookie
+			wr.Use(srv.CSRFGuard())
 		}
 		wr.Post("/v1/upload", srv.UploadHandler())
 		wr.Post("/v1/evaluate", srv.EvaluateHandler())
@@ -78,9 +80,9 @@ func BuildRouter(cfg config.Config, srv *httpserver.Server) http.Handler {
 	// Read-only endpoints
 	r.Get("/v1/result/{id}", srv.ResultHandler())
 
-	// Health and metrics
-	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) { promhttp.Handler().ServeHTTP(w, r) })
+	// Enhanced health and metrics endpoints
+	r.Get("/healthz", srv.HealthzHandler()) // Enhanced health check with service status
+	r.Get("/health", srv.HealthzHandler())  // Compatibility endpoint
 	r.Get("/readyz", srv.ReadyzHandler())
 
 	// OpenAPI if present
@@ -90,12 +92,16 @@ func BuildRouter(cfg config.Config, srv *httpserver.Server) http.Handler {
 	if cfg.AdminEnabled() {
 		admin, err := httpserver.NewAdminServer(cfg, srv)
 		if err == nil {
-			r.Post("/admin/login", admin.AdminLoginHandler())
-			r.Post("/admin/logout", admin.AdminLogoutHandler())
+			// JWT token issuance for admin APIs (primary auth mechanism)
+			r.Post("/admin/token", admin.AdminTokenHandler())
 			r.Get("/admin/api/status", admin.AdminStatusHandler())
 			r.Get("/admin/api/stats", admin.AdminStatsHandler())
 			r.Get("/admin/api/jobs", admin.AdminJobsHandler())
 			r.Get("/admin/api/jobs/{id}", admin.AdminJobDetailsHandler())
+
+			// Admin-only observability endpoints (JWT required)
+			r.Get("/admin/metrics", admin.AdminBearerRequired(srv.MetricsHandler()))                                                                   // Custom observability metrics (admin only)
+			r.Get("/admin/prometheus", admin.AdminBearerRequired(func(w http.ResponseWriter, r *http.Request) { promhttp.Handler().ServeHTTP(w, r) })) // Prometheus metrics (admin only)
 		}
 	}
 

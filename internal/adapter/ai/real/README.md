@@ -21,10 +21,10 @@ The system now uses environment variables to configure backoff behavior:
 
 ```bash
 # AI Backoff Configuration
-AI_BACKOFF_MAX_ELAPSED_TIME=90s      # Maximum total time for retries
-AI_BACKOFF_INITIAL_INTERVAL=1s        # Initial delay between retries
-AI_BACKOFF_MAX_INTERVAL=10s           # Maximum delay between retries
-AI_BACKOFF_MULTIPLIER=2.0             # Exponential backoff multiplier
+AI_BACKOFF_MAX_ELAPSED_TIME=180s     # Maximum total time for retries
+AI_BACKOFF_INITIAL_INTERVAL=2s       # Initial delay between retries
+AI_BACKOFF_MAX_INTERVAL=20s          # Maximum delay between retries
+AI_BACKOFF_MULTIPLIER=1.5            # Exponential backoff multiplier
 ```
 
 #### Test Environment Defaults
@@ -91,10 +91,10 @@ type Config struct {
     // ... existing fields ...
     
     // AI Backoff Configuration
-    AIBackoffMaxElapsedTime time.Duration `env:"AI_BACKOFF_MAX_ELAPSED_TIME" envDefault:"90s"`
-    AIBackoffInitialInterval time.Duration `env:"AI_BACKOFF_INITIAL_INTERVAL" envDefault:"1s"`
-    AIBackoffMaxInterval   time.Duration `env:"AI_BACKOFF_MAX_INTERVAL" envDefault:"10s"`
-    AIBackoffMultiplier    float64       `env:"AI_BACKOFF_MULTIPLIER" envDefault:"2.0"`
+    AIBackoffMaxElapsedTime time.Duration `env:"AI_BACKOFF_MAX_ELAPSED_TIME" envDefault:"180s"`
+    AIBackoffInitialInterval time.Duration `env:"AI_BACKOFF_INITIAL_INTERVAL" envDefault:"2s"`
+    AIBackoffMaxInterval   time.Duration `env:"AI_BACKOFF_MAX_INTERVAL" envDefault:"20s"`
+    AIBackoffMultiplier    float64       `env:"AI_BACKOFF_MULTIPLIER" envDefault:"1.5"`
 }
 ```
 

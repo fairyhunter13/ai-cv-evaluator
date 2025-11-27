@@ -46,8 +46,10 @@ func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, m
 	slog.Info("job retrieved", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Time("created_at", job.CreatedAt), slog.Time("updated_at", job.UpdatedAt))
 	if job.Status != domain.JobCompleted {
 		slog.Info("job not completed", slog.String("job_id", id), slog.String("status", string(job.Status)))
-		// Stale timeout policy: mark queued/processing older than 5 minutes as failed
-		// Increased from 2 minutes to 5 minutes to allow for free model processing time
+
+		// Stale timeout policy: queued/processing older than 5 minutes are considered stale.
+		// This protects clients from jobs that never progress while still reflecting the
+		// real upstream behavior (no synthetic results are created here).
 		now := time.Now().UTC()
 		stale := false
 		if job.Status == domain.JobQueued && now.Sub(job.CreatedAt) > 5*time.Minute {
@@ -63,21 +65,26 @@ func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, m
 			job.Status = domain.JobFailed
 			job.Error = msg
 		}
-		// Include error object when failed, per rules (03-api-contracts-and-validation.md)
-		m := map[string]any{"id": id, "status": string(job.Status)}
-		if job.Status == domain.JobFailed {
-			code := errorCodeFromJobError(job.Error)
-			m["error"] = map[string]any{
-				"code":    code,
-				"message": job.Error,
+
+		// After potential stale handling, if the job is still not completed, return a
+		// non-completed status payload (queued/processing/failed) as before.
+		if job.Status != domain.JobCompleted {
+			// Include error object when failed, per rules (03-api-contracts-and-validation.md)
+			m := map[string]any{"id": id, "status": string(job.Status)}
+			if job.Status == domain.JobFailed {
+				code := errorCodeFromJobError(job.Error)
+				m["error"] = map[string]any{
+					"code":    code,
+					"message": job.Error,
+				}
 			}
+			slog.Info("returning non-completed status", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Any("response", m))
+			etag := makeETag(m)
+			if etag == ifNoneMatch {
+				return http.StatusNotModified, nil, etag, nil
+			}
+			return http.StatusOK, m, etag, nil
 		}
-		slog.Info("returning non-completed status", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Any("response", m))
-		etag := makeETag(m)
-		if etag == ifNoneMatch {
-			return http.StatusNotModified, nil, etag, nil
-		}
-		return http.StatusOK, m, etag, nil
 	}
 	res, err := s.Results.GetByJobID(ctx, id)
 	if err != nil {

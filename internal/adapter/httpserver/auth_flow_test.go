@@ -12,32 +12,29 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 )
 
-func TestAdminLoginHandler_ValidCredentials(t *testing.T) {
-	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
-	server := &httpserver.Server{Cfg: cfg}
-	adminServer, err := httpserver.NewAdminServer(cfg, server)
-	require.NoError(t, err)
+func TestAdminTokenHandler_IssuesJWT(t *testing.T) {
+    cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+    server := &httpserver.Server{Cfg: cfg}
+    adminServer, err := httpserver.NewAdminServer(cfg, server)
+    require.NoError(t, err)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
-	req.Form = map[string][]string{
-		"username": {"admin"},
-		"password": {"password"},
-	}
-	w := httptest.NewRecorder()
+    req := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+    req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+    req.Form = map[string][]string{
+        "username": {"admin"},
+        "password": {"password"},
+    }
+    w := httptest.NewRecorder()
 
-	adminServer.AdminLoginHandler()(w, req)
+    adminServer.AdminTokenHandler()(w, req)
 
-	require.Equal(t, http.StatusOK, w.Code)
-	require.Contains(t, w.Body.String(), "Login successful")
-
-	// Check that session cookie is set
-	cookies := w.Result().Cookies()
-	require.Len(t, cookies, 1)
-	require.Equal(t, "session", cookies[0].Name)
-	require.NotEmpty(t, cookies[0].Value)
+    require.Equal(t, http.StatusOK, w.Code)
+    var body map[string]any
+    require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+    require.NotEmpty(t, body["token"])
 }
 
-func TestAdminLoginHandler_InvalidCredentials(t *testing.T) {
+func TestAdminTokenHandler_InvalidCredentials(t *testing.T) {
 	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
 	server := &httpserver.Server{Cfg: cfg}
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
@@ -54,40 +51,21 @@ func TestAdminLoginHandler_InvalidCredentials(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		req := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
+        req := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
 		req.Form = map[string][]string{
 			"username": {tc.username},
 			"password": {tc.password},
 		}
 		w := httptest.NewRecorder()
 
-		adminServer.AdminLoginHandler()(w, req)
+        adminServer.AdminTokenHandler()(w, req)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
-		require.Contains(t, w.Body.String(), "Invalid credentials")
+        require.Contains(t, w.Body.String(), "Invalid credentials")
 	}
 }
 
-func TestAdminLogoutHandler(t *testing.T) {
-	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
-	server := &httpserver.Server{Cfg: cfg}
-	adminServer, err := httpserver.NewAdminServer(cfg, server)
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(http.MethodPost, "/admin/logout", nil)
-	w := httptest.NewRecorder()
-
-	adminServer.AdminLogoutHandler()(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	require.Contains(t, w.Body.String(), "Logout successful")
-
-	// Check that session cookie is cleared
-	cookies := w.Result().Cookies()
-	require.Len(t, cookies, 1)
-	require.Equal(t, "session", cookies[0].Name)
-	require.Empty(t, cookies[0].Value)
-}
+// Logout not applicable for JWT; client discards token
 
 func TestAdminStatusHandler_Unauthorized(t *testing.T) {
 	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
@@ -109,23 +87,21 @@ func TestAdminStatusHandler_Authorized(t *testing.T) {
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
 	require.NoError(t, err)
 
-	// First login to get session
-	loginReq := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
-	loginReq.Form = map[string][]string{
-		"username": {"admin"},
-		"password": {"password"},
-	}
-	loginW := httptest.NewRecorder()
-	adminServer.AdminLoginHandler()(loginW, loginReq)
-	require.Equal(t, http.StatusOK, loginW.Code)
+    // Get JWT
+    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+    tokenReq.Form = map[string][]string{
+        "username": {"admin"},
+        "password": {"password"},
+    }
+    tokenW := httptest.NewRecorder()
+    adminServer.AdminTokenHandler()(tokenW, tokenReq)
+    require.Equal(t, http.StatusOK, tokenW.Code)
+    var tb map[string]any
+    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+    tok := tb["token"].(string)
 
-	// Extract session cookie
-	cookies := loginW.Result().Cookies()
-	require.Len(t, cookies, 1)
-
-	// Now test status endpoint with session
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/status", nil)
-	req.AddCookie(cookies[0])
+    req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 
 	adminServer.AdminStatusHandler()(w, req)
@@ -199,7 +175,7 @@ func TestAdminAPIGuard_WithCredentials(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
-func TestAdminAPIGuard_WithValidSession(t *testing.T) {
+func TestAdminAPIGuard_WithBearer(t *testing.T) {
 	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
 	server := &httpserver.Server{Cfg: cfg}
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
@@ -213,23 +189,21 @@ func TestAdminAPIGuard_WithValidSession(t *testing.T) {
 		_, _ = w.Write([]byte("success"))
 	})
 
-	// First login to get session
-	loginReq := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
-	loginReq.Form = map[string][]string{
-		"username": {"admin"},
-		"password": {"password"},
-	}
-	loginW := httptest.NewRecorder()
-	adminServer.AdminLoginHandler()(loginW, loginReq)
-	require.Equal(t, http.StatusOK, loginW.Code)
+    // Get JWT
+    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+    tokenReq.Form = map[string][]string{
+        "username": {"admin"},
+        "password": {"password"},
+    }
+    tokenW := httptest.NewRecorder()
+    adminServer.AdminTokenHandler()(tokenW, tokenReq)
+    require.Equal(t, http.StatusOK, tokenW.Code)
+    var tb map[string]any
+    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+    tok := tb["token"].(string)
 
-	// Extract session cookie
-	cookies := loginW.Result().Cookies()
-	require.Len(t, cookies, 1)
-
-	// Test with valid session
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.AddCookie(cookies[0])
+    req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 
 	guard(testHandler).ServeHTTP(w, req)
@@ -238,25 +212,4 @@ func TestAdminAPIGuard_WithValidSession(t *testing.T) {
 	require.Contains(t, w.Body.String(), "success")
 }
 
-func TestAdminAPIGuard_WithBasicAuth(t *testing.T) {
-	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
-	server := &httpserver.Server{Cfg: cfg}
-
-	guard := server.AdminAPIGuard()
-
-	// Create a test handler
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("success"))
-	})
-
-	// Test with valid basic auth
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	req.SetBasicAuth("admin", "password")
-	w := httptest.NewRecorder()
-
-	guard(testHandler).ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	require.Contains(t, w.Body.String(), "success")
-}
+// Basic Auth removed

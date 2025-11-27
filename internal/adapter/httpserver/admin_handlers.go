@@ -4,6 +4,8 @@ package httpserver
 import (
 	"encoding/json"
 	"net/http"
+    "strings"
+    "time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/go-chi/chi/v5"
@@ -19,7 +21,6 @@ type AdminServer struct {
 // NewAdminServer creates a new admin server
 func NewAdminServer(cfg config.Config, server *Server) (*AdminServer, error) {
 	sessionManager := NewSessionManager(cfg)
-
 	return &AdminServer{
 		cfg:            cfg,
 		sessionManager: sessionManager,
@@ -27,79 +28,91 @@ func NewAdminServer(cfg config.Config, server *Server) (*AdminServer, error) {
 	}, nil
 }
 
-// AdminLoginHandler handles API login for separated frontend
-func (a *AdminServer) AdminLoginHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		username := r.FormValue("username")
-		password := r.FormValue("password")
+// AdminLoginHandler removed: JWT is default authentication.
 
-		// Simple credential check (in production, this should use a proper user store)
-		if username != a.cfg.AdminUsername || password != a.cfg.AdminPassword {
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-			return
-		}
+// AdminTokenHandler issues a JWT for admin APIs (alternative to cookie sessions)
+func (a *AdminServer) AdminTokenHandler() http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // Support form or JSON payload
+        var username, password string
+        ct := r.Header.Get("Content-Type")
+        if strings.HasPrefix(strings.ToLower(ct), "application/json") {
+            var body map[string]string
+            _ = json.NewDecoder(r.Body).Decode(&body)
+            username = strings.TrimSpace(body["username"])
+            password = strings.TrimSpace(body["password"])
+        } else {
+            username = strings.TrimSpace(r.FormValue("username"))
+            password = strings.TrimSpace(r.FormValue("password"))
+        }
 
-		// Create session
-		sessionValue, err := a.sessionManager.CreateSession(username)
-		if err != nil {
-			http.Error(w, "Failed to create session", http.StatusInternalServerError)
-			return
-		}
+        if username != a.cfg.AdminUsername || password != a.cfg.AdminPassword {
+            http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+            return
+        }
 
-		a.sessionManager.SetSessionCookie(w, sessionValue)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("Login successful"))
-	}
+        // Issue JWT (24h)
+        token, err := a.sessionManager.GenerateJWT(username, 24*time.Hour)
+        if err != nil {
+            http.Error(w, "Failed to issue token", http.StatusInternalServerError)
+            return
+        }
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        _ = json.NewEncoder(w).Encode(map[string]any{
+            "token":    token,
+            "username": username,
+            "expires":  time.Now().Add(24 * time.Hour).Unix(),
+        })
+    }
 }
 
-// AdminLogoutHandler handles API logout for separated frontend
-func (a *AdminServer) AdminLogoutHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		a.sessionManager.ClearSessionCookie(w)
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("Logout successful"))
-	}
-}
+// AdminLogoutHandler removed: JWT is stateless; clients can discard token.
 
-// AdminStatusHandler returns admin status for separated frontend
+// AdminStatusHandler returns dashboard statistics
 func (a *AdminServer) AdminStatusHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check for session cookie
-		cookie, err := r.Cookie("session")
-		if err != nil || cookie.Value == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Validate session
-		session, err := a.sessionManager.ValidateSession(cookie.Value)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+        // Prefer SSO header injected by reverse proxy (Authentik outpost)
+        username := getSSOUsernameFromHeaders(r)
+        if username == "" {
+            // Fallback to Bearer JWT
+            authz := strings.TrimSpace(r.Header.Get("Authorization"))
+            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+            token := strings.TrimSpace(authz[len("Bearer "):])
+            sub, err := a.sessionManager.ValidateJWT(token)
+            if err != nil || sub == "" {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+            username = sub
+        }
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status": "authenticated", "username": "` + session.Username + `"}`))
+        _, _ = w.Write([]byte(`{"status": "authenticated", "username": "` + username + `"}`))
 	}
 }
 
 // AdminStatsHandler returns dashboard statistics
 func (a *AdminServer) AdminStatsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check for session cookie
-		cookie, err := r.Cookie("session")
-		if err != nil || cookie.Value == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Validate session
-		_, err = a.sessionManager.ValidateSession(cookie.Value)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+        // Prefer SSO header injected by reverse proxy (Authentik outpost)
+        if getSSOUsernameFromHeaders(r) == "" {
+            // Fallback to Bearer JWT
+            authz := strings.TrimSpace(r.Header.Get("Authorization"))
+            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+            token := strings.TrimSpace(authz[len("Bearer "):])
+            if _, err := a.sessionManager.ValidateJWT(token); err != nil {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+        }
 
 		// Get stats from the main server
 		stats := a.server.getDashboardStats(r.Context())
@@ -118,19 +131,20 @@ func (a *AdminServer) AdminStatsHandler() http.HandlerFunc {
 // AdminJobsHandler returns paginated job list
 func (a *AdminServer) AdminJobsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check for session cookie
-		cookie, err := r.Cookie("session")
-		if err != nil || cookie.Value == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Validate session
-		_, err = a.sessionManager.ValidateSession(cookie.Value)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+        // Prefer SSO header injected by reverse proxy (Authentik outpost)
+        if getSSOUsernameFromHeaders(r) == "" {
+            // Fallback to Bearer JWT
+            authz := strings.TrimSpace(r.Header.Get("Authorization"))
+            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+            token := strings.TrimSpace(authz[len("Bearer "):])
+            if _, err := a.sessionManager.ValidateJWT(token); err != nil {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+        }
 
 		// Parse and validate query parameters
 		page := SanitizeString(r.URL.Query().Get("page"))
@@ -203,19 +217,20 @@ func (a *AdminServer) AdminJobsHandler() http.HandlerFunc {
 // AdminJobDetailsHandler returns individual job details
 func (a *AdminServer) AdminJobDetailsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check for session cookie
-		cookie, err := r.Cookie("session")
-		if err != nil || cookie.Value == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// Validate session
-		_, err = a.sessionManager.ValidateSession(cookie.Value)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
+        // Prefer SSO header injected by reverse proxy (Authentik outpost)
+        if getSSOUsernameFromHeaders(r) == "" {
+            // Fallback to Bearer JWT
+            authz := strings.TrimSpace(r.Header.Get("Authorization"))
+            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+            token := strings.TrimSpace(authz[len("Bearer "):])
+            if _, err := a.sessionManager.ValidateJWT(token); err != nil {
+                http.Error(w, "Unauthorized", http.StatusUnauthorized)
+                return
+            }
+        }
 
 		// Get and validate job ID from URL path
 		jobID := SanitizeJobID(chi.URLParam(r, "id"))
@@ -248,4 +263,9 @@ func (a *AdminServer) AdminJobDetailsHandler() http.HandlerFunc {
 			return
 		}
 	}
+}
+
+// AdminAuthRequired middleware for protecting admin routes
+func (a *AdminServer) AdminAuthRequired(next http.HandlerFunc) http.HandlerFunc {
+	return a.sessionManager.AuthRequired(next).ServeHTTP
 }

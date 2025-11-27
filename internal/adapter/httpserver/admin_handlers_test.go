@@ -42,23 +42,22 @@ func TestAdminStatsHandler_Authorized(t *testing.T) {
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
 	require.NoError(t, err)
 
-	// First login to get session
-	loginReq := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
-	loginReq.Form = map[string][]string{
-		"username": {"admin"},
-		"password": {"password"},
-	}
-	loginW := httptest.NewRecorder()
-	adminServer.AdminLoginHandler()(loginW, loginReq)
-	require.Equal(t, http.StatusOK, loginW.Code)
+    // Obtain JWT
+    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+    tokenReq.Form = map[string][]string{
+        "username": {"admin"},
+        "password": {"password"},
+    }
+    tokenW := httptest.NewRecorder()
+    adminServer.AdminTokenHandler()(tokenW, tokenReq)
+    require.Equal(t, http.StatusOK, tokenW.Code)
+    var tb map[string]any
+    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+    tok := tb["token"].(string)
 
-	// Extract session cookie
-	cookies := loginW.Result().Cookies()
-	require.Len(t, cookies, 1)
-
-	// Now test stats endpoint with session
-	req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
-	req.AddCookie(cookies[0])
+    // Now test stats endpoint with bearer
+    req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
+    req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 
 	adminServer.AdminStatsHandler()(w, req)
@@ -101,23 +100,22 @@ func TestAdminJobsHandler_Authorized(t *testing.T) {
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
 	require.NoError(t, err)
 
-	// First login to get session
-	loginReq := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
-	loginReq.Form = map[string][]string{
-		"username": {"admin"},
-		"password": {"password"},
-	}
-	loginW := httptest.NewRecorder()
-	adminServer.AdminLoginHandler()(loginW, loginReq)
-	require.Equal(t, http.StatusOK, loginW.Code)
+    // Obtain JWT
+    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+    tokenReq.Form = map[string][]string{
+        "username": {"admin"},
+        "password": {"password"},
+    }
+    tokenW := httptest.NewRecorder()
+    adminServer.AdminTokenHandler()(tokenW, tokenReq)
+    require.Equal(t, http.StatusOK, tokenW.Code)
+    var tb map[string]any
+    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+    tok := tb["token"].(string)
 
-	// Extract session cookie
-	cookies := loginW.Result().Cookies()
-	require.Len(t, cookies, 1)
-
-	// Test jobs endpoint with session
-	req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs?page=1&limit=10", nil)
-	req.AddCookie(cookies[0])
+    // Test jobs endpoint with bearer
+    req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs?page=1&limit=10", nil)
+    req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 
 	adminServer.AdminJobsHandler()(w, req)
@@ -148,19 +146,18 @@ func TestAdminJobsHandler_Pagination(t *testing.T) {
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
 	require.NoError(t, err)
 
-	// First login to get session
-	loginReq := httptest.NewRequest(http.MethodPost, "/admin/login", nil)
-	loginReq.Form = map[string][]string{
-		"username": {"admin"},
-		"password": {"password"},
-	}
-	loginW := httptest.NewRecorder()
-	adminServer.AdminLoginHandler()(loginW, loginReq)
-	require.Equal(t, http.StatusOK, loginW.Code)
-
-	// Extract session cookie
-	cookies := loginW.Result().Cookies()
-	require.Len(t, cookies, 1)
+    // Obtain JWT
+    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+    tokenReq.Form = map[string][]string{
+        "username": {"admin"},
+        "password": {"password"},
+    }
+    tokenW := httptest.NewRecorder()
+    adminServer.AdminTokenHandler()(tokenW, tokenReq)
+    require.Equal(t, http.StatusOK, tokenW.Code)
+    var tb map[string]any
+    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+    tok := tb["token"].(string)
 
 	// Test with different pagination parameters
 	testCases := []struct {
@@ -174,11 +171,11 @@ func TestAdminJobsHandler_Pagination(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs", nil)
+        req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs", nil)
 		if tc.page != "" {
 			req.URL.RawQuery = "page=" + tc.page + "&limit=" + tc.limit
 		}
-		req.AddCookie(cookies[0])
+        req.Header.Set("Authorization", "Bearer "+tok)
 		w := httptest.NewRecorder()
 
 		adminServer.AdminJobsHandler()(w, req)

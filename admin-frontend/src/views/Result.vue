@@ -278,6 +278,8 @@ const loading = ref(false)
 const error = ref('')
 const result = ref<any>(null)
 const jobId = ref('')
+// Cache ETag per job ID
+const etags = ref<Record<string, string>>({})
 
 const toggleSidebar = () => {
   sidebarOpen.value = !sidebarOpen.value
@@ -303,12 +305,21 @@ const handleGetResult = async () => {
   result.value = null
 
   try {
-    const response = await axios.get(`/v1/result/${jobId.value}`, {
+    const currentJob = jobId.value
+    const response = await axios.get(`/v1/result/${currentJob}`, {
       withCredentials: true,
+      headers: etags.value[currentJob] ? { 'If-None-Match': etags.value[currentJob] } : {},
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
     })
 
     if (response.status === 200) {
       result.value = response.data
+      const newETag = response.headers['etag'] || response.headers['ETag']
+      if (newETag) {
+        etags.value[currentJob] = newETag as string
+      }
+    } else if (response.status === 304) {
+      // Not modified; keep current result as-is
     }
   } catch (err: any) {
     if (err.response?.status === 404) {

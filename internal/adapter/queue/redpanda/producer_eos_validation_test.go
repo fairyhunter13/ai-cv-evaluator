@@ -28,35 +28,39 @@ func TestProducerEOSValidation(t *testing.T) {
 	// Create producer with transactional ID for EOS
 	producer, err := NewProducerWithTransactionalID([]string{brokerAddr}, "test-producer-eos-validation")
 	require.NoError(t, err)
-	defer producer.Close()
+	defer func() {
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
+	}()
 
 	t.Run("EOS_Exactly_Once_Delivery", func(t *testing.T) {
-		testEOSExactlyOnceDeliveryValidation(t, ctx, producer)
+		testEOSExactlyOnceDeliveryValidation(ctx, t, producer)
 	})
 
 	t.Run("EOS_Transaction_Atomicity", func(t *testing.T) {
-		testEOSTransactionAtomicityValidation(t, ctx, producer)
+		testEOSTransactionAtomicityValidation(ctx, t, producer)
 	})
 
 	t.Run("EOS_Concurrent_Transactions", func(t *testing.T) {
-		testEOSConcurrentTransactionsValidation(t, ctx, producer)
+		testEOSConcurrentTransactionsValidation(ctx, t, producer)
 	})
 
 	t.Run("EOS_Error_Recovery", func(t *testing.T) {
-		testEOSErrorRecoveryValidation(t, ctx, producer)
+		testEOSErrorRecoveryValidation(ctx, t, producer)
 	})
 
 	t.Run("EOS_Transaction_Isolation", func(t *testing.T) {
-		testEOSTransactionIsolationValidation(t, ctx, producer)
+		testEOSTransactionIsolationValidation(ctx, t)
 	})
 
 	t.Run("EOS_Message_Ordering", func(t *testing.T) {
-		testEOSMessageOrderingValidation(t, ctx, producer)
+		testEOSMessageOrderingValidation(ctx, t, producer)
 	})
 }
 
 // testEOSExactlyOnceDeliveryValidation tests exactly-once delivery semantics
-func testEOSExactlyOnceDeliveryValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSExactlyOnceDeliveryValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	payload := domain.EvaluateTaskPayload{
 		JobID:     "test-job-exactly-once",
 		CVID:      "test-cv-exactly-once",
@@ -80,7 +84,7 @@ func testEOSExactlyOnceDeliveryValidation(t *testing.T, ctx context.Context, pro
 }
 
 // testEOSTransactionAtomicity tests transaction atomicity
-func testEOSTransactionAtomicityValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSTransactionAtomicityValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	// Test that transactions are atomic - either all operations succeed or none do
 	payload := domain.EvaluateTaskPayload{
 		JobID:     "test-job-atomicity",
@@ -109,7 +113,7 @@ func testEOSTransactionAtomicityValidation(t *testing.T, ctx context.Context, pr
 }
 
 // testEOSConcurrentTransactions tests EOS under concurrent load
-func testEOSConcurrentTransactionsValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSConcurrentTransactionsValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	const numGoroutines = 10
 	const numMessagesPerGoroutine = 3
 
@@ -154,7 +158,7 @@ func testEOSConcurrentTransactionsValidation(t *testing.T, ctx context.Context, 
 }
 
 // testEOSErrorRecovery tests EOS error recovery scenarios
-func testEOSErrorRecoveryValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSErrorRecoveryValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	// Test context cancellation
 	cancelCtx, cancel := context.WithCancel(ctx)
 	cancel() // Cancel immediately
@@ -182,32 +186,36 @@ func testEOSErrorRecoveryValidation(t *testing.T, ctx context.Context, producer 
 	slog.Info("EOS error recovery test completed")
 }
 
-// testEOSTransactionIsolationValidation tests transaction isolation
-func testEOSTransactionIsolationValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSTransactionIsolationValidation(ctx context.Context, t *testing.T) {
 	// Get broker address from the shared container pool
 	brokerAddr := getContainerBroker(t)
 
 	// Create two producers with different transactional IDs
 	producer1, err := NewProducerWithTransactionalID([]string{brokerAddr}, "test-producer-isolation-1")
 	require.NoError(t, err)
-	defer producer1.Close()
+	defer func() {
+		if err := producer1.Close(); err != nil {
+			t.Logf("producer1.Close error: %v", err)
+		}
+	}()
 
 	producer2, err := NewProducerWithTransactionalID([]string{brokerAddr}, "test-producer-isolation-2")
 	require.NoError(t, err)
-	defer producer2.Close()
-
+	defer func() {
+		if err := producer2.Close(); err != nil {
+			t.Logf("producer2.Close error: %v", err)
+		}
+	}()
 	// Producer 1 transaction
 	payload1 := domain.EvaluateTaskPayload{
 		JobID:     "test-job-isolation-1",
 		CVID:      "test-cv-isolation-1",
 		ProjectID: "test-project-isolation-1",
 	}
-
 	jobID1, err := producer1.EnqueueEvaluate(ctx, payload1)
 	require.NoError(t, err)
 	assert.Equal(t, payload1.JobID, jobID1)
 
-	// Producer 2 transaction (should be isolated)
 	payload2 := domain.EvaluateTaskPayload{
 		JobID:     "test-job-isolation-2",
 		CVID:      "test-cv-isolation-2",
@@ -217,12 +225,11 @@ func testEOSTransactionIsolationValidation(t *testing.T, ctx context.Context, pr
 	jobID2, err := producer2.EnqueueEvaluate(ctx, payload2)
 	require.NoError(t, err)
 	assert.Equal(t, payload2.JobID, jobID2)
-
 	slog.Info("EOS transaction isolation test completed", slog.String("job1", jobID1), slog.String("job2", jobID2))
 }
 
 // testEOSMessageOrdering tests message ordering guarantees
-func testEOSMessageOrderingValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSMessageOrderingValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	// Test that messages with the same key are ordered
 	const numMessages = 5
 	jobIDs := make([]string, numMessages)
@@ -263,27 +270,31 @@ func TestProducerEOSComplianceComprehensive(t *testing.T) {
 	// Create producer with transactional ID for EOS
 	producer, err := NewProducerWithTransactionalID([]string{brokerAddr}, "test-producer-comprehensive")
 	require.NoError(t, err)
-	defer producer.Close()
+	defer func() {
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
+	}()
 
 	t.Run("EOS_At_Least_Once_Delivery", func(t *testing.T) {
-		testEOSAtLeastOnceDeliveryValidation(t, ctx, producer)
+		testEOSAtLeastOnceDeliveryValidation(ctx, t, producer)
 	})
 
 	t.Run("EOS_At_Most_Once_Delivery", func(t *testing.T) {
-		testEOSAtMostOnceDeliveryValidation(t, ctx, producer)
+		testEOSAtMostOnceDeliveryValidation(ctx, t, producer)
 	})
 
 	t.Run("EOS_Message_Durability", func(t *testing.T) {
-		testEOSMessageDurabilityValidation(t, ctx, producer)
+		testEOSMessageDurabilityValidation(ctx, t, producer)
 	})
 
 	t.Run("EOS_Transaction_Consistency", func(t *testing.T) {
-		testEOSTransactionConsistencyValidation(t, ctx, producer)
+		testEOSTransactionConsistencyValidation(ctx, t, producer)
 	})
 }
 
 // testEOSAtLeastOnceDelivery tests at-least-once delivery semantics
-func testEOSAtLeastOnceDeliveryValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSAtLeastOnceDeliveryValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	payload := domain.EvaluateTaskPayload{
 		JobID:     "test-job-at-least-once",
 		CVID:      "test-cv-at-least-once",
@@ -301,7 +312,7 @@ func testEOSAtLeastOnceDeliveryValidation(t *testing.T, ctx context.Context, pro
 }
 
 // testEOSAtMostOnceDelivery tests at-most-once delivery semantics
-func testEOSAtMostOnceDeliveryValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSAtMostOnceDeliveryValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	payload := domain.EvaluateTaskPayload{
 		JobID:     "test-job-at-most-once",
 		CVID:      "test-cv-at-most-once",
@@ -317,7 +328,7 @@ func testEOSAtMostOnceDeliveryValidation(t *testing.T, ctx context.Context, prod
 }
 
 // testEOSMessageDurability tests message durability
-func testEOSMessageDurabilityValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSMessageDurabilityValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	payload := domain.EvaluateTaskPayload{
 		JobID:     "test-job-durability",
 		CVID:      "test-cv-durability",
@@ -336,7 +347,7 @@ func testEOSMessageDurabilityValidation(t *testing.T, ctx context.Context, produ
 }
 
 // testEOSTransactionConsistency tests transaction consistency
-func testEOSTransactionConsistencyValidation(t *testing.T, ctx context.Context, producer *Producer) {
+func testEOSTransactionConsistencyValidation(ctx context.Context, t *testing.T, producer *Producer) {
 	// Test that transactions maintain consistency across multiple operations
 	payloads := []domain.EvaluateTaskPayload{
 		{

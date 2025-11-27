@@ -69,11 +69,15 @@ func (r *JobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobS
 			slog.String("error_type", fmt.Sprintf("%T", err)))
 		return fmt.Errorf("op=job.update_status.begin_tx: %w", err)
 	}
+	// Track if transaction was committed to avoid rollback after commit
+	committed := false
 	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			slog.Error("failed to rollback transaction",
-				slog.String("job_id", id),
-				slog.Any("error", err))
+		if !committed {
+			if err := tx.Rollback(ctx); err != nil {
+				slog.Error("failed to rollback transaction",
+					slog.String("job_id", id),
+					slog.Any("error", err))
+			}
 		}
 	}()
 
@@ -123,6 +127,9 @@ func (r *JobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobS
 			slog.String("error_type", fmt.Sprintf("%T", err)))
 		return fmt.Errorf("op=job.update_status.commit: %w", err)
 	}
+
+	// Mark transaction as committed to prevent rollback
+	committed = true
 
 	// Log successful completion
 	totalDuration := time.Since(updateStart)
