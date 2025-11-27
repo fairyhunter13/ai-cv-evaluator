@@ -1,8 +1,9 @@
 package observability
 
 import (
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"testing"
+
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 )
 
 func TestSetupLogger_DevAndProd(t *testing.T) {

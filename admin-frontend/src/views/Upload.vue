@@ -295,6 +295,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import { handleApiError } from '@/utils/errorHandler'
+import { success as showSuccess, error as showError } from '@/utils/notifications'
 import LoadingButton from '@/components/LoadingButton.vue'
 
 const router = useRouter()
@@ -386,13 +387,18 @@ const handleUpload = async () => {
       // Display the returned IDs
       if (response.data.cv_id && response.data.project_id) {
         success.value += ` CV ID: ${response.data.cv_id}, Project ID: ${response.data.project_id}`
+        showSuccess('Upload Successful', `CV ID: ${response.data.cv_id}, Project ID: ${response.data.project_id}`)
+      } else {
+        showSuccess('Upload Successful', 'Files uploaded successfully!')
       }
       // Reset form
       files.cv = null
       files.project = null
     }
   } catch (err: any) {
-    error.value = handleApiError(err)
+    const errorMessage = handleApiError(err)
+    error.value = errorMessage
+    showError('Upload Failed', errorMessage)
   } finally {
     uploading.value = false
   }

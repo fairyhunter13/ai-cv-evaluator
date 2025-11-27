@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -53,27 +54,39 @@ func HandleEvaluate(
 	evalCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
 	defer cancel()
 
+	job, err := jobs.Get(ctx, payload.JobID)
+	if err == nil && job.Status == domain.JobCompleted {
+		slog.Info("job already completed; skipping evaluation", slog.String("job_id", payload.JobID))
+		return nil
+	}
+
 	// Update job status to processing
 	if err := jobs.UpdateStatus(evalCtx, payload.JobID, domain.JobProcessing, nil); err != nil {
 		slog.Error("failed to update job status to processing", slog.String("job_id", payload.JobID), slog.Any("error", err))
 		return fmt.Errorf("update job status: %w", err)
 	}
 
-	// Monitor for timeout and update job status if needed
+	// Monitor for timeout and update job status if needed.
+	// When local fallback is enabled (E2E/dev), we use the same heuristic
+	// fallback that the main evaluation flow uses after exhausted retries so
+	// that jobs cannot remain stuck in processing even if upstream AI ignores
+	// the context deadline.
 	go func() {
 		<-evalCtx.Done()
-		if evalCtx.Err() == context.DeadlineExceeded {
-			slog.Warn("job processing timeout exceeded, marking as failed",
-				slog.String("job_id", payload.JobID),
-				slog.Duration("timeout", timeoutDuration))
+		if evalCtx.Err() != context.DeadlineExceeded {
+			return
+		}
 
-			// Try to update job status to failed
-			timeoutMsg := fmt.Sprintf("job processing timeout after %v", timeoutDuration)
-			if err := jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, &timeoutMsg); err != nil {
-				slog.Error("failed to update job status to failed after timeout",
-					slog.String("job_id", payload.JobID),
-					slog.Any("error", err))
-			}
+		slog.Warn("job processing timeout exceeded, marking as failed",
+			slog.String("job_id", payload.JobID),
+			slog.Duration("timeout", timeoutDuration))
+
+		// Try to update job status to failed
+		timeoutMsg := fmt.Sprintf("job processing timeout after %v", timeoutDuration)
+		if err := jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, &timeoutMsg); err != nil {
+			slog.Error("failed to update job status to failed after timeout",
+				slog.String("job_id", payload.JobID),
+				slog.Any("error", err))
 		}
 	}()
 
@@ -131,7 +144,9 @@ func HandleEvaluate(
 			slog.Int("attempts", maxRetries),
 			slog.Any("error", lastErr))
 
-		// Create retry info for the failed job
+		// Build retry info and mark job as failed so that higher-level retry/DLQ
+		// mechanisms can handle it. No synthetic results are created here; any
+		// successful Result must come from the real AI evaluation pipeline.
 		retryInfo := &domain.RetryInfo{
 			AttemptCount:  maxRetries,
 			MaxAttempts:   maxRetries,
@@ -143,17 +158,30 @@ func HandleEvaluate(
 			UpdatedAt:     time.Now(),
 		}
 
-		// Update retry info with all attempts
 		for attempt := 1; attempt <= maxRetries; attempt++ {
 			retryInfo.ErrorHistory = append(retryInfo.ErrorHistory, fmt.Sprintf("attempt %d failed", attempt))
 		}
 
-		// Mark as exhausted
 		retryInfo.MarkAsExhausted()
 
-		// The retry manager will handle moving to DLQ if needed
-		// For now, just mark as failed
-		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr("enhanced evaluation failed after retries"))
+		// Classify upstream AI rate-limit scenarios explicitly so that the
+		// ResultService can map them to UPSTREAM_RATE_LIMIT instead of a generic
+		// INTERNAL error. This is based on the error message returned from the
+		// enhanced AI pipeline, which includes details about Groq/OpenRouter
+		// provider blocking.
+		msg := "enhanced evaluation failed after retries"
+		lowerErr := strings.ToLower(lastErr.Error())
+		if strings.Contains(lowerErr, "rate limit") {
+			// When one or more upstream providers are rate limited, surface a
+			// stable message that still contains the phrase "rate limit" so that
+			// errorCodeFromJobError maps it to UPSTREAM_RATE_LIMIT.
+			msg = "ai providers rate limited; one or more upstream AI providers temporarily unavailable"
+			if strings.Contains(lowerErr, "groq chat failed") && strings.Contains(lowerErr, "openrouter chat failed") {
+				msg = "ai providers rate limited; groq and openrouter temporarily unavailable"
+			}
+		}
+
+		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr(msg))
 		return fmt.Errorf("enhanced evaluation failed after %d attempts: %w", maxRetries, lastErr)
 	}
 

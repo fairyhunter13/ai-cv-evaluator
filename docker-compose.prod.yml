@@ -21,10 +21,11 @@ services:
       - QDRANT_URL=http://qdrant:6333
       - TIKA_URL=http://tika:9998
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OPENROUTER_MIN_INTERVAL=5s
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}
-      - CORS_ALLOW_ORIGINS=https://dashboard.ai-cv-evaluator.web.id
+      - CORS_ALLOW_ORIGINS=*
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -50,13 +51,17 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./deploy/nginx/prod-conf.d:/etc/nginx/conf.d:ro
       - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/portal:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
     depends_on:
       - frontend
       - backend
+      - oauth2-proxy-app
+      - oauth2-proxy-dashboard
+      - keycloak
     restart: unless-stopped
 
   worker:
@@ -69,6 +74,8 @@ services:
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - CONSUMER_MAX_CONCURRENCY=1
+      - OPENROUTER_MIN_INTERVAL=5s
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -80,10 +87,10 @@ services:
         condition: service_started
     restart: unless-stopped
     deploy:
-      replicas: 3
+      replicas: 1
 
   db:
-    image: postgres:16
+    image: postgres:16-alpine
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
@@ -157,8 +164,6 @@ services:
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    restart: unless-stopped
-
   jaeger:
     image: jaegertracing/all-in-one:1.57
     restart: unless-stopped
@@ -175,6 +180,71 @@ services:
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
+    environment:
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-Forwarded-User
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_USERS_AUTO_ASSIGN_ORG=true
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+    restart: unless-stopped
+
+  # Keycloak (prod)
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    command: ["start", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me}
+      KC_PROXY: edge
+      # TODO: set KC_HOSTNAME to your chosen Keycloak public hostname
+      # KC_HOSTNAME: keycloak.ai-cv-evaluator.web.id
+    volumes:
+      - ./deploy/keycloak/realm-aicv.json:/opt/keycloak/data/import/realm-aicv.json:ro
+    ports:
+      - "8090:8080" # ensure different port from portal
+    restart: unless-stopped
+
+  # oauth2-proxy for main app domain
+  oauth2-proxy-app:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: http://keycloak:8080/realms/aicv
+      OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_REDIRECT_URL: https://ai-cv-evaluator.web.id/oauth2/callback
+      OAUTH2_PROXY_UPSTREAMS: static://200
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+    depends_on:
+      - keycloak
+    restart: unless-stopped
+
+  # oauth2-proxy for dashboard subdomain
+  oauth2-proxy-dashboard:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: http://keycloak:8080/realms/aicv
+      OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_REDIRECT_URL: https://dashboard.ai-cv-evaluator.web.id/oauth2/callback
+      OAUTH2_PROXY_UPSTREAMS: static://200
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+    depends_on:
+      - keycloak
     restart: unless-stopped
 
   certbot:
@@ -182,8 +252,3 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - /var/www/certbot:/var/www/certbot
-
-volumes:
-  db_data: {}
-  redpanda_data: {}
-  qdrant_data: {}

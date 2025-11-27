@@ -76,11 +76,9 @@ func TestIdempotencyKeyHandling(t *testing.T) {
 		// This test would require integration with the usecase layer
 		// For now, we verify the structure supports idempotency
 		payload := domain.EvaluateTaskPayload{
-			JobID:          "test-job-1",
-			CVID:           "cv-1",
-			ProjectID:      "project-1",
-			JobDescription: "Test job",
-			StudyCaseBrief: "Test study case",
+			JobID:     "test-job-1",
+			CVID:      "cv-1",
+			ProjectID: "project-1",
 		}
 
 		// Verify payload structure

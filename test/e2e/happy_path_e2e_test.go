@@ -6,7 +6,6 @@ package e2e_test
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 // making strong assumptions about asynchronous completion in constrained envs.
 func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
 	// NO SKIPPING - E2E tests must always run
-	t.Parallel() // Enable parallel execution
 
 	// Clear dump directory before test
 	clearDumpDirectory(t)
@@ -29,17 +27,8 @@ func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
 	}
 	client := &http.Client{Timeout: httpTimeout}
 
-	// Ensure app is reachable; fail test if not ready
-	// Derive healthz from configurable baseURL (defined in helpers)
-	healthz := strings.TrimSuffix(baseURL, "/v1") + "/healthz"
-	if resp, err := client.Get(healthz); err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
-		if resp != nil {
-			resp.Body.Close()
-		}
-		t.Fatalf("App not available; healthz check failed: %v", err)
-	} else if resp != nil {
-		resp.Body.Close()
-	}
+	// Ensure app is reachable; wait for readiness instead of failing on first attempt.
+	waitForAppReady(t, client, 60*time.Second)
 
 	// 1) Upload simple CV and Project texts
 	uploadResp := uploadTestFiles(t, client, "Happy path CV", "Happy path project")

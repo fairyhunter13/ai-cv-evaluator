@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI CV Evaluator Portal</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'; margin: 0; background: #0f172a; color: #e2e8f0; }
+    header { padding: 24px; background: #111827; border-bottom: 1px solid #1f2937; display: flex; align-items: center; justify-content: space-between; }
+    h1 { margin: 0; font-size: 18px; letter-spacing: 0.2px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; transition: transform .08s ease; }
+    .card:hover { transform: translateY(-2px); border-color: #334155; }
+    .title { font-size: 16px; margin: 0 0 8px; color: #f1f5f9; }
+    .desc { font-size: 13px; color: #94a3b8; margin: 0 0 12px; }
+    .btn { display: inline-block; padding: 8px 12px; border-radius: 8px; text-decoration: none; background: #2563eb; color: white; font-weight: 600; font-size: 13px; }
+    .btn.secondary { background: #4b5563; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .footer { margin-top: 24px; color: #64748b; font-size: 12px; text-align: center; }
+    .user { color: #e5e7eb; font-weight: 600; }
+    nav .btn { margin-left: 8px; }
+  </style>
+  <script>
+    // Lightweight detection of user header propagated by oauth2-proxy via nginx
+    async function fetchUser() {
+      try {
+        const res = await fetch('/admin/api/status', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const el = document.getElementById('user');
+          el.textContent = data.username || 'admin';
+        }
+      } catch (e) { /* ignore */ }
+    }
+    window.addEventListener('DOMContentLoaded', fetchUser);
+  </script>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <link rel="icon" href="data:," />
+</head>
+<body>
+  <header>
+    <h1>AI CV Evaluator Portal</h1>
+    <nav>
+      <span class="user">Signed in as <span id="user">...</span></span>
+      <a class="btn secondary" href="/logout">Logout</a>
+    </nav>
+  </header>
+  <div class="container">
+    <p class="desc">Choose a service to open. Single Sign-On keeps you authenticated across all services.</p>
+    <div class="grid">
+      <div class="card">
+        <h3 class="title">Admin Frontend</h3>
+        <p class="desc">Manage CV evaluation jobs and results.</p>
+        <div class="row">
+          <a class="btn" href="/app/">Open Frontend</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="title">Backend API</h3>
+        <p class="desc">API root and health probes.</p>
+        <div class="row">
+          <a class="btn" href="/v1/">Open API</a>
+          <a class="btn secondary" href="/healthz">Health</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="title">Grafana</h3>
+        <p class="desc">Dashboards for metrics and monitoring.</p>
+        <div class="row">
+          <a class="btn" href="/grafana/">Open Grafana</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="title">Prometheus</h3>
+        <p class="desc">Prometheus expression browser.</p>
+        <div class="row">
+          <a class="btn" href="/prometheus/">Open Prometheus</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="title">Jaeger</h3>
+        <p class="desc">Distributed tracing UI.</p>
+        <div class="row">
+          <a class="btn" href="/jaeger/">Open Jaeger</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="title">Redpanda Console</h3>
+        <p class="desc">Kafka topics and cluster insights.</p>
+        <div class="row">
+          <a class="btn" href="/redpanda/">Open Redpanda</a>
+        </div>
+      </div>
+    </div>
+
+    <p class="footer">You are authenticated via Single Sign-On. Use Logout to sign out from all services.</p>
+  </div>
+</body>
+</html>
+
+

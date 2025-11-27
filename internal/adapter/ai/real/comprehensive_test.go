@@ -46,7 +46,7 @@ func TestChatJSONWithRetry_Success(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"model": "test-model-1",
 				"choices": []map[string]any{
-					{"message": map[string]any{"content": "test response"}},
+					{"message": map[string]any{"content": "The AI response for this test is a detailed and realistic one, designed to simulate a real-world conversation. It should not be flagged as a low-quality or refusal response by the detectRefusalWithValidation function."}},
 				},
 			})
 			return
@@ -66,7 +66,7 @@ func TestChatJSONWithRetry_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "test response" {
+	if result != "The AI response for this test is a detailed and realistic one, designed to simulate a real-world conversation. It should not be flagged as a low-quality or refusal response by the detectRefusalWithValidation function." {
 		t.Fatalf("unexpected result: %s", result)
 	}
 }
@@ -143,6 +143,61 @@ func TestCallOpenRouterWithModel_Success(t *testing.T) {
 	}
 	if result != "test response" {
 		t.Fatalf("unexpected result: %s", result)
+	}
+}
+
+func TestCallOpenRouterWithModel_UsesBothAPIKeysWhenConfigured(t *testing.T) {
+	authHeaders := make([]string, 0, 4)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		authHeaders = append(authHeaders, r.Header.Get("Authorization"))
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"model": "test-model",
+			"choices": []map[string]any{
+				{"message": map[string]any{"content": "test response"}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	cfg := config.Config{
+		OpenRouterAPIKey:      "primary-key",
+		OpenRouterAPIKey2:     "secondary-key",
+		OpenRouterBaseURL:     server.URL,
+		OpenRouterMinInterval: 0,
+	}
+	client := NewTestClient(cfg)
+
+	for i := 0; i < 4; i++ {
+		result, err := client.callOpenRouterWithModel(context.Background(), "test-model", "system", "user", 100)
+		if err != nil {
+			t.Fatalf("unexpected error on call %d: %v", i, err)
+		}
+		if result != "test response" {
+			t.Fatalf("unexpected result on call %d: %s", i, result)
+		}
+	}
+
+	if len(authHeaders) != 4 {
+		t.Fatalf("expected 4 calls, got %d", len(authHeaders))
+	}
+	seenPrimary := false
+	seenSecondary := false
+	for _, h := range authHeaders {
+		switch h {
+		case "Bearer primary-key":
+			seenPrimary = true
+		case "Bearer secondary-key":
+			seenSecondary = true
+		default:
+			t.Fatalf("unexpected Authorization header: %s", h)
+		}
+	}
+	if !seenPrimary || !seenSecondary {
+		t.Fatalf("expected both primary and secondary keys to be used, got %v", authHeaders)
 	}
 }
 
@@ -281,6 +336,156 @@ func TestCallOpenRouterWithModel_NetworkError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestCallGroqChat_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"content": "groq test response"}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	cfg := config.Config{
+		GroqAPIKey:  "test-groq-key",
+		GroqBaseURL: server.URL,
+	}
+	client := NewTestClient(cfg)
+
+	result, err := client.callGroqChat(context.Background(), "system", "user", 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "groq test response" {
+		t.Fatalf("unexpected result: %s", result)
+	}
+}
+
+func TestCallGroqChat_TriesNextModelOn4xx(t *testing.T) {
+	modelsTried := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		model, _ := body["model"].(string)
+		modelsTried = append(modelsTried, model)
+
+		switch model {
+		case "llama-3.1-8b-instant":
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": "bad request",
+			})
+		case "llama-3.3-70b-versatile":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"choices": []map[string]any{
+					{"message": map[string]any{"content": "fallback groq response"}},
+				},
+			})
+		default:
+			t.Fatalf("unexpected model: %s", model)
+		}
+	}))
+	defer server.Close()
+
+	cfg := config.Config{
+		GroqAPIKey:  "test-groq-key",
+		GroqBaseURL: server.URL,
+	}
+	client := NewTestClient(cfg)
+
+	result, err := client.callGroqChat(context.Background(), "system", "user", 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "fallback groq response" {
+		t.Fatalf("unexpected result: %s", result)
+	}
+	if len(modelsTried) != 2 {
+		t.Fatalf("expected 2 models to be tried, got %d (%v)", len(modelsTried), modelsTried)
+	}
+	if modelsTried[0] == modelsTried[1] {
+		t.Fatalf("expected different models to be tried, got %v", modelsTried)
+	}
+}
+
+func TestCallGroqChat_StopsOn429AndDoesNotTryOtherModels(t *testing.T) {
+	modelsTried := make([]string, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		model, _ := body["model"].(string)
+		modelsTried = append(modelsTried, model)
+
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": "rate limited",
+		})
+	}))
+	defer server.Close()
+
+	cfg := config.Config{
+		GroqAPIKey:  "test-groq-key",
+		GroqBaseURL: server.URL,
+	}
+	client := NewTestClient(cfg)
+
+	_, err := client.callGroqChat(context.Background(), "system", "user", 100)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "rate limited") {
+		t.Fatalf("expected rate limit error, got %v", err)
+	}
+	if len(modelsTried) != 1 {
+		t.Fatalf("expected only 1 model to be tried due to rate limiting, got %d (%v)", len(modelsTried), modelsTried)
+	}
+}
+
+func TestChatJSONWithRetry_GroqPrimaryWhenNoOpenRouterKey(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/chat/completions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]any{"content": "groq primary response"}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	cfg := config.Config{
+		GroqAPIKey:  "test-groq-key",
+		GroqBaseURL: server.URL,
+	}
+	client := NewTestClient(cfg)
+
+	result, err := client.ChatJSONWithRetry(context.Background(), "system", "user", 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "groq primary response" {
+		t.Fatalf("unexpected result: %s", result)
 	}
 }
 

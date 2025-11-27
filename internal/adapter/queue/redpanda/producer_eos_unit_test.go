@@ -56,7 +56,9 @@ func testEOSTransactionStructure(t *testing.T) {
 		assert.Equal(t, 1, cap(producer.transactionChan), "Transaction channel should have capacity of 1")
 
 		// Clean up
-		producer.Close()
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
 	}
 }
 
@@ -96,7 +98,11 @@ func testEOSChannelManagement(t *testing.T) {
 		t.Logf("Expected error in unit test environment: %v", err)
 		return
 	}
-	defer producer.Close()
+	defer func() {
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
+	}()
 
 	// Test channel operations
 	select {
@@ -127,7 +133,11 @@ func testEOSTransactionFlowUnit(t *testing.T) {
 		t.Logf("Expected error in unit test environment: %v", err)
 		return
 	}
-	defer producer.Close()
+	defer func() {
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
+	}()
 
 	// Test payload structure
 	payload := domain.EvaluateTaskPayload{
@@ -178,7 +188,9 @@ func testEOSTransactionalIDRequired(t *testing.T) {
 	} else {
 		require.NotNil(t, producer, "Producer should be created")
 		require.NotNil(t, producer.client, "Client should be initialized")
-		producer.Close()
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
 	}
 }
 
@@ -193,7 +205,11 @@ func testEOSChannelSynchronization(t *testing.T) {
 		t.Logf("Expected error in unit test environment: %v", err)
 		return
 	}
-	defer producer.Close()
+	defer func() {
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
+	}()
 
 	// Test channel capacity and behavior
 	assert.Equal(t, 1, cap(producer.transactionChan), "Channel should have capacity of 1")
@@ -274,7 +290,11 @@ func testEOSTransactionLifecycle(t *testing.T) {
 		t.Logf("Expected error in unit test environment: %v", err)
 		return
 	}
-	defer producer.Close()
+	defer func() {
+		if err := producer.Close(); err != nil {
+			t.Logf("producer.Close error: %v", err)
+		}
+	}()
 
 	// Test transaction lifecycle steps
 	_ = domain.EvaluateTaskPayload{

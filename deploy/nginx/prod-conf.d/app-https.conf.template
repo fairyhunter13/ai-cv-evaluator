@@ -1,0 +1,114 @@
+server {
+  listen 443 ssl http2 default_server;
+  server_name ai-cv-evaluator.web.id 43.157.225.155 localhost;
+
+  ssl_certificate /etc/letsencrypt/live/ai-cv-evaluator.web.id/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/ai-cv-evaluator.web.id/privkey.pem;
+  ssl_trusted_certificate /etc/letsencrypt/live/ai-cv-evaluator.web.id/chain.pem;
+
+  # Security headers
+  add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+  add_header X-Content-Type-Options nosniff;
+  add_header X-Frame-Options DENY;
+  add_header Referrer-Policy no-referrer-when-downgrade;
+
+  # ACME HTTP-01 (rarely used on 443, but keep for completeness)
+  location ^~ /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+  }
+
+  # Health passthrough (no SSO)
+  location /healthz { auth_request off; proxy_pass http://backend:8080/healthz; }
+  location /readyz  { auth_request off; proxy_pass http://backend:8080/readyz; }
+
+  # Forward-auth via oauth2-proxy for all routes except health
+  auth_request /oauth2/auth;
+  error_page 401 = @oauth2_signin;
+  # propagate user header for upstream apps
+  auth_request_set $auth_user $upstream_http_x_auth_request_user;
+  proxy_set_header X-Forwarded-User $auth_user;
+  proxy_set_header X-Auth-Request-User $auth_user;
+
+  # oauth2-proxy internal auth endpoint
+  location = /oauth2/auth {
+    proxy_pass http://oauth2-proxy-app:4180/oauth2/auth;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Scheme $scheme;
+    proxy_set_header X-Auth-Request-Redirect $scheme://$http_host$request_uri;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+  }
+
+  # oauth2-proxy public endpoints
+  location /oauth2/ {
+    auth_request off;
+    proxy_pass http://oauth2-proxy-app:4180/oauth2/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Portal root - served statically behind SSO
+  location = / {
+    root /usr/share/nginx/html;
+    index index.html;
+  }
+
+  location /assets/ {
+    root /usr/share/nginx/html;
+  }
+
+  # Application backend
+  location /v1/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://backend:8080;
+  }
+  # Central logout endpoint - invalidate SSO and redirect to portal
+  location = /logout { return 302 /oauth2/sign_out?rd=/; }
+  # Service logout passthroughs -> central logout
+  location ~ ^/(grafana|prometheus|jaeger|redpanda)/logout { return 302 /logout; }
+
+  # Grafana (served from subpath /grafana)
+  location /grafana/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://grafana:3000/;
+  }
+
+  # Prometheus
+  location /prometheus/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://prometheus:9090/;
+  }
+
+  # Jaeger UI
+  location /jaeger/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://jaeger:16686/;
+  }
+
+  # Redpanda Console
+  location /redpanda/ {
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_pass http://redpanda-console:8080/;
+  }
+  # Unauthorized handler: redirect to oauth2-proxy start with rd fixed to portal root
+  location @oauth2_signin { internal; return 302 /oauth2/start?rd=$scheme://$http_host/; }
+}
+
+# Redirect HTTP to HTTPS (keep ACME on 80 in app-http.conf)

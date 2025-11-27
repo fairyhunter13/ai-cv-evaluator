@@ -310,15 +310,11 @@ func testMessageKeyIsolation(t *testing.T) {
 
 	// Create records with different keys
 	record1 := &kgo.Record{
-		Key:   []byte(jobID1),
-		Value: []byte("producer-1-data"),
-		Topic: "test-topic",
+		Key: []byte(jobID1),
 	}
 
 	record2 := &kgo.Record{
-		Key:   []byte(jobID2),
-		Value: []byte("producer-2-data"),
-		Topic: "test-topic",
+		Key: []byte(jobID2),
 	}
 
 	// Verify keys are different

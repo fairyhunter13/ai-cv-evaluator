@@ -1,0 +1,14 @@
+server {
+  listen 80;
+  server_name ai-cv-evaluator.web.id;
+
+  # Keep ACME HTTP-01 challenge on HTTP
+  location ^~ /.well-known/acme-challenge/ {
+    root /var/www/certbot;
+  }
+
+  # Redirect everything else to HTTPS
+  location / {
+    return 301 https://$host$request_uri;
+  }
+}

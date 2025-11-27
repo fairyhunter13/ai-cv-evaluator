@@ -1,261 +1,76 @@
 # Developer Quick Reference
 
-## 🚀 **Quick Commands**
+## Local development
 
-### **Development Setup**
+- Prereqs: Docker, Docker Compose, Go 1.24+, Node.js 18+
+- Copy or decrypt env:
+  - `.env` for dev (OpenRouter/OpenAI keys, admin creds)
+  - `.env.production` for prod
 
-#### Development Environment
+- Groq and OpenRouter chat model selection is automatic; chat models are not configured via environment variables.
+
+### Start full dev stack (backend + worker + SSO + dashboards)
+
 ```bash
-# Start complete development environment (backend + frontend)
 make dev-full
-
-# Or start frontend separately
-make frontend-dev
 ```
 
-#### Backend Services
+This brings up:
+
+- API server (`app`) on internal port 8080
+- Worker (`worker`) processing queue jobs
+- Postgres, Redpanda, Qdrant, Tika, OTEL collector
+- **Keycloak** (IdP) on host port `8089`
+- **oauth2-proxy** in front of nginx
+- **dev-nginx** on host `http://localhost:8088` acting as a single SSO gate
+- Portal UI under `/` with links to:
+  - Admin frontend (`/app/`)
+  - Backend API (`/v1/`)
+  - Grafana, Prometheus, Jaeger, Redpanda console
+
+All dashboards and admin/API endpoints are protected by SSO via oauth2-proxy + Keycloak.
+
+## Testing
+
+### Go unit / integration tests
+
 ```bash
-# Start backend services only (migrations run automatically)
-docker compose up -d --build
-
-# Run migrations manually (if needed)
-make migrate
-
-# Run tests
-make ci-e2e
-
-# View logs
-docker compose logs worker
+make test      # go test ./...
+make ci-test   # used by CI, includes coverage gate
 ```
 
-### **Testing**
+### E2E tests (Go, backend worker + live AI providers)
+
 ```bash
-# Unit tests
-make test
-
-# E2E tests (full stack)
-make ci-e2e
-
-# Linting
-make lint
-
-# Format code
-make fmt
+make test-e2e  # requires OPENROUTER_API_KEY and OPENAI_API_KEY (optional fallback: OPENROUTER_API_KEY_2)
 ```
 
-### **Development**
+- CI uses the same E2E suite via the `run-e2e-tests` target in the deploy workflow, with safe defaults for worker concurrency and timeouts. Only increase these values if your AI quotas can handle it.
 
-#### Frontend Development
+- By default (when `RUN_FULL_SMOKE_E2E` is *not* set), the E2E suite runs a trimmed set of comprehensive, edge-case, and performance tests that are tuned for free-tier stability. Heavier/noisier cases (e.g. `Noisy_Data` edge case, additional large pairs) only run when you explicitly enable full smoke:
+
+  ```bash
+  RUN_FULL_SMOKE_E2E=1 make test-e2e   # same suite as CI, but explicitly enabling heavier smoke locally
+  ```
+
+### Playwright SSO gate tests (frontend)
+
+From `admin-frontend/`:
+
 ```bash
-# Install frontend dependencies
-make frontend-install
-
-# Start frontend dev server with HMR
-make frontend-dev
-
-# Build frontend for production
-make frontend-build
-
-# Clean frontend build artifacts
-make frontend-clean
+npm install            # once
+npx playwright install # once
+npm run test:e2e       # runs tests in tests/sso-gate.spec.ts
 ```
 
-#### Backend Development
-```bash
-# Run server locally
-make run
+These tests assume `make dev-full` is running and verify that:
 
-# Build Docker images
-make docker-build
+- Unauthenticated access to `/app/`, `/grafana/`, `/prometheus/`, `/jaeger/`, `/redpanda/`, `/admin/` is redirected into the SSO flow.
+- After logging in once via SSO, those dashboards are reachable without further logins.
+- `/logout` revokes SSO, and protected URLs again send you to SSO.
 
-# Clean up
-docker compose down -v
-```
+## Deployment
 
-## 🏗️ **Current Architecture**
-
-### **Split Architecture**
-- **Frontend**: Vue 3 + Vite (HMR-enabled dev server)
-- **Server**: 1 container (API-only HTTP requests)
-- **Workers**: 8 containers × 30 concurrency = 240 workers
-- **Queue**: Redpanda (Kafka-compatible)
-- **Database**: PostgreSQL
-- **Vector DB**: Qdrant
-- **Text Extraction**: Apache Tika
-
-### **Key Directories**
-```
-cmd/
-├── server/          # HTTP server
-└── worker/          # Background workers
-
-internal/
-├── domain/          # Business entities
-├── usecase/         # Business logic
-└── adapter/         # External integrations
-
-admin-frontend/      # Vue 3 + Vite frontend
-├── src/
-│   ├── views/       # Page components
-│   └── stores/      # Pinia state management
-├── public/          # Static assets
-└── package.json     # Frontend dependencies
-
-docs/                # Documentation
-test/e2e/            # E2E tests
-```
-
-## 📊 **Performance Metrics**
-
-- **Job Processing**: 6-10 seconds average
-- **Throughput**: 240 concurrent workers
-- **Queue Priority**: default (10), critical (6), low (1)
-- **Retry Logic**: Exponential backoff
-- **Graceful Shutdown**: Asynq built-in handling
-
-## 🔧 **Configuration**
-
-### **Environment Variables**
-```bash
-# Core
-APP_ENV=dev
-DB_URL=postgres://postgres:postgres@db:5432/app?sslmode=disable
-KAFKA_BROKERS=redpanda:9092
-
-# AI Providers
-OPENROUTER_API_KEY=your_key
-OPENAI_API_KEY=your_key
-
-# Vector DB
-QDRANT_URL=http://qdrant:6333
-
-# Observability
-OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-```
-
-### **Docker Compose Services**
-- `migrate`: Database migration container (runs once, then exits)
-- `app`: Server container (API-only)
-- `frontend`: Vue 3 frontend (development)
-- `worker`: 8 worker replicas
-- `db`: PostgreSQL
-- `redpanda`: Queue backend
-- `qdrant`: Vector database
-- `tika`: Text extraction
-- `prometheus`: Metrics
-- `grafana`: Dashboards
-- `jaeger`: Tracing
-
-## 🐛 **Debugging**
-
-### **Check Service Status**
-```bash
-docker compose ps
-docker compose logs app
-docker compose logs frontend
-docker compose logs worker
-```
-
-### **Check Queue Status**
-```bash
-# Check Redpanda topics and consumer groups
-docker exec ai-cv-evaluator-redpanda-1 rpk topic list
-docker exec ai-cv-evaluator-redpanda-1 rpk group list
-```
-
-### **Check Database**
-```bash
-docker exec ai-cv-evaluator-db-1 psql -U postgres -d app -c "SELECT id, status FROM jobs ORDER BY created_at DESC LIMIT 5;"
-```
-
-### **Health Checks**
-```bash
-# Backend API
-curl http://localhost:8080/healthz
-curl http://localhost:8080/readyz
-curl http://localhost:8080/metrics
-
-# Frontend (if running)
-curl http://localhost:3001
-```
-
-## 📈 **Monitoring**
-
-### **Grafana Dashboards**
-- HTTP Metrics: http://localhost:3000
-- Job Queue Metrics: http://localhost:3000
-- AI Metrics: http://localhost:3000
-
-### **Jaeger Tracing**
-- Trace UI: http://localhost:16686
-
-### **Prometheus Metrics**
-- Metrics: http://localhost:9090
-
-## 🔄 **Common Workflows**
-
-### **Adding New Features**
-1. Update domain entities
-2. Add usecase logic
-3. Create adapters
-4. Add tests
-5. Update documentation
-
-### **Deploying Changes**
-1. Update Docker images
-2. Run migrations
-3. Deploy with rolling update
-4. Verify health checks
-
-### **Troubleshooting**
-1. Check service logs
-2. Verify queue status
-3. Check database state
-4. Review metrics
-5. Check health endpoints
-
-## 📝 **Code Standards**
-
-### **Architecture**
-- Clean Architecture principles
-- Domain-driven design
-- Ports and adapters pattern
-
-### **Testing**
-- Unit tests for business logic
-- E2E tests for full workflows
-
-### **Documentation**
-- Update README for user changes
-- Update ARCHITECTURE.md for design changes
-- Add ADRs for architectural decisions
-
-## 🚨 **Common Issues**
-
-### **Workers Not Processing**
-- Check Redpanda connection
-- Verify worker registration
-- Check queue configuration
-
-### **Jobs Stuck in Queued**
-- Increase worker replicas
-- Check AI provider keys
-- Verify database connection
-
-### **Performance Issues**
-- Monitor worker metrics
-- Check queue depth
-- Verify resource limits
-
-## 📚 **Documentation Links**
-
-- [Complete Documentation](README.md)
-- [Architecture Details](architecture/ARCHITECTURE.md)
-- [Production Setup](architecture/ARCHITECTURE.md)
-- [Contributing Guide](contributing/CONTRIBUTING.md)
-- [Security Policy](security/SECURITY.md)
-
----
-
-**Last Updated**: September 2024  
-**Version**: 2.0 (Split Architecture)
+- Production stack is defined in `docker-compose.prod.yml`.
+- Public entrypoint is the Nginx container, which frontends the API, frontend, SSO, and dashboards.
+- CI/CD is orchestrated via GitHub Actions workflows in `.github/workflows/`.
