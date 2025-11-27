@@ -10,8 +10,8 @@ All documentation is organized in the [`docs/`](docs/) directory:
 - **[🚀 Developer Quick Reference](docs/DEVELOPER_QUICK_REFERENCE.md)** - Get started quickly
 - **[🏗️ System Architecture](docs/architecture/ARCHITECTURE.md)** - System design and architecture
 - **[💻 Frontend Development](docs/development/FRONTEND_DEVELOPMENT.md)** - Frontend development guide
-- **[🔄 Migration Status](docs/migration/REDPANDA_MIGRATION_STATUS.md)** - Current migration status
-- **[📁 Directory Structure](docs/directory-structure.md)** - Project structure overview
+- **[🔄 Migration Status](docs/migration/MIGRATION_SUMMARY.md)** - Current migration status
+- **[📁 Directory Structure](docs/DIRECTORY_STRUCTURE.md)** - Project structure overview
 
 ## Quick Start
 
@@ -52,7 +52,7 @@ docker compose -f docker-compose.prod.yml up -d
 - `GET /v1/result/{id}`
 - `GET /healthz`, `GET /readyz`, `GET /metrics`
 - `GET /openapi.yaml`
-- Admin API: `POST /admin/login`, `POST /admin/logout`, `GET /admin/api/status`
+- Admin API: `POST /admin/token`, `GET /admin/api/status`
 
 ## API (Contract-first)
 See `api/openapi.yaml` for the complete schema. Examples:
@@ -88,13 +88,16 @@ See `api/openapi.yaml` for the complete schema. Examples:
 ## Architecture
 - **Split Architecture**: Separate server, worker, and frontend containers for optimal scalability
 - **Server Container**: Handles HTTP requests, file uploads, and job creation (API-only)
-- **Worker Container**: Processes AI evaluation tasks with high throughput
-  - 3 worker replicas with Kafka consumer groups for load balancing
-  - Exactly-once processing with manual offset commits
-  - Push-based delivery for immediate job processing (<100ms latency)
+- **Worker Container**: Single optimized worker tuned for free-tier AI providers
+	- **1 concurrent worker by default** (`CONSUMER_MAX_CONCURRENCY=1`) for Groq/OpenRouter free tiers
+	- Safe to increase `CONSUMER_MAX_CONCURRENCY` in higher-capacity environments when needed
+	- Handles all 8 Kafka partitions with dynamic internal scaling when concurrency > 1
+	- Exactly-once processing with auto-commit offsets
+	- Push-based delivery for immediate job processing
+	- Simplified deployment (single worker vs previous 4-worker setup)
 - **Frontend Container**: Vue 3 + Vite admin dashboard with Hot Module Replacement
 - **Queue System**: Redpanda (Kafka-compatible) for reliable message delivery
-  - Replaces Redis+Asynq for better performance and scalability
+  - 8 partitions for parallel processing within single worker
   - Redpanda Console for monitoring topics, consumer groups, and messages
   - Modern SPA with Tailwind CSS styling
   - API communication with backend via HTTP
@@ -108,7 +111,7 @@ See `api/openapi.yaml` for the complete schema. Examples:
 - **Text Extraction**: Out-of-process using Apache Tika container
 - **Observability**: OpenTelemetry traces + Prometheus metrics
 
-See `docs/README.md` for complete documentation index, `docs/architecture/ARCHITECTURE.md` for detailed diagrams, and `docs/production-split-architecture.md` for production setup.
+See `docs/README.md` for complete documentation index and `docs/architecture/ARCHITECTURE.md` for detailed diagrams.
 
 ## Secrets and SOPS
 
@@ -195,10 +198,7 @@ sops .env.production.sops.yaml
 
 ### Traditional Backend-Only Admin
 - Enable admin by setting credentials:
-  ```bash
-  ADMIN_USERNAME=admin ADMIN_PASSWORD=changeme ADMIN_SESSION_SECRET=dev-secret \
-  go run ./cmd/server
-  ```
+  JWT is the default admin auth; use `POST /admin/token` to obtain a token.
 - Access: http://localhost:8080/admin/ (login required)
 
 ### Observability Dashboards
@@ -225,15 +225,18 @@ sops .env.production.sops.yaml
 ## Configuration
 Environment variables (see `.env.sample`):
 - Core: `APP_ENV`, `PORT`, `DB_URL`, `KAFKA_BROKERS`
-- AI: `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, etc.
+- AI: `OPENROUTER_API_KEY`, `OPENROUTER_API_KEY_2`, `OPENAI_API_KEY`, etc.
 - Vector DB: `QDRANT_URL`, `QDRANT_API_KEY`
 - Extractor: `TIKA_URL`
 - Observability: `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`
 - Limits & CORS: `MAX_UPLOAD_MB`, `RATE_LIMIT_PER_MIN`, `CORS_ALLOW_ORIGINS`
+	- Queue / AI safety: `CONSUMER_MAX_CONCURRENCY` (defaults to 1), `OPENROUTER_MIN_INTERVAL` (defaults to 5s) for free-tier-friendly throughput
 - Frontend: `FRONTEND_SEPARATED` (enables API-only mode)
 
 Notes:
-- Chat model uses free models from OpenRouter API (no default model specified).
+- Groq chat uses an internal curated list of models (for example, `llama-3.1-8b-instant`, `llama-3.3-70b-versatile`). Groq model selection and fallback are automatic and not configurable via environment variables.
+- OpenRouter chat uses free models discovered from the OpenRouter API; there is no fixed chat model environment variable.
 - Embeddings are performed via OpenAI; set `OPENAI_API_KEY` and `EMBEDDINGS_MODEL` (default `text-embedding-3-small`). If `OPENAI_API_KEY` is not set, embeddings and RAG are skipped.
 - E2E tests run against live providers (no stub/mock). Ensure `OPENROUTER_API_KEY` (and `OPENAI_API_KEY` for RAG) are present before running E2E.
 - Frontend separation: Set `FRONTEND_SEPARATED=true` to enable API-only backend mode.
+

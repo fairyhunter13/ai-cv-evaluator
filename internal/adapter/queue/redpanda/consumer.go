@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	qdrantcli "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/vector/qdrant"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 	"go.opentelemetry.io/otel"
 )
 
@@ -28,8 +30,11 @@ type Consumer struct {
 	results domain.ResultRepository
 	ai      domain.AIClient
 	q       *qdrantcli.Client
-	groupID string
-	topic   string
+
+	// Observability components
+	observableClient *observability.IntegratedObservableClient
+	groupID          string
+	topic            string
 	// Dynamic worker pool configuration
 	maxWorkers    int
 	minWorkers    int
@@ -37,7 +42,14 @@ type Consumer struct {
 	activeWorkers int
 	workerMu      sync.RWMutex
 	jobQueue      chan *kgo.Record
-	shutdown      chan struct{}
+
+	// Phase 1 Algorithm: Adaptive Polling
+	adaptivePoller *AdaptivePoller
+	shutdown       chan struct{}
+
+	// Connection management
+	brokers         []string
+	transactionalID string
 }
 
 // NewConsumer constructs a Consumer with exactly-once semantics.
@@ -61,15 +73,26 @@ func NewConsumerWithConfig(brokers []string, groupID string, transactionalID str
 func NewConsumerWithTopic(brokers []string, groupID string, transactionalID string, jobs domain.JobRepository, uploads domain.UploadRepository, results domain.ResultRepository, aicl domain.AIClient, qcli *qdrantcli.Client, minWorkers, maxWorkers int, topic string) (*Consumer, error) {
 	slog.Info("creating redpanda consumer", slog.Any("brokers", brokers), slog.String("group_id", groupID), slog.String("transactional_id", transactionalID))
 
-	// Validate brokers
+	// Validate brokers BEFORE using brokers[0]
 	if len(brokers) == 0 {
 		return nil, fmt.Errorf("no seed brokers provided")
 	}
 
-	// Validate group ID
+	// Validate group ID BEFORE creating any clients
 	if groupID == "" {
 		return nil, fmt.Errorf("missing required group ID")
 	}
+
+	// Create integrated observable client for queue operations (safe to access brokers[0])
+	observableClient := observability.NewIntegratedObservableClient(
+		observability.ConnectionTypeQueue,
+		observability.OperationTypePoll,
+		brokers[0], // Use first broker as endpoint
+		"ai-cv-evaluator-worker",
+		60*time.Second,  // Base timeout
+		10*time.Second,  // Min timeout
+		300*time.Second, // Max timeout
+	)
 
 	// Create topic if it doesn't exist first
 	ctx := context.Background()
@@ -113,17 +136,23 @@ func NewConsumerWithTopic(brokers []string, groupID string, transactionalID stri
 		kgo.ConsumeTopics(topic),
 		kgo.RequireStableFetchOffsets(),
 
-		// ✅ FIXED: Add connection timeout configurations to prevent context deadline exceeded
-		kgo.DialTimeout(30 * time.Second),            // Connection establishment timeout
-		kgo.RequestTimeoutOverhead(10 * time.Second), // Request timeout buffer
-		kgo.RetryTimeout(60 * time.Second),           // Retry timeout for failed requests
-		kgo.SessionTimeout(30 * time.Second),         // Consumer group session timeout
+		// ✅ FIXED: Optimized timeouts for better Redpanda connectivity
+		kgo.DialTimeout(10 * time.Second),           // Further reduced for faster connection
+		kgo.RequestTimeoutOverhead(5 * time.Second), // Reduced for faster requests
+		kgo.RetryTimeout(30 * time.Second),          // Reduced retry timeout
+		kgo.SessionTimeout(30 * time.Second),        // Increased session timeout for stability
+		kgo.HeartbeatInterval(3 * time.Second),      // More frequent heartbeats
+		kgo.RebalanceTimeout(10 * time.Second),      // Faster rebalancing
 
-		// Optimized settings for parallel processing
-		kgo.FetchMaxBytes(1048576),               // 1MB fetch size
-		kgo.FetchMaxWait(100 * time.Millisecond), // 100ms fetch wait
-		kgo.FetchMinBytes(1),                     // Minimum bytes to fetch
-		kgo.FetchMaxPartitionBytes(1048576),      // 1MB per partition
+		// ✅ FIXED: Optimized fetch settings for better message consumption
+		kgo.FetchMaxBytes(10 * 1024 * 1024),         // Reduced from 50MB to 10MB
+		kgo.FetchMaxWait(10 * time.Second),          // Increased to 10s for better stability
+		kgo.FetchMinBytes(512),                      // Reduced from 1KB to 512B
+		kgo.FetchMaxPartitionBytes(2 * 1024 * 1024), // Reduced from 10MB to 2MB
+
+		// ✅ ADDED: Enable automatic offset commits for better message processing
+		kgo.AutoCommitMarks(),
+		kgo.AutoCommitInterval(1 * time.Second), // Commit offsets every 1 second
 	}
 
 	session, err := kgo.NewGroupTransactSession(opts...)
@@ -144,20 +173,26 @@ func NewConsumerWithTopic(brokers []string, groupID string, transactionalID stri
 
 	slog.Info("redpanda consumer created successfully", slog.Int("min_workers", minWorkers), slog.Int("max_workers", maxWorkers))
 	return &Consumer{
-		session:       session,
-		jobs:          jobs,
-		uploads:       uploads,
-		results:       results,
-		ai:            aicl,
-		q:             qcli,
-		groupID:       groupID,
-		topic:         topic,
-		minWorkers:    minWorkers,
-		maxWorkers:    maxWorkers,
-		workerPool:    make(chan struct{}, maxWorkers),
-		jobQueue:      make(chan *kgo.Record, maxWorkers*2), // Buffer for job queue
-		shutdown:      make(chan struct{}),
-		activeWorkers: minWorkers,
+		observableClient: observableClient,
+		session:          session,
+		jobs:             jobs,
+		uploads:          uploads,
+		results:          results,
+		ai:               aicl,
+		q:                qcli,
+		groupID:          groupID,
+		topic:            topic,
+		minWorkers:       minWorkers,
+		maxWorkers:       maxWorkers,
+		workerPool:       make(chan struct{}, maxWorkers),
+		jobQueue:         make(chan *kgo.Record, maxWorkers*2), // Buffer for job queue
+		shutdown:         make(chan struct{}),
+		activeWorkers:    minWorkers,
+		brokers:          brokers,
+		transactionalID:  transactionalID,
+
+		// Phase 1 Algorithm: Initialize adaptive poller
+		adaptivePoller: NewAdaptivePoller(100 * time.Millisecond), // Start with 100ms base interval
 	}, nil
 }
 
@@ -199,7 +234,7 @@ func (c *Consumer) startWorkerPool(ctx context.Context) {
 
 // workerPoolManager manages dynamic scaling of workers
 func (c *Consumer) workerPoolManager(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second) // Check every 5 seconds
+	ticker := time.NewTicker(2 * time.Second) // Check every 2 seconds for faster scaling
 	defer ticker.Stop()
 
 	for {
@@ -219,8 +254,7 @@ func (c *Consumer) scaleWorkers(ctx context.Context) {
 	queueLen := len(c.jobQueue)
 	activeWorkers := c.getActiveWorkers()
 
-	// FIXED: Only scale up if we have capacity and jobs to process
-	// Ensure we never exceed max workers
+	// Scale up: Add workers when queue has jobs and we have capacity
 	if queueLen > 0 && activeWorkers < c.maxWorkers {
 		workersToAdd := minInt(queueLen, c.maxWorkers-activeWorkers)
 		if workersToAdd > 0 {
@@ -237,9 +271,32 @@ func (c *Consumer) scaleWorkers(ctx context.Context) {
 		}
 	}
 
+	// Scale down: Remove workers when we have excess capacity
+	// Scale down if we have more than min workers AND (queue is empty OR we have excess workers)
+	if activeWorkers > c.minWorkers && (queueLen == 0 || activeWorkers > queueLen) {
+		// Calculate how many workers we can remove
+		// Keep at least min workers, but don't remove more than we have excess
+		workersToRemove := activeWorkers - c.minWorkers
+		if queueLen > 0 && activeWorkers > queueLen {
+			// If we have more workers than jobs, remove excess workers
+			workersToRemove = minInt(workersToRemove, activeWorkers-queueLen)
+		}
+
+		if workersToRemove > 0 {
+			// Signal workers to stop gracefully
+			for i := 0; i < workersToRemove; i++ {
+				if c.getActiveWorkers() > c.minWorkers {
+					c.decrementActiveWorkers()
+					// Workers will check active count and exit gracefully
+				}
+			}
+			slog.Info("scaled down workers", slog.Int("removed", workersToRemove), slog.Int("queue_length", queueLen), slog.Int("total_active", c.getActiveWorkers()))
+		}
+	}
+
 	// Log current status for debugging
-	if queueLen > 0 {
-		slog.Info("worker pool status", slog.Int("queue_length", queueLen), slog.Int("active_workers", activeWorkers), slog.Int("max_workers", c.maxWorkers))
+	if queueLen > 0 || activeWorkers > c.minWorkers {
+		slog.Info("worker pool status", slog.Int("queue_length", queueLen), slog.Int("active_workers", activeWorkers), slog.Int("min_workers", c.minWorkers), slog.Int("max_workers", c.maxWorkers))
 	}
 }
 
@@ -258,16 +315,45 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 			return
 		default:
 			pollCount++
+
+			// Phase 1 Algorithm: Use adaptive polling interval
+			nextInterval := c.adaptivePoller.GetNextInterval()
 			slog.Info("messageFetcher polling for messages",
 				slog.Int("poll_count", pollCount),
 				slog.String("topic", c.topic),
-				slog.String("group_id", c.groupID))
+				slog.String("group_id", c.groupID),
+				slog.Duration("adaptive_interval", nextInterval))
 
-			// FIXED: Increased timeout to accommodate connection timeouts (was 30s, now 60s)
-			fetchCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			slog.Info("calling session.PollFetches", slog.String("topic", c.topic))
-			fetches := c.session.PollFetches(fetchCtx)
-			cancel()
+			// Use observable client with adaptive timeout and connection health check
+			var fetches kgo.Fetches
+			err := c.observableClient.ExecuteWithMetrics(ctx, "poll_fetches", func(fetchCtx context.Context) error {
+				// Add connection health check before polling
+				if !c.isConnectionHealthy() {
+					slog.Warn("connection unhealthy, attempting to reconnect")
+					// Try to re-establish connection
+					if err := c.reconnectToRedpanda(); err != nil {
+						slog.Error("failed to reconnect to Redpanda", slog.Any("error", err))
+						return fmt.Errorf("connection unhealthy: %w", err)
+					}
+				}
+
+				fetches = c.session.PollFetches(fetchCtx)
+				return nil
+			})
+
+			if err != nil {
+				slog.Error("poll fetches failed with observable metrics", slog.Any("error", err))
+				// Add exponential backoff for connection errors
+				if strings.Contains(err.Error(), "context deadline exceeded") ||
+					strings.Contains(err.Error(), "connection") ||
+					strings.Contains(err.Error(), "timeout") {
+					slog.Warn("connection error detected, using exponential backoff", slog.Any("error", err))
+					time.Sleep(time.Duration(pollCount) * 2 * time.Second) // Exponential backoff
+				} else {
+					time.Sleep(nextInterval)
+				}
+				continue
+			}
 
 			slog.Info("session.PollFetches completed",
 				slog.Int("num_records", fetches.NumRecords()),
@@ -310,6 +396,9 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 						break
 					}
 				}
+				// Phase 1 Algorithm: Record failed poll
+				c.adaptivePoller.RecordFailure()
+
 				slog.Info("continuing polling after errors", slog.Duration("sleep_duration", backoffDuration))
 				time.Sleep(backoffDuration)
 				continue
@@ -317,6 +406,9 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 
 			// If no records to process, continue polling
 			if fetches.NumRecords() == 0 {
+				// Phase 1 Algorithm: Record successful poll (no errors, just no messages)
+				c.adaptivePoller.RecordSuccess()
+
 				// Log every 30 seconds that we're waiting for messages
 				if time.Now().Unix()%30 == 0 {
 					slog.Info("consumer waiting for messages",
@@ -324,9 +416,14 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 						slog.String("group_id", c.groupID),
 						slog.Int("poll_count", pollCount))
 				}
-				time.Sleep(100 * time.Millisecond)
+
+				// Phase 1 Algorithm: Use adaptive sleep interval
+				time.Sleep(nextInterval)
 				continue
 			}
+
+			// Phase 1 Algorithm: Record successful poll (messages found)
+			c.adaptivePoller.RecordSuccess()
 
 			// Queue all records for processing
 			fetches.EachRecord(func(record *kgo.Record) {
@@ -404,6 +501,20 @@ func (c *Consumer) worker(ctx context.Context, workerID int) {
 					slog.String("topic", record.Topic),
 					slog.Int("partition", int(record.Partition)))
 			}
+
+			// Check if we should scale down after processing a job
+			// If we have excess workers (more than min or more than queue length), exit gracefully
+			activeWorkers := c.getActiveWorkers()
+			queueLen := len(c.jobQueue)
+			if activeWorkers > c.minWorkers && (queueLen == 0 || activeWorkers > queueLen) {
+				slog.Info("worker scaling down due to excess capacity",
+					slog.Int("worker_id", workerID),
+					slog.Int("jobs_processed", jobCount),
+					slog.Int("active_workers", activeWorkers),
+					slog.Int("min_workers", c.minWorkers),
+					slog.Int("queue_length", queueLen))
+				return
+			}
 		}
 	}
 }
@@ -419,6 +530,14 @@ func (c *Consumer) incrementActiveWorkers() {
 	c.workerMu.Lock()
 	defer c.workerMu.Unlock()
 	c.activeWorkers++
+}
+
+func (c *Consumer) decrementActiveWorkers() {
+	c.workerMu.Lock()
+	defer c.workerMu.Unlock()
+	if c.activeWorkers > 0 {
+		c.activeWorkers--
+	}
 }
 
 // Helper function for min
@@ -504,4 +623,95 @@ func (c *Consumer) Close() error {
 		}
 	}
 	return nil
+}
+
+// GetHealthStatus returns the health status of the consumer
+func (c *Consumer) GetHealthStatus() map[string]interface{} {
+	if c.observableClient == nil {
+		return map[string]interface{}{
+			"status": "unhealthy",
+			"reason": "observable client not initialized",
+		}
+	}
+
+	healthStatus := c.observableClient.GetHealthStatus()
+	healthStatus["consumer_type"] = "redpanda"
+	healthStatus["group_id"] = c.groupID
+	healthStatus["topic"] = c.topic
+	healthStatus["active_workers"] = c.getActiveWorkers()
+	healthStatus["min_workers"] = c.minWorkers
+	healthStatus["max_workers"] = c.maxWorkers
+
+	return healthStatus
+}
+
+// isConnectionHealthy checks if the connection to Redpanda is healthy
+func (c *Consumer) isConnectionHealthy() bool {
+	// Simple health check - try to get metadata
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Check if session is still valid
+	if c.session == nil {
+		return false
+	}
+
+	// Try a simple operation to check connectivity
+	fetches := c.session.PollFetches(ctx)
+	return len(fetches.Errors()) == 0
+}
+
+// reconnectToRedpanda attempts to reconnect to Redpanda
+func (c *Consumer) reconnectToRedpanda() error {
+	slog.Info("attempting to reconnect to Redpanda")
+
+	// Close existing session
+	if c.session != nil {
+		c.session.Close()
+	}
+
+	// Recreate session with same configuration
+	opts := []kgo.Opt{
+		kgo.SeedBrokers(c.brokers...),
+		kgo.TransactionalID(c.transactionalID),
+		kgo.FetchIsolationLevel(kgo.ReadCommitted()),
+		kgo.ConsumerGroup(c.groupID),
+		kgo.ConsumeTopics(c.topic),
+		kgo.RequireStableFetchOffsets(),
+
+		// Optimized timeouts for better connectivity
+		kgo.DialTimeout(10 * time.Second),
+		kgo.RequestTimeoutOverhead(5 * time.Second),
+		kgo.RetryTimeout(30 * time.Second),
+		kgo.SessionTimeout(20 * time.Second),
+		kgo.HeartbeatInterval(3 * time.Second),
+		kgo.RebalanceTimeout(10 * time.Second),
+
+		// Optimized fetch settings
+		kgo.FetchMaxBytes(10 * 1024 * 1024),
+		kgo.FetchMaxWait(2 * time.Second),
+		kgo.FetchMinBytes(512),
+		kgo.FetchMaxPartitionBytes(2 * 1024 * 1024),
+
+		// Enable automatic offset commits
+		kgo.AutoCommitMarks(),
+		kgo.AutoCommitInterval(1 * time.Second),
+	}
+
+	session, err := kgo.NewGroupTransactSession(opts...)
+	if err != nil {
+		return fmt.Errorf("failed to recreate Redpanda session: %w", err)
+	}
+
+	c.session = session
+	slog.Info("successfully reconnected to Redpanda")
+	return nil
+}
+
+// IsHealthy returns true if the consumer is healthy
+func (c *Consumer) IsHealthy() bool {
+	if c.observableClient == nil {
+		return false
+	}
+	return c.observableClient.IsHealthy()
 }

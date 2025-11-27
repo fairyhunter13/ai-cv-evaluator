@@ -157,16 +157,30 @@
               </div>
 
               <!-- Refresh Button -->
-              <div class="flex items-end">
+              <div class="flex items-end gap-2">
                 <LoadingButton
                   :loading="loading"
                   text="Refresh"
                   loading-text="Loading..."
                   variant="primary"
                   size="md"
-                  full-width
+                  class="flex-1"
                   @click="loadJobs"
                 />
+                <button
+                  @click="toggleAutoRefresh"
+                  :class="[
+                    'px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                    autoRefreshEnabled 
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ]"
+                  :title="autoRefreshEnabled ? 'Auto-refresh enabled' : 'Auto-refresh disabled'"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
@@ -210,8 +224,8 @@
               </div>
             </div>
 
-            <!-- Jobs Table -->
-            <div v-else-if="jobs.length > 0" class="overflow-x-auto">
+            <!-- Jobs Table - Desktop -->
+            <div v-else-if="jobs.length > 0" class="hidden md:block overflow-x-auto">
               <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                   <tr>
@@ -288,6 +302,64 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <!-- Jobs Cards - Mobile -->
+            <div v-else-if="jobs.length > 0" class="md:hidden divide-y divide-gray-200">
+              <div v-for="job in jobs" :key="job.id" class="p-4 hover:bg-gray-50">
+                <div class="space-y-3">
+                  <!-- Job ID and Status -->
+                  <div class="flex items-start justify-between">
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs text-gray-500 mb-1">Job ID</p>
+                      <p class="text-sm font-mono text-gray-900 truncate">{{ job.id }}</p>
+                    </div>
+                    <span 
+                      class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                      :class="{
+                        'bg-yellow-100 text-yellow-800': job.status === 'queued',
+                        'bg-blue-100 text-blue-800': job.status === 'processing',
+                        'bg-green-100 text-green-800': job.status === 'completed',
+                        'bg-red-100 text-red-800': job.status === 'failed'
+                      }"
+                    >
+                      {{ job.status?.charAt(0).toUpperCase() + job.status?.slice(1) }}
+                    </span>
+                  </div>
+
+                  <!-- CV and Project IDs -->
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <p class="text-xs text-gray-500 mb-1">CV ID</p>
+                      <p class="text-sm font-mono text-gray-900 truncate">{{ job.cv_id }}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-500 mb-1">Project ID</p>
+                      <p class="text-sm font-mono text-gray-900 truncate">{{ job.project_id }}</p>
+                    </div>
+                  </div>
+
+                  <!-- Timestamps -->
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <p class="text-xs text-gray-500 mb-1">Created</p>
+                      <p class="text-xs text-gray-700">{{ formatDate(job.created_at) }}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-500 mb-1">Updated</p>
+                      <p class="text-xs text-gray-700">{{ formatDate(job.updated_at) }}</p>
+                    </div>
+                  </div>
+
+                  <!-- Action Button -->
+                  <button
+                    @click="viewJobDetails(job.id)"
+                    class="w-full mt-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-md hover:bg-primary-700 transition-colors"
+                  >
+                    View Details
+                  </button>
+                </div>
+              </div>
             </div>
 
             <!-- Empty State -->
@@ -455,12 +527,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import { handleApiError } from '@/utils/errorHandler'
 import { success, error as showError } from '@/utils/notifications'
+import config from '@/config'
 import LoadingButton from '@/components/LoadingButton.vue'
 import LoadingTable from '@/components/LoadingTable.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
@@ -489,6 +562,11 @@ const jobDetails = ref<any>(null)
 const jobDetailsLoading = ref(false)
 const jobDetailsError = ref('')
 
+// Auto-refresh
+const autoRefreshEnabled = ref(true)
+const autoRefreshInterval = ref(config.autoRefreshInterval) // From environment config
+let refreshInterval: NodeJS.Timeout | null = null
+
 // Debounced search
 let searchTimeout: NodeJS.Timeout | null = null
 const debouncedSearch = () => {
@@ -499,6 +577,39 @@ const debouncedSearch = () => {
     pagination.page = 1
     loadJobs()
   }, 500)
+}
+
+// Start auto-refresh
+const startAutoRefresh = () => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
+  if (autoRefreshEnabled.value) {
+    refreshInterval = setInterval(() => {
+      // Only refresh if not currently loading and no modal is open
+      if (!loading.value && !selectedJob.value) {
+        loadJobs(true) // Silent refresh
+      }
+    }, autoRefreshInterval.value)
+  }
+}
+
+// Stop auto-refresh
+const stopAutoRefresh = () => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+}
+
+// Toggle auto-refresh
+const toggleAutoRefresh = () => {
+  autoRefreshEnabled.value = !autoRefreshEnabled.value
+  if (autoRefreshEnabled.value) {
+    startAutoRefresh()
+  } else {
+    stopAutoRefresh()
+  }
 }
 
 const toggleSidebar = () => {
@@ -514,7 +625,7 @@ const handleLogout = async () => {
   router.push('/login')
 }
 
-const loadJobs = async () => {
+const loadJobs = async (silent = false) => {
   loading.value = true
   error.value = ''
 
@@ -538,12 +649,18 @@ const loadJobs = async () => {
     if (response.status === 200) {
       jobs.value = response.data.jobs || []
       pagination.total = response.data.pagination?.total || 0
-      success('Jobs loaded', `Found ${jobs.value.length} jobs`)
+      // Only show success notification on manual refresh
+      if (!silent) {
+        success('Jobs loaded', `Found ${jobs.value.length} jobs`)
+      }
     }
   } catch (err: any) {
     const errorMessage = handleApiError(err)
     error.value = errorMessage
-    showError('Failed to load jobs', errorMessage)
+    // Only show error on manual refresh
+    if (!silent) {
+      showError('Failed to load jobs', errorMessage)
+    }
   } finally {
     loading.value = false
   }
@@ -604,6 +721,7 @@ watch([() => filters.status], () => {
 
 onMounted(() => {
   loadJobs()
+  startAutoRefresh()
   
   // Close user menu when clicking outside
   document.addEventListener('click', (e) => {
@@ -611,5 +729,9 @@ onMounted(() => {
       userMenuOpen.value = false
     }
   })
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>

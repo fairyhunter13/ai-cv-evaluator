@@ -8,6 +8,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -257,6 +259,16 @@ func (s *Service) isFreeModel(model Model) bool {
 		return false
 	}
 
+	// Exclude specific free models that are incompatible with our prompt style,
+	// such as those that reject developer/system instructions.
+	switch modelID {
+	case "google/gemma-3n-e2b-it:free", "google/gemma-3n-e4b-it:free":
+		slog.Warn("EXCLUDING incompatible free model from rotation",
+			slog.String("model_id", model.ID),
+			slog.String("reason", "developer instruction is not enabled for this model"))
+		return false
+	}
+
 	// Additional check: exclude known paid model patterns
 	excludedPatterns := []string{
 		"gpt-4", "gpt-5", "claude-3", "gemini-pro", "mistral-large",
@@ -305,4 +317,114 @@ func (s *Service) Refresh(ctx context.Context) error {
 	s.lastFetch = time.Time{}
 	_, err := s.GetFreeModels(ctx)
 	return err
+}
+
+// fetchAllModelsFromAPI fetches all models (free and paid) from OpenRouter API.
+func (s *Service) fetchAllModelsFromAPI(ctx context.Context) ([]Model, error) {
+	url := s.baseURL + "/models"
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	if s.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+s.apiKey)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+	var apiResp OpenRouterResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return apiResp.Data, nil
+}
+
+// GetCheapestPaidModels returns up to `limit` cheapest non-free models by estimated per-request cost.
+// Cost heuristic: prefer Pricing.Request when present; otherwise use Prompt+Completion. Empty values are treated as high cost.
+func (s *Service) GetCheapestPaidModels(ctx context.Context, limit int) ([]Model, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	all, err := s.fetchAllModelsFromAPI(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Filter to paid models and exclude problematic ids
+	candidates := make([]Model, 0)
+	for _, m := range all {
+		if s.isFreeModel(m) {
+			continue
+		}
+		mid := strings.ToLower(m.ID)
+		if mid == "openrouter/auto" {
+			continue
+		}
+		candidates = append(candidates, m)
+	}
+	type priced struct {
+		m    Model
+		cost float64
+	}
+	list := make([]priced, 0, len(candidates))
+	for _, m := range candidates {
+		req := parsePrice(m.Pricing.Request)
+		prompt := parsePrice(m.Pricing.Prompt)
+		compl := parsePrice(m.Pricing.Completion)
+		cost := req
+		if cost <= 0 {
+			cost = prompt + compl
+		}
+		if cost <= 0 {
+			cost = 1e9 // unknown; push to end
+		}
+		list = append(list, priced{m: m, cost: cost})
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].cost < list[j].cost })
+
+	out := make([]Model, 0, minInt(limit, len(list)))
+	for i := 0; i < len(list) && len(out) < limit; i++ {
+		out = append(out, list[i].m)
+	}
+	return out, nil
+}
+
+func parsePrice(v string) float64 {
+	if v == "" {
+		return 0
+	}
+	// Accept strings like "0", "0.0", "0.0001"; ignore currency symbols
+	cleaned := strings.TrimSpace(strings.TrimLeft(v, "$€£"))
+	// Some providers may include "/1k tokens" etc. Keep leading float
+	var numStr string
+	for i := 0; i < len(cleaned); i++ {
+		c := cleaned[i]
+		if (c >= '0' && c <= '9') || c == '.' {
+			numStr += string(c)
+		} else {
+			break
+		}
+	}
+	if numStr == "" {
+		return 0
+	}
+	f, err := strconv.ParseFloat(numStr, 64)
+	if err != nil {
+		return 0
+	}
+	return f
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

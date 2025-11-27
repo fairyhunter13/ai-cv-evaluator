@@ -17,8 +17,6 @@ type RetryConfig struct {
 	Multiplier float64 `env:"RETRY_MULTIPLIER" envDefault:"2.0"`
 	// Jitter adds randomness to prevent thundering herd
 	Jitter bool `env:"RETRY_JITTER" envDefault:"true"`
-	// DLQEnabled enables Dead Letter Queue functionality
-	DLQEnabled bool `env:"DLQ_ENABLED" envDefault:"true"`
 	// DLQMaxAge is the maximum age for DLQ jobs before cleanup
 	DLQMaxAge time.Duration `env:"DLQ_MAX_AGE" envDefault:"168h"`
 	// DLQCleanupInterval is the interval for DLQ cleanup
@@ -33,7 +31,6 @@ func (c Config) GetRetryConfig() RetryConfig {
 		MaxDelay:           c.RetryMaxDelay,
 		Multiplier:         c.RetryMultiplier,
 		Jitter:             c.RetryJitter,
-		DLQEnabled:         c.DLQEnabled,
 		DLQMaxAge:          c.DLQMaxAge,
 		DLQCleanupInterval: c.DLQCleanupInterval,
 	}

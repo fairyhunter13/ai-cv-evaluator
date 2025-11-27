@@ -188,6 +188,21 @@
                 <p class="mt-1 text-sm text-gray-500">Provide context for the evaluation (optional - will use default if empty)</p>
               </div>
 
+              <!-- Scoring Rubric -->
+              <div>
+                <label for="scoring_rubric" class="block text-sm font-medium text-gray-700 mb-2">
+                  Scoring Rubric <span class="text-gray-400">(Optional)</span>
+                </label>
+                <textarea
+                  id="scoring_rubric"
+                  v-model="form.scoring_rubric"
+                  rows="4"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  placeholder="Provide a custom scoring rubric to override the default (leave empty to use default)..."
+                ></textarea>
+                <p class="mt-1 text-sm text-gray-500">Define how the evaluation should be scored (optional - will use default if empty)</p>
+              </div>
+
               <!-- Error Message -->
               <div v-if="error" class="rounded-md bg-red-50 p-4">
                 <div class="flex">
@@ -256,6 +271,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 import { handleApiError } from '@/utils/errorHandler'
+import { success as showSuccess, error as showError } from '@/utils/notifications'
 import LoadingButton from '@/components/LoadingButton.vue'
 
 const router = useRouter()
@@ -272,7 +288,8 @@ const form = reactive({
   cv_id: '',
   project_id: '',
   job_description: '',
-  study_case_brief: ''
+  study_case_brief: '',
+  scoring_rubric: ''
 })
 
 const toggleSidebar = () => {
@@ -299,23 +316,29 @@ const handleEvaluate = async () => {
       cv_id: form.cv_id,
       project_id: form.project_id,
       job_description: form.job_description,
-      study_case_brief: form.study_case_brief
+      study_case_brief: form.study_case_brief,
+      scoring_rubric: form.scoring_rubric
     }, {
       withCredentials: true,
     })
 
     if (response.status === 200) {
       success.value = 'Evaluation started successfully!'
-      jobId.value = response.data.job_id || 'N/A'
+      // Backend returns 'id' not 'job_id'
+      jobId.value = response.data.id || 'N/A'
+      showSuccess('Evaluation Started', `Job ID: ${jobId.value}. You can check the status in the Jobs page.`)
       
       // Reset form
       form.cv_id = ''
       form.project_id = ''
       form.job_description = ''
       form.study_case_brief = ''
+      form.scoring_rubric = ''
     }
   } catch (err: any) {
-    error.value = handleApiError(err)
+    const errorMessage = handleApiError(err)
+    error.value = errorMessage
+    showError('Evaluation Failed', errorMessage)
   } finally {
     evaluating.value = false
   }

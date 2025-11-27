@@ -60,7 +60,6 @@ func TestConfig_Load_CustomValues(t *testing.T) {
 	t.Setenv("EMBEDDINGS_MODEL", "text-embedding-3-large")
 	t.Setenv("QDRANT_URL", "http://custom-qdrant:6333")
 	t.Setenv("QDRANT_API_KEY", "qdrant-key")
-	t.Setenv("UNIDOC_LICENSE_API_KEY", "unidoc-key")
 	t.Setenv("TIKA_URL", "http://custom-tika:9998")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:14268/api/traces")
 	t.Setenv("OTEL_SERVICE_NAME", "custom-service")
@@ -95,7 +94,6 @@ func TestConfig_Load_CustomValues(t *testing.T) {
 	assert.Equal(t, "text-embedding-3-large", cfg.EmbeddingsModel)
 	assert.Equal(t, "http://custom-qdrant:6333", cfg.QdrantURL)
 	assert.Equal(t, "qdrant-key", cfg.QdrantAPIKey)
-	assert.Equal(t, "unidoc-key", cfg.UnidocLicenseAPIKey)
 	assert.Equal(t, "http://custom-tika:9998", cfg.TikaURL)
 	assert.Equal(t, "http://jaeger:14268/api/traces", cfg.OTLPEndpoint)
 	assert.Equal(t, "custom-service", cfg.OTELServiceName)
@@ -394,10 +392,10 @@ func TestConfig_Load_EmptyStringArrays(t *testing.T) {
 func clearEnvVars(t *testing.T) {
 	envVars := []string{
 		"APP_ENV", "PORT", "DB_URL", "KAFKA_BROKERS",
-		"OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "CHAT_MODEL",
+		"OPENROUTER_API_KEY", "OPENROUTER_API_KEY_2", "OPENROUTER_BASE_URL", "CHAT_MODEL",
 		"CHAT_FALLBACK_MODELS", "FREE_MODELS_REFRESH", "OPENAI_API_KEY",
 		"OPENAI_BASE_URL", "EMBEDDINGS_MODEL", "QDRANT_URL", "QDRANT_API_KEY",
-		"UNIDOC_LICENSE_API_KEY", "TIKA_URL", "OTEL_EXPORTER_OTLP_ENDPOINT",
+		"TIKA_URL", "OTEL_EXPORTER_OTLP_ENDPOINT",
 		"OTEL_SERVICE_NAME", "EMBED_CACHE_SIZE", "ADMIN_USERNAME",
 		"ADMIN_PASSWORD", "ADMIN_SESSION_SECRET", "MAX_UPLOAD_MB",
 		"CORS_ALLOW_ORIGINS", "RATE_LIMIT_PER_MIN", "SERVER_SHUTDOWN_TIMEOUT",

@@ -2,12 +2,13 @@ package tika
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestExtractPath_Success(t *testing.T) {

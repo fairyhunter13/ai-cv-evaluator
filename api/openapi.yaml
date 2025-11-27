@@ -8,6 +8,8 @@ paths:
   /v1/upload:
     post:
       summary: Upload CV and Project files
+      description: |
+        Uploads CV and Project files. When admin is enabled, this endpoint is protected by admin session or HTTP Basic Auth.
       requestBody:
         required: true
         content:
@@ -37,6 +39,8 @@ paths:
   /v1/evaluate:
     post:
       summary: Enqueue evaluation job
+      description: |
+        Enqueues an evaluation job. When admin is enabled, this endpoint is protected by admin session or HTTP Basic Auth.
       requestBody:
         required: true
         content:
@@ -48,6 +52,7 @@ paths:
                 project_id: { type: string }
                 job_description: { type: string }
                 study_case_brief: { type: string }
+                scoring_rubric: { type: string }
               required: [cv_id, project_id]
       responses:
         '200':
@@ -64,11 +69,18 @@ paths:
   /v1/result/{id}:
     get:
       summary: Fetch job status/result
+      description: |
+        Returns the status and optionally the result for a job. Supports conditional requests using If-None-Match.
       parameters:
         - in: path
           name: id
           required: true
           schema: { type: string }
+        - in: header
+          name: If-None-Match
+          required: false
+          schema: { type: string }
+          description: Send the previously returned ETag to receive 304 Not Modified when unchanged.
       responses:
         '200':
           description: OK

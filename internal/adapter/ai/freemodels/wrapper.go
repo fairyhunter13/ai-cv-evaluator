@@ -23,8 +23,14 @@ func NewFreeModelWrapper(cfg config.Config) *FreeModelWrapper {
 	// Create the underlying real client
 	realClient := real.New(cfg)
 
-	// Create free models service with configurable refresh interval
-	freeModelsSvc := freemodels.NewService(cfg.OpenRouterAPIKey, cfg.OpenRouterBaseURL, cfg.FreeModelsRefresh)
+	// Create free models service with configurable refresh interval.
+	// Prefer primary OpenRouter key but fall back to OPENROUTER_API_KEY_2 when
+	// only the secondary key is configured.
+	openRouterKey := cfg.OpenRouterAPIKey
+	if openRouterKey == "" {
+		openRouterKey = cfg.OpenRouterAPIKey2
+	}
+	freeModelsSvc := freemodels.NewService(openRouterKey, cfg.OpenRouterBaseURL, cfg.FreeModelsRefresh)
 
 	return &FreeModelWrapper{
 		client:        realClient,

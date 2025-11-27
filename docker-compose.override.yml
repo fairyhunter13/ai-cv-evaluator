@@ -1,0 +1,26 @@
+services:
+  grafana:
+    environment:
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - ./deploy/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+
+  prometheus:
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.external-url=/prometheus/'
+      - '--web.route-prefix=/prometheus'
+
+  jaeger:
+    environment:
+      QUERY_BASE_PATH: /jaeger
+
+  redpanda-console:
+    environment:
+      CONSOLE_CONFIG_FILEPATH: /tmp/config.yaml
+    volumes:
+      - ./deploy/redpanda/console-config.yaml:/tmp/config.yaml:ro

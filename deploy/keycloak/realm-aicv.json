@@ -1,0 +1,41 @@
+{
+  "realm": "aicv",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": true,
+  "resetPasswordAllowed": false,
+  "internationalizationEnabled": false,
+  "displayName": "AI CV Evaluator",
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@local",
+      "credentials": [ { "type": "password", "value": "Admin@Rakamin13", "temporary": false } ],
+      "clientRoles": {
+        "realm-management": ["realm-admin"]
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "oauth2-proxy",
+      "name": "oauth2-proxy",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "oauth2-proxy-secret",
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": true,
+      "redirectUris": [
+        "http://localhost:4180/oauth2/callback",
+        "http://nginx/oauth2/callback",
+        "https://dashboard.ai-cv-evaluator.web.id/oauth2/callback",
+        "https://ai-cv-evaluator.web.id/oauth2/callback"
+      ],
+      "webOrigins": ["*"]
+    }
+  ]
+}
+

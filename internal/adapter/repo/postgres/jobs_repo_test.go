@@ -54,7 +54,6 @@ func TestJobRepo_UpdateStatus(t *testing.T) {
 	pool.EXPECT().BeginTx(mock.Anything, mock.Anything).Return(mockTx, nil).Once()
 	mockTx.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
 	mockTx.EXPECT().Commit(mock.Anything).Return(nil).Once()
-	mockTx.EXPECT().Rollback(mock.Anything).Return(nil).Once() // Rollback is called in defer after commit
 	err := repo.UpdateStatus(ctx, "job-1", domain.JobCompleted, nil)
 	require.NoError(t, err)
 
@@ -63,7 +62,6 @@ func TestJobRepo_UpdateStatus(t *testing.T) {
 	pool.EXPECT().BeginTx(mock.Anything, mock.Anything).Return(mockTx, nil).Once()
 	mockTx.EXPECT().Exec(mock.Anything, mock.Anything, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
 	mockTx.EXPECT().Commit(mock.Anything).Return(nil).Once()
-	mockTx.EXPECT().Rollback(mock.Anything).Return(nil).Once() // Rollback is called in defer after commit
 	err = repo.UpdateStatus(ctx, "job-1", domain.JobFailed, &errorMsg)
 	require.NoError(t, err)
 

@@ -1,0 +1,113 @@
+server {
+    listen 80;
+    server_name dashboard.ai-cv-evaluator.web.id;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name dashboard.ai-cv-evaluator.web.id;
+    
+    # SSL configuration
+    ssl_certificate /etc/letsencrypt/live/dashboard.ai-cv-evaluator.web.id/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/dashboard.ai-cv-evaluator.web.id/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/dashboard.ai-cv-evaluator.web.id/chain.pem;
+    
+    # SSL security settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+    
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_proxied expired no-cache no-store private must-revalidate auth;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        text/javascript
+        application/javascript
+        application/xml+rss
+        application/json;
+    
+    # Forward-auth via oauth2-proxy
+    auth_request /oauth2/auth;
+    error_page 401 = @oauth2_signin;
+    auth_request_set $auth_user $upstream_http_x_auth_request_user;
+    proxy_set_header X-Forwarded-User $auth_user;
+    proxy_set_header X-Auth-Request-User $auth_user;
+
+    # oauth2-proxy internal auth endpoint
+    location = /oauth2/auth {
+        proxy_pass http://oauth2-proxy-dashboard:4180/oauth2/auth;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Scheme $scheme;
+        proxy_set_header X-Auth-Request-Redirect $scheme://$http_host$request_uri;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+    }
+
+    # oauth2-proxy public endpoints
+    location /oauth2/ {
+        auth_request off;
+        proxy_pass http://oauth2-proxy-dashboard:4180/oauth2/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # Portal root - static
+    location = / {
+        root /usr/share/nginx/html;
+        index index.html;
+    }
+    location /assets/ {
+        root /usr/share/nginx/html;
+    }
+    
+    # Frontend app under /app/ (linked from portal)
+    location /app/ {
+        proxy_pass http://frontend:80/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    location /admin/ {
+        proxy_pass http://backend:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # Health check endpoint
+    location /healthz {
+        proxy_pass http://backend:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    # Central logout endpoint
+    location = /logout { return 302 /oauth2/sign_out?rd=/; }
+
+    # Unauthorized handler: redirect to oauth2-proxy start with rd fixed to portal root
+    location @oauth2_signin { internal; return 302 /oauth2/start?rd=$scheme://$http_host/; }
+}
