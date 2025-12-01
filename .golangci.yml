@@ -1,5 +1,4 @@
-version: "2"
-
+# golangci-lint v1.x configuration
 run:
   timeout: 5m
   skip-dirs:
@@ -17,64 +16,66 @@ linters:
     - misspell
     - gocyclo
     - unused
-  exclusions:
-    # Mode of the generated files analysis.
-    generated: lax
-    # Predefined exclusion rules.
-    presets:
-      - comments
-      - std-error-handling
-      - common-false-positives
-    # Excluding configuration per-path, per-linter, per-text and per-source.
-    rules:
-      # Exclude some linters from running on tests files.
-      - path: _test\.go
-        linters:
-          - gocyclo
-      # Exclude vendor and mock files
-      - path: vendor/|mock_
-        linters:
-          - errcheck
-          - gosec
-      # Exclude typecheck on generated Postgres mocks (mockery output)
-      - path: internal/adapter/repo/postgres/mocks/
-        linters:
-          - typecheck
-      # Exclude Tika file path issue
-      - path: internal/adapter/textextractor/tika/tika\.go
-        text: "G304:"
-      # Legacy AI client functions kept for reference/future use
-      - path: internal/adapter/ai/real/client\.go
-        linters:
-          - unused
-        text: "providerCounter|chatJSONWithEnhancedModelSwitching|isOpenRouterBlocked"
-      # Legacy evaluation handler functions kept for reference
-      - path: internal/adapter/queue/redpanda/integrated_evaluation_handler\.go
-        linters:
-          - unused
-        text: "extractStructuredCVInfo|compareWithJobRequirements|summarizeProjectContent|generateScoringPrompt"
-      # Accept high cyclomatic complexity in core AI/evaluation functions
-      - path: internal/adapter/ai/real/client\.go
-        linters:
-          - gocyclo
-      - path: internal/adapter/queue/redpanda/evaluation_handler\.go
-        linters:
-          - gocyclo
-      # G101 false positives for variable names containing "key", "token", etc.
-      - linters:
-          - gosec
-        text: "G101:"
-      # G114 http serve without timeout - acceptable for internal worker process
-      - path: cmd/worker/main\.go
-        linters:
-          - gosec
-        text: "G114:"
-      # G404 weak random for non-crypto use in middleware
-      - path: internal/adapter/httpserver/middleware\.go
-        linters:
-          - gosec
-        text: "G404:"
-      # QF1003 tagged switch suggestion - low priority style issue
-      - linters:
-          - staticcheck
-        text: "QF1003:"
+    - gosimple
+
+linters-settings:
+  gocyclo:
+    min-complexity: 30
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - gocyclo
+    # Exclude vendor and mock files
+    - path: vendor/|mock_
+      linters:
+        - errcheck
+        - gosec
+    # Exclude typecheck on generated Postgres mocks (mockery output)
+    - path: internal/adapter/repo/postgres/mocks/
+      linters:
+        - typecheck
+    # Exclude Tika file path issue
+    - path: internal/adapter/textextractor/tika/tika\.go
+      text: "G304:"
+    # Legacy AI client functions kept for reference/future use
+    - path: internal/adapter/ai/real/client\.go
+      linters:
+        - unused
+      text: "providerCounter|chatJSONWithEnhancedModelSwitching|isOpenRouterBlocked"
+    # Legacy evaluation handler functions kept for reference
+    - path: internal/adapter/queue/redpanda/integrated_evaluation_handler\.go
+      linters:
+        - unused
+      text: "extractStructuredCVInfo|compareWithJobRequirements|summarizeProjectContent|generateScoringPrompt"
+    # Accept high cyclomatic complexity in core AI/evaluation functions
+    - path: internal/adapter/ai/real/client\.go
+      linters:
+        - gocyclo
+    - path: internal/adapter/queue/redpanda/evaluation_handler\.go
+      linters:
+        - gocyclo
+    # G101 false positives for variable names containing "key", "token", etc.
+    - linters:
+        - gosec
+      text: "G101:"
+    # G114 http serve without timeout - acceptable for internal worker process
+    - path: cmd/worker/main\.go
+      linters:
+        - gosec
+      text: "G114:"
+    # G404 weak random for non-crypto use in middleware
+    - path: internal/adapter/httpserver/middleware\.go
+      linters:
+        - gosec
+      text: "G404:"
+    # QF1003 tagged switch suggestion - low priority style issue
+    - linters:
+        - staticcheck
+      text: "QF1003:"
+    # S1008 gosimple style suggestion - low priority
+    - linters:
+        - gosimple
+      text: "S1008:"
