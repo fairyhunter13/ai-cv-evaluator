@@ -1,0 +1,16 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: email-ai-cv-evaluator
+    receivers:
+      - uid: email-ai-cv-evaluator-receiver
+        type: email
+        disableResolveMessage: false
+        settings:
+          # Comma- or semicolon-separated list of recipients.
+          addresses: "fairyhunter13@gmail.com;hafiz.putraludyanto@gmail.com"
+          singleEmail: true
+          # Use an explicit if/else instead of the unsupported `default` function.
+          subject: "[ai-cv-evaluator] Alert: {{ if .CommonAnnotations.summary }}{{ .CommonAnnotations.summary }}{{ else }}{{ .CommonLabels.alertname }}{{ end }}"
+          message: "{{ template \"default.message\" . }}"

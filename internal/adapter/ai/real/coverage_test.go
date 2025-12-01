@@ -480,3 +480,73 @@ func TestTestClientWithCustomBackoff(t *testing.T) {
 		t.Errorf("Expected custom InitialInterval to be 10ms, got %v", backoffConfig.InitialInterval)
 	}
 }
+
+func TestReadSSEChatStream_AccumulatedContent(t *testing.T) {
+	// Mix of valid delta chunks, a malformed chunk, and a final [DONE] marker.
+	// Malformed chunks should be skipped and not cause the helper to fail.
+	stream := strings.Join([]string{
+		"data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}",
+		"data: {this-is-not-valid-json}",
+		"data: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}",
+		"data: [DONE]",
+		"",
+	}, "\n")
+
+	out, err := readSSEChatStream(strings.NewReader(stream), "test-provider", "test-model", 5*time.Second)
+	if err != nil {
+		t.Fatalf("unexpected error from readSSEChatStream: %v", err)
+	}
+	if out != "Hello world" {
+		t.Fatalf("unexpected accumulated content: %q", out)
+	}
+}
+
+type idleTestStream struct {
+	lines  []string
+	index  int
+	closed chan struct{}
+}
+
+func newIdleTestStream(lines []string) *idleTestStream {
+	return &idleTestStream{
+		lines:  lines,
+		closed: make(chan struct{}),
+	}
+}
+
+func (s *idleTestStream) Read(p []byte) (int, error) {
+	if s.index < len(s.lines) {
+		// Return the next line immediately
+		data := s.lines[s.index] + "\n"
+		s.index++
+		return copy(p, []byte(data)), nil
+	}
+	// After all lines are sent, block until closed to simulate an idle stream.
+	<-s.closed
+	return 0, io.EOF
+}
+
+func (s *idleTestStream) Close() error {
+	select {
+	case <-s.closed:
+		// already closed
+	default:
+		close(s.closed)
+	}
+	return nil
+}
+
+func TestReadSSEChatStream_IdleTimeout(t *testing.T) {
+	stream := newIdleTestStream([]string{
+		"data: {\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}",
+	})
+
+	start := time.Now()
+	_, err := readSSEChatStream(stream, "test-provider", "test-model", 50*time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "stream idle") {
+		t.Fatalf("expected idle timeout error, got: %v", err)
+	}
+	if time.Since(start) < 40*time.Millisecond {
+		t.Fatalf("idle timeout triggered too early: %v", time.Since(start))
+	}
+}

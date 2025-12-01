@@ -8,6 +8,11 @@ datasources:
   - name: Prometheus
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: http://prometheus:9090/prometheus
+    uid: prometheus
+    jsonData:
+      manageAlerts: true
+      prometheusType: Prometheus
+      timeInterval: 15s
     isDefault: true
     editable: true

@@ -5,9 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	obsctx "github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
+	"go.opentelemetry.io/otel"
 )
 
 // EvaluateService orchestrates job creation and queueing for evaluation.
@@ -44,12 +47,25 @@ func NewEvaluateServiceWithHealthChecks(j domain.JobRepository, q domain.Queue, 
 
 // Enqueue validates inputs, creates a job, and enqueues the evaluation task.
 func (s EvaluateService) Enqueue(ctx domain.Context, cvID, projectID, jobDesc, studyCase, scoringRubric, idemKey string) (string, error) {
+	tr := otel.Tracer("usecase.evaluate")
+	ctx, span := tr.Start(ctx, "EvaluateService.Enqueue")
+	defer span.End()
+
+	lg := obsctx.LoggerFromContext(ctx)
+	lg.Info("enqueue evaluate request",
+		slog.String("cv_id", cvID),
+		slog.String("project_id", projectID),
+		slog.String("idempotency_key", idemKey),
+		slog.String("request_id", obsctx.RequestIDFromContext(ctx)))
+
 	if cvID == "" || projectID == "" {
+		lg.Error("enqueue evaluate missing ids", slog.String("cv_id", cvID), slog.String("project_id", projectID))
 		return "", fmt.Errorf("%w: ids required", domain.ErrInvalidArgument)
 	}
 	// Idempotency: if provided, try to find an existing job
 	if idemKey != "" {
 		if j, err := s.Jobs.FindByIdempotencyKey(ctx, idemKey); err == nil && j.ID != "" {
+			lg.Info("enqueue evaluate idempotent hit", slog.String("job_id", j.ID), slog.String("cv_id", cvID), slog.String("project_id", projectID))
 			return j.ID, nil
 		}
 	}
@@ -60,14 +76,19 @@ func (s EvaluateService) Enqueue(ctx domain.Context, cvID, projectID, jobDesc, s
 	}
 	jobID, err := s.Jobs.Create(ctx, j)
 	if err != nil {
+		lg.Error("enqueue evaluate failed to create job", slog.Any("error", err), slog.String("cv_id", cvID), slog.String("project_id", projectID))
 		return "", err
 	}
-	// Enqueue
-	payload := domain.EvaluateTaskPayload{JobID: jobID, CVID: cvID, ProjectID: projectID, JobDescription: jobDesc, StudyCaseBrief: studyCase, ScoringRubric: scoringRubric}
+	lg.Info("enqueue evaluate job created", slog.String("job_id", jobID), slog.String("cv_id", cvID), slog.String("project_id", projectID))
+	// Enqueue, propagating request_id to the background worker via payload
+	requestID := obsctx.RequestIDFromContext(ctx)
+	payload := domain.EvaluateTaskPayload{JobID: jobID, CVID: cvID, ProjectID: projectID, JobDescription: jobDesc, StudyCaseBrief: studyCase, ScoringRubric: scoringRubric, RequestID: requestID}
 	if _, err := s.Queue.EnqueueEvaluate(ctx, payload); err != nil {
 		_ = s.Jobs.UpdateStatus(ctx, jobID, domain.JobFailed, ptr("enqueue failed"))
+		lg.Error("enqueue evaluate failed to enqueue", slog.String("job_id", jobID), slog.Any("error", err))
 		return "", err
 	}
+	lg.Info("enqueue evaluate enqueued", slog.String("job_id", jobID))
 	return jobID, nil
 }
 

@@ -11,7 +11,7 @@ SOPS_AGE_KEY_FILE ?= $(HOME)/.config/sops/age/keys.txt
 # Common variables
 DOCKER_COMPOSE := docker compose
 DOCKER_COMPOSE_FILE := docker-compose.yml
-# Support multiple compose files. Override with: DOCKER_COMPOSE_FILES="docker-compose.yml docker-compose.e2e.override.yml"
+# Support multiple compose files. Example: DOCKER_COMPOSE_FILES="docker-compose.yml docker-compose.dev.override.yml"
 DOCKER_COMPOSE_FILES ?= $(DOCKER_COMPOSE_FILE)
 # Expand to: -f file1 -f file2 ...
 compose_files_args := $(foreach f,$(DOCKER_COMPOSE_FILES),-f $(f))
@@ -378,7 +378,135 @@ clean-test-cv:
 	$(GO) test -v -race -timeout=180s -failfast -parallel=4 -count=1 -coverprofile=$(COVERAGE_DIR)/coverage.unit.out $$pkgs
 
  test-e2e:
-	$(MAKE) run-e2e-tests E2E_CLEAR_DUMP=true E2E_START_SERVICES=false
+	$(MAKE) test-e2e-core
+
+# --- Rate-Limit-Friendly Core E2E Suite ---------------------------------------
+# These targets run a lightweight E2E suite designed to be safe to run multiple
+# times consecutively without hitting provider rate limits.
+#
+# Algorithm:
+#   - Uses minimal CV/project texts (~50-100 chars) to minimize tokens
+#   - Runs only 3 jobs with 15s cooldown between each
+#   - Each job makes ~3 LLM calls via the multi-step evaluation chain
+#   - Total: ~9 LLM calls over ~3 minutes = ~3 RPM (well under 30 RPM limit)
+#   - 4 provider accounts (2 Groq + 2 OpenRouter) handle load via fallback
+#
+# Usage:
+#   make test-e2e-core                    # Quick core suite (services must be running)
+#   make run-e2e-core                     # Core suite with service startup/cleanup
+#   make run-e2e-core-repeat RUNS=3       # Run core suite multiple times consecutively
+
+# Core E2E parameters (optimized for rate-limit safety)
+# - 1 job keeps load extremely low and minimizes rate-limit risk
+# - 15s cooldown ensures we stay under 30 RPM limit even with retries
+# - 120s per-job timeout handles slow LLM responses
+# - 8m global timeout allows for job + overhead
+E2E_CORE_TIMEOUT ?= 8m
+E2E_CORE_JOB_COUNT ?= 1
+E2E_INTER_JOB_COOLDOWN ?= 15s
+E2E_PER_JOB_TIMEOUT ?= 120s
+
+# Run the main rate-limit-friendly core E2E test only
+# This is the recommended target for CI - runs 2 jobs with proper cooldowns
+test-e2e-core:
+	@set -euo pipefail; \
+	$(call log_info,Running rate-limit-friendly core E2E test...); \
+	$(call load_env); \
+	E2E_CORE_JOB_COUNT="$(E2E_CORE_JOB_COUNT)" \
+	E2E_INTER_JOB_COOLDOWN="$(E2E_INTER_JOB_COOLDOWN)" \
+	E2E_PER_JOB_TIMEOUT="$(E2E_PER_JOB_TIMEOUT)" \
+	$(GO) test -tags=e2e -v -race -timeout=$(E2E_CORE_TIMEOUT) -count=1 \
+		-run "TestE2E_Core_RateLimitFriendly$$" ./test/e2e/...
+
+# Run single-job core E2E test (fastest possible E2E validation)
+test-e2e-single:
+	@set -euo pipefail; \
+	$(call log_info,Running single-job E2E test...); \
+	$(call load_env); \
+	$(GO) test -tags=e2e -v -race -timeout=3m -count=1 \
+		-run "TestE2E_Core_SingleJob" ./test/e2e/...
+
+# Run core E2E with service startup and cleanup
+# This is the recommended CI target - starts services, runs the core test, and cleans up
+run-e2e-core:
+	@set -euo pipefail; \
+	$(call log_info,Starting rate-limit-friendly core E2E suite...); \
+	$(call log_info,Configuration: jobs=$(E2E_CORE_JOB_COUNT), cooldown=$(E2E_INTER_JOB_COOLDOWN), per_job_timeout=$(E2E_PER_JOB_TIMEOUT)); \
+	$(call load_env); \
+	rm -rf $(ARTIFACTS_DIR)/* || true; \
+	mkdir -p $(ARTIFACTS_DIR); \
+	$(call log_info,Starting services...); \
+	$(DOCKER_COMPOSE) $(compose_files_args) up -d --build; \
+	trap 'echo "==> E2E cleanup..."; $(call comprehensive_cleanup); echo "==> Cleanup completed"' EXIT; \
+	$(call wait_for_postgres); \
+	$(call verify_database_schema); \
+	$(call wait_for_healthz); \
+	$(call log_info,Running core E2E test...); \
+	E2E_CORE_JOB_COUNT="$(E2E_CORE_JOB_COUNT)" \
+	E2E_INTER_JOB_COOLDOWN="$(E2E_INTER_JOB_COOLDOWN)" \
+	E2E_PER_JOB_TIMEOUT="$(E2E_PER_JOB_TIMEOUT)" \
+	$(GO) test -tags=e2e -v -race -timeout=$(E2E_CORE_TIMEOUT) -count=1 \
+		-run "TestE2E_Core_RateLimitFriendly$$" ./test/e2e/...; \
+	$(call log_info,Core E2E test completed successfully)
+
+# Run CI-focused E2E tests (single canonical variant, rate-limit safe)
+# This is the recommended target for CI pipelines - runs the core test only
+test-e2e-ci:
+	@set -euo pipefail; \
+	$(call log_info,Running CI-focused E2E tests (core variant only)...); \
+	$(call load_env); \
+	$(GO) test -tags=e2e -v -race -timeout=10m -count=1 \
+		-run "TestE2E_Core_RateLimitFriendly$$" ./test/e2e/...
+
+# Run CI E2E with service startup and cleanup
+run-e2e-ci:
+	@set -euo pipefail; \
+	$(call log_info,Starting CI-focused E2E suite (core variant only)...); \
+	$(call load_env); \
+	rm -rf $(ARTIFACTS_DIR)/* || true; \
+	mkdir -p $(ARTIFACTS_DIR); \
+	$(call log_info,Starting services...); \
+	$(DOCKER_COMPOSE) $(compose_files_args) up -d --build; \
+	trap 'echo "==> E2E cleanup..."; $(call comprehensive_cleanup); echo "==> Cleanup completed"' EXIT; \
+	$(call wait_for_postgres); \
+	$(call verify_database_schema); \
+	$(call wait_for_healthz); \
+	$(call log_info,Running CI E2E tests (core variant only)...); \
+	E2E_INTER_JOB_COOLDOWN=15s \
+	E2E_PER_JOB_TIMEOUT=120s \
+	$(GO) test -tags=e2e -v -race -timeout=10m -count=1 \
+		-run "TestE2E_Core_RateLimitFriendly$$" ./test/e2e/...; \
+	$(call log_info,CI E2E tests completed successfully)
+
+# Run core E2E multiple times consecutively to validate rate-limit safety
+# Usage: make run-e2e-core-repeat RUNS=2
+# This target validates that the algorithm can handle back-to-back test runs
+RUNS ?= 2
+run-e2e-core-repeat:
+	@set -euo pipefail; \
+	$(call log_info,Running core E2E $(RUNS) times consecutively to validate rate-limit safety...); \
+	$(call load_env); \
+	rm -rf $(ARTIFACTS_DIR)/* || true; \
+	mkdir -p $(ARTIFACTS_DIR); \
+	$(call log_info,Starting services...); \
+	$(DOCKER_COMPOSE) $(compose_files_args) up -d --build; \
+	trap 'echo "==> E2E cleanup..."; $(call comprehensive_cleanup); echo "==> Cleanup completed"' EXIT; \
+	$(call wait_for_postgres); \
+	$(call verify_database_schema); \
+	$(call wait_for_healthz); \
+	for i in $$(seq 1 $(RUNS)); do \
+		$(call log_info,=== Run $$i of $(RUNS) ===); \
+		E2E_CORE_JOB_COUNT=1 \
+		E2E_INTER_JOB_COOLDOWN="$(E2E_INTER_JOB_COOLDOWN)" \
+		E2E_PER_JOB_TIMEOUT="$(E2E_PER_JOB_TIMEOUT)" \
+		$(GO) test -tags=e2e -v -race -timeout=5m -count=1 \
+			-run "TestE2E_Core_RateLimitFriendly$$" ./test/e2e/...; \
+		if [ $$i -lt $(RUNS) ]; then \
+			$(call log_info,Cooldown between runs: 60s); \
+			sleep 60; \
+		fi; \
+	done; \
+	$(call log_info,All $(RUNS) runs completed successfully - rate-limit algorithm validated!)
 
  cover:
 	$(GO) tool cover -html=coverage/coverage.unit.out -o coverage/coverage.html
@@ -389,7 +517,7 @@ clean-test-cv:
 E2E_CLEAR_DUMP ?= true
 E2E_START_SERVICES ?= false
 E2E_BASE_URL ?= 
-E2E_TIMEOUT ?= 20m
+E2E_TIMEOUT ?= 5m
 E2E_LOG_DIR ?= 
 E2E_PARALLEL ?= 2
 E2E_WORKER_REPLICAS ?= 1

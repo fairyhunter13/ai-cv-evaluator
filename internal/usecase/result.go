@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	obsctx "github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
+	"go.opentelemetry.io/otel"
 )
 
 // ResultService provides read access to evaluation results and assembles
@@ -34,18 +36,23 @@ func NewResultService(j domain.JobRepository, r domain.ResultRepository) ResultS
 // It implements conditional responses (304 Not Modified) based on If-None-Match ETag
 // and returns proper shapes for queued/processing/failed states per API rules.
 func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, map[string]any, string, error) {
-	slog.Info("fetching result", slog.String("job_id", id))
+	tr := otel.Tracer("usecase.result")
+	ctx, span := tr.Start(ctx, "ResultService.Fetch")
+	defer span.End()
+
+	lg := obsctx.LoggerFromContext(ctx)
+	lg.Info("fetching result", slog.String("job_id", id))
 	job, err := s.Jobs.Get(ctx, id)
 	if err != nil {
-		slog.Error("failed to get job", slog.String("job_id", id), slog.Any("error", err))
+		lg.Error("failed to get job", slog.String("job_id", id), slog.Any("error", err))
 		if errWrapped(err, domain.ErrNotFound) {
 			return http.StatusNotFound, nil, "", fmt.Errorf("%w: job not found", domain.ErrNotFound)
 		}
 		return http.StatusInternalServerError, nil, "", err
 	}
-	slog.Info("job retrieved", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Time("created_at", job.CreatedAt), slog.Time("updated_at", job.UpdatedAt))
+	lg.Info("job retrieved", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Time("created_at", job.CreatedAt), slog.Time("updated_at", job.UpdatedAt))
 	if job.Status != domain.JobCompleted {
-		slog.Info("job not completed", slog.String("job_id", id), slog.String("status", string(job.Status)))
+		lg.Info("job not completed", slog.String("job_id", id), slog.String("status", string(job.Status)))
 
 		// Stale timeout policy: queued/processing older than 5 minutes are considered stale.
 		// This protects clients from jobs that never progress while still reflecting the
@@ -59,7 +66,7 @@ func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, m
 			stale = true
 		}
 		if stale {
-			slog.Warn("job marked as stale", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Duration("age", now.Sub(job.CreatedAt)))
+			lg.Warn("job marked as stale", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Duration("age", now.Sub(job.CreatedAt)))
 			msg := "timeout: job exceeded 5 minutes"
 			_ = s.Jobs.UpdateStatus(ctx, id, domain.JobFailed, &msg)
 			job.Status = domain.JobFailed
@@ -78,7 +85,7 @@ func (s ResultService) Fetch(ctx domain.Context, id, ifNoneMatch string) (int, m
 					"message": job.Error,
 				}
 			}
-			slog.Info("returning non-completed status", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Any("response", m))
+			lg.Info("returning non-completed status", slog.String("job_id", id), slog.String("status", string(job.Status)), slog.Any("response", m))
 			etag := makeETag(m)
 			if etag == ifNoneMatch {
 				return http.StatusNotModified, nil, etag, nil

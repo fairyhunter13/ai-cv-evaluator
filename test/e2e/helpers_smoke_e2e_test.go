@@ -64,11 +64,12 @@ func evaluateFilesWithDefaults(t *testing.T, client *http.Client, cvID, projectI
 		}
 
 		resp.Body.Close()
+		// Do not retry on 429; tests must fail if rate limiting occurs.
 		if resp.StatusCode == http.StatusTooManyRequests {
-			time.Sleep(500 * time.Millisecond)
-			continue
+			break
 		}
-		break
+		// Simple backoff for other non-OK statuses
+		time.Sleep(200 * time.Millisecond)
 	}
 
 	// Enhanced error logging before failing

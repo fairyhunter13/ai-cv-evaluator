@@ -4,7 +4,7 @@ services:
     env_file:
       - ./.env.production
     environment:
-      - DB_URL=postgres://postgres:postgres@db:5432/app?sslmode=disable
+      - DB_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-app}?sslmode=disable
     depends_on:
       db:
         condition: service_healthy
@@ -16,7 +16,7 @@ services:
       - ./.env.production
     environment:
       - APP_ENV=prod
-      - DB_URL=postgres://postgres:postgres@db:5432/app?sslmode=disable
+      - DB_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-app}?sslmode=disable
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - TIKA_URL=http://tika:9998
@@ -25,7 +25,7 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}
-      - CORS_ALLOW_ORIGINS=*
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-https://ai-cv-evaluator.web.id,https://dashboard.ai-cv-evaluator.web.id}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -70,7 +70,7 @@ services:
       - ./.env.production
     environment:
       - APP_ENV=prod
-      - DB_URL=postgres://postgres:postgres@db:5432/app?sslmode=disable
+      - DB_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-app}?sslmode=disable
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
@@ -92,14 +92,14 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_DB: app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_DB: ${DB_NAME:-app}
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 3s
       retries: 10
@@ -189,6 +189,9 @@ services:
       - GF_AUTH_PROXY_AUTO_SIGN_UP=true
       - GF_USERS_AUTO_ASSIGN_ORG=true
       - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+    depends_on:
+      - prometheus
+      - loki
     restart: unless-stopped
 
   # Keycloak (prod)
@@ -196,11 +199,10 @@ services:
     image: quay.io/keycloak/keycloak:25.0
     command: ["start", "--import-realm"]
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change-me}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?Set KEYCLOAK_ADMIN in .env.production}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env.production}
       KC_PROXY: edge
-      # TODO: set KC_HOSTNAME to your chosen Keycloak public hostname
-      # KC_HOSTNAME: keycloak.ai-cv-evaluator.web.id
+      KC_HOSTNAME: ${KC_HOSTNAME:-keycloak.ai-cv-evaluator.web.id}
     volumes:
       - ./deploy/keycloak/realm-aicv.json:/opt/keycloak/data/import/realm-aicv.json:ro
     ports:
@@ -218,7 +220,7 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_COOKIE_SAMESITE: lax
-      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
       OAUTH2_PROXY_REDIRECT_URL: https://ai-cv-evaluator.web.id/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
@@ -238,7 +240,7 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_COOKIE_SAMESITE: lax
-      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
       OAUTH2_PROXY_REDIRECT_URL: https://dashboard.ai-cv-evaluator.web.id/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
@@ -252,3 +254,36 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - /var/www/certbot:/var/www/certbot
+
+  # Centralized logging with Loki
+  loki:
+    image: grafana/loki:3.0.0
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./deploy/loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Log shipper - collects container logs and sends to Loki
+  promtail:
+    image: grafana/promtail:3.0.0
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./deploy/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redpanda_data:
+  qdrant_data:
+  loki_data:

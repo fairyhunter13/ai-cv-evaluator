@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	qdrantcli "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/vector/qdrant"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 	"go.opentelemetry.io/otel"
@@ -43,111 +44,143 @@ func (h *IntegratedEvaluationHandler) PerformIntegratedEvaluation(
 	ctx, span := tracer.Start(ctx, "PerformIntegratedEvaluation")
 	defer span.End()
 
-	slog.Info("performing integrated evaluation with full project.md conformance", slog.String("job_id", jobID))
+	slog.Info("performing multi-step integrated evaluation", slog.String("job_id", jobID))
 
-	// Step 1: Extract structured CV information (sequential - required for subsequent steps)
-	extractedCV, err := h.extractStructuredCVInfo(ctx, cvContent, jobID)
+	// Step 1: evaluate CV match directly against job requirements using the
+	// standardized scoring rubric (with optional RAG context).
+	step1Ctx, step1Span := tracer.Start(ctx, "PerformIntegratedEvaluation.evaluateCVMatch")
+	cvEvaluation, err := h.evaluateCVMatch(step1Ctx, cvContent, jobDesc, scoringRubric, jobID)
+	step1Span.End()
 	if err != nil {
-		return domain.Result{}, fmt.Errorf("CV extraction failed: %w", err)
+		slog.Error("step 1: evaluateCVMatch failed; falling back to fast path",
+			slog.String("job_id", jobID),
+			slog.Any("error", err))
+		return h.performFastPathEvaluation(ctx, cvContent, projectContent, jobDesc, studyCase, scoringRubric, jobID)
 	}
 
-	// Steps 2-4: Parallel AI processing for maximum performance
-	slog.Info("starting parallel AI processing for steps 2-4", slog.String("job_id", jobID))
-
-	type jobComparisonResult struct {
-		result string
-		err    error
-	}
-	type cvEvaluationResult struct {
-		result string
-		err    error
-	}
-	type projectEvaluationResult struct {
-		result string
-		err    error
+	// Step 2: evaluate project deliverables (with RAG + standardized rubric)
+	step2Ctx, step2Span := tracer.Start(ctx, "PerformIntegratedEvaluation.evaluateProjectDeliverables")
+	projectEvaluation, err := h.evaluateProjectDeliverables(step2Ctx, projectContent, studyCase, scoringRubric, jobID)
+	step2Span.End()
+	if err != nil {
+		slog.Error("step 2: evaluateProjectDeliverables failed; falling back to fast path",
+			slog.String("job_id", jobID),
+			slog.Any("error", err))
+		return h.performFastPathEvaluation(ctx, cvContent, projectContent, jobDesc, studyCase, scoringRubric, jobID)
 	}
 
-	// Create channels for parallel processing
-	jobComparisonChan := make(chan jobComparisonResult, 1)
-	cvEvaluationChan := make(chan cvEvaluationResult, 1)
-	projectEvaluationChan := make(chan projectEvaluationResult, 1)
+	// Step 3: refine evaluations into final scores and feedback
+	step3Ctx, step3Span := tracer.Start(ctx, "PerformIntegratedEvaluation.refineEvaluation")
+	refinedResponse, err := h.refineEvaluation(step3Ctx, cvEvaluation, projectEvaluation, jobID)
+	step3Span.End()
+	if err != nil {
+		slog.Error("step 3: refineEvaluation failed; falling back to fast path",
+			slog.String("job_id", jobID),
+			slog.Any("error", err))
+		return h.performFastPathEvaluation(ctx, cvContent, projectContent, jobDesc, studyCase, scoringRubric, jobID)
+	}
 
-	// Launch parallel goroutines for Steps 2-4
-	go func() {
-		result, err := h.compareWithJobRequirements(ctx, extractedCV, jobDesc, jobID)
-		jobComparisonChan <- jobComparisonResult{result: result, err: err}
-	}()
+	// Step 4: validate and finalize results
+	step4Ctx, step4Span := tracer.Start(ctx, "PerformIntegratedEvaluation.validateAndFinalizeResults")
+	result, err := h.validateAndFinalizeResults(step4Ctx, refinedResponse, jobID)
+	step4Span.End()
+	if err != nil {
+		slog.Error("validateAndFinalizeResults failed for multi-step evaluation; falling back to fast path",
+			slog.String("job_id", jobID),
+			slog.Any("error", err))
+		return h.performFastPathEvaluation(ctx, cvContent, projectContent, jobDesc, studyCase, scoringRubric, jobID)
+	}
 
-	go func() {
-		// For CV evaluation, we need the job comparison result, so we'll do a quick comparison first
-		quickComparison, err := h.compareWithJobRequirements(ctx, extractedCV, jobDesc, jobID)
+	slog.Info("integrated evaluation completed successfully with multi-step chain", slog.String("job_id", jobID),
+		slog.Float64("cv_match_rate", result.CVMatchRate),
+		slog.Float64("project_score", result.ProjectScore))
+
+	observability.ObserveEvaluation(result.CVMatchRate, result.ProjectScore)
+
+	return result, nil
+}
+
+// performFastPathEvaluation runs the previous single-prompt evaluation as a fallback.
+func (h *IntegratedEvaluationHandler) performFastPathEvaluation(
+	ctx context.Context,
+	cvContent, projectContent, jobDesc, studyCase, scoringRubric string,
+	jobID string,
+) (domain.Result, error) {
+	tracer := otel.Tracer("integrated.evaluation")
+	ctx, span := tracer.Start(ctx, "PerformIntegratedEvaluation.fastPath")
+	defer span.End()
+
+	slog.Info("performing fast integrated evaluation", slog.String("job_id", jobID))
+
+	// Optional RAG context: retrieve additional job description and scoring
+	// rubric snippets when the vector client is available. This is a
+	// best-effort enhancement and must not cause evaluation to fail if
+	// embeddings or Qdrant are unavailable.
+	var ragContext string
+	if h.q != nil {
+		ragCtx, err := h.retrieveEnhancedRAGContext(ctx, cvContent+" "+projectContent, jobDesc, studyCase)
 		if err != nil {
-			cvEvaluationChan <- cvEvaluationResult{result: "", err: err}
-			return
+			slog.Warn("fast path RAG context retrieval failed", slog.String("job_id", jobID), slog.Any("error", err))
+		} else {
+			ragContext = ragCtx
 		}
-		result, err := h.evaluateCVMatch(ctx, quickComparison, scoringRubric, jobID)
-		cvEvaluationChan <- cvEvaluationResult{result: result, err: err}
-	}()
-
-	go func() {
-		result, err := h.evaluateProjectDeliverables(ctx, projectContent, studyCase, scoringRubric, jobID)
-		projectEvaluationChan <- projectEvaluationResult{result: result, err: err}
-	}()
-
-	// Wait for all parallel operations to complete
-	var jobComparison, cvEvaluation, projectEvaluation string
-
-	// Collect results from parallel processing
-	select {
-	case result := <-jobComparisonChan:
-		if result.err != nil {
-			return domain.Result{}, fmt.Errorf("job comparison failed: %w", result.err)
-		}
-		jobComparison = result.result
-	case <-ctx.Done():
-		return domain.Result{}, fmt.Errorf("job comparison timeout: %w", ctx.Err())
 	}
 
-	select {
-	case result := <-cvEvaluationChan:
-		if result.err != nil {
-			return domain.Result{}, fmt.Errorf("CV evaluation failed: %w", result.err)
-		}
-		cvEvaluation = result.result
-	case <-ctx.Done():
-		return domain.Result{}, fmt.Errorf("CV evaluation timeout: %w", ctx.Err())
+	extraContext := ""
+	if ragContext != "" {
+		extraContext = "\n\nAdditional Retrieved Context:\n" + ragContext + "\n"
 	}
 
-	select {
-	case result := <-projectEvaluationChan:
-		if result.err != nil {
-			return domain.Result{}, fmt.Errorf("project evaluation failed: %w", result.err)
-		}
-		projectEvaluation = result.result
-	case <-ctx.Done():
-		return domain.Result{}, fmt.Errorf("project evaluation timeout: %w", ctx.Err())
-	}
+	prompt := fmt.Sprintf(`You are a senior technical recruiter evaluating a candidate's CV and project.
 
-	slog.Info("parallel AI processing completed", slog.String("job_id", jobID),
-		slog.String("job_comparison_length", fmt.Sprintf("%d", len(jobComparison))),
-		slog.String("cv_evaluation_length", fmt.Sprintf("%d", len(cvEvaluation))),
-		slog.String("project_evaluation_length", fmt.Sprintf("%d", len(projectEvaluation))))
+CV Content:
+%s
 
-	// Step 5: Refine evaluation with stability controls (sequential - requires both evaluations)
-	finalResult, err := h.refineEvaluation(ctx, cvEvaluation, projectEvaluation, jobID)
+Project Content:
+%s
+
+Job Description:
+%s
+
+Study Case:
+%s
+
+Scoring Rubric:
+%s
+
+%s
+
+Using the information above, produce a single JSON object with the following fields:
+{
+  "cv_match_rate": 0.85,
+  "cv_feedback": "Professional CV feedback",
+  "project_score": 8.5,
+  "project_feedback": "Technical project feedback",
+  "overall_summary": "Candidate summary with recommendations"
+}
+
+Guidelines:
+- cv_match_rate: 0.0 to 1.0 (0=no match, 1=perfect match)
+- project_score: 1.0 to 10.0 (1=poor, 10=excellent)
+- Provide professional, constructive feedback in the feedback fields.
+- Return only the JSON object, with no extra commentary, prose, or code fences.
+`, cvContent, projectContent, jobDesc, studyCase, scoringRubric, extraContext)
+
+	response, err := h.performStableEvaluation(ctx, prompt, jobID)
 	if err != nil {
-		return domain.Result{}, fmt.Errorf("evaluation refinement failed: %w", err)
+		return domain.Result{}, fmt.Errorf("fast evaluation failed: %w", err)
 	}
 
-	// Step 6: Validate and finalize results (sequential - final step)
-	result, err := h.validateAndFinalizeResults(ctx, finalResult, jobID)
+	result, err := h.validateAndFinalizeResults(ctx, response, jobID)
 	if err != nil {
 		return domain.Result{}, fmt.Errorf("result validation failed: %w", err)
 	}
 
-	slog.Info("integrated evaluation completed successfully with parallel processing", slog.String("job_id", jobID),
+	slog.Info("integrated evaluation completed successfully with fast path", slog.String("job_id", jobID),
 		slog.Float64("cv_match_rate", result.CVMatchRate),
 		slog.Float64("project_score", result.ProjectScore))
+
+	observability.ObserveEvaluation(result.CVMatchRate, result.ProjectScore)
 
 	return result, nil
 }
@@ -178,7 +211,7 @@ Extract and format as JSON:
 }
 
 Focus on technical skills, experience level, achievements, and cultural fit indicators.
-Think through the CV step by step internally, but in your final answer return only valid JSON with no additional text, explanations, or reasoning.
+Return only valid JSON with no additional text, explanations, or reasoning.
 
 `
 
@@ -188,7 +221,7 @@ Think through the CV step by step internally, but in your final answer return on
 	}
 
 	// Clean and validate JSON response
-	cleanedResponse, err := h.cleanJSONResponse(response)
+	cleanedResponse, err := h.cleanJSONResponseWithCoTFallback(ctx, response, jobID)
 	if err != nil {
 		slog.Error("response cleaning failed",
 			slog.String("job_id", jobID),
@@ -305,7 +338,10 @@ Respond with detailed JSON analysis including:
   "overall_assessment": "Comprehensive summary with specific strengths and gaps"
 }
 
-Provide detailed analysis for each parameter with specific examples from the CV.`
+Provide detailed analysis for each parameter with specific examples from the CV.
+Return only the JSON object, no additional text or explanations.
+
+`
 
 	// Combine job description with RAG context
 	jobInput := jobDesc
@@ -326,12 +362,49 @@ Provide detailed analysis for each parameter with specific examples from the CV.
 	return response, nil
 }
 
-// evaluateCVMatch evaluates CV match with detailed scoring.
-func (h *IntegratedEvaluationHandler) evaluateCVMatch(ctx context.Context, jobComparison, scoringRubric, jobID string) (string, error) {
-	slog.Info("step 3: evaluating CV match and generating feedback", slog.String("job_id", jobID))
+// evaluateCVMatch evaluates CV match directly from the raw CV content and job
+// description using the standardized scoring rubric. The output is an
+// analytical narrative that is later refined into final scores.
+func (h *IntegratedEvaluationHandler) evaluateCVMatch(ctx context.Context, cvContent, jobDesc, scoringRubric, jobID string) (string, error) {
+	slog.Info("evaluating CV match and generating feedback", slog.String("job_id", jobID))
 
-	// Use the job comparison as the CV content for evaluation
-	fullPrompt := h.generateScoringPrompt(jobComparison, "", "", "", scoringRubric)
+	// Retrieve RAG context for job requirements (best-effort; must not fail the
+	// evaluation if embeddings or Qdrant are unavailable).
+	var ragContext string
+	if h.q != nil {
+		context, err := h.retrieveEnhancedRAGContext(ctx, cvContent, jobDesc, "job_description")
+		if err != nil {
+			slog.Warn("RAG context retrieval failed for CV evaluation", slog.String("job_id", jobID), slog.Any("error", err))
+		} else {
+			ragContext = context
+		}
+	}
+
+	jobInput := jobDesc
+	if ragContext != "" {
+		jobInput = fmt.Sprintf("%s\n\nAdditional Job Context:\n%s", jobDesc, ragContext)
+	}
+
+	promptTemplate := `You are an HR specialist and recruitment expert. Evaluate the candidate's CV against the job requirements using the standardized scoring rubric.
+
+CV Content:
+%s
+
+Job Description and Context:
+%s
+
+Scoring Rubric:
+%s
+
+Provide a concise analytical assessment focusing on:
+- Technical skills alignment with the backend + AI/LLM role
+- Experience level and impact of previous work
+- Relevant achievements and measurable outcomes
+- Cultural and collaboration fit (communication, learning mindset, teamwork)
+
+Return a short analysis (bullet list or structured paragraphs). Do NOT return JSON.`
+
+	fullPrompt := fmt.Sprintf(promptTemplate, cvContent, jobInput, scoringRubric)
 
 	response, err := h.performStableEvaluation(ctx, fullPrompt, jobID)
 	if err != nil {
@@ -344,12 +417,19 @@ func (h *IntegratedEvaluationHandler) evaluateCVMatch(ctx context.Context, jobCo
 
 // evaluateProjectDeliverables evaluates project deliverables with RAG context.
 func (h *IntegratedEvaluationHandler) evaluateProjectDeliverables(ctx context.Context, projectContent, studyCase, scoringRubric, jobID string) (string, error) {
-	slog.Info("step 4: evaluating project deliverables", slog.String("job_id", jobID))
+	slog.Info("evaluating project deliverables", slog.String("job_id", jobID))
 
-	// Retrieve RAG context for project evaluation
+	// Create a timeout context for the entire project evaluation process. This
+	// remains generous but we now perform a single scoring call (no separate
+	// summarization step) to reduce overall latency.
+	timeoutDuration := 5 * time.Minute // 5 minutes timeout for AI processing
+	evalCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+	defer cancel()
+
+	// Retrieve RAG context for project evaluation (best-effort).
 	var ragContext string
 	if h.q != nil {
-		context, err := h.retrieveEnhancedRAGContext(ctx, projectContent, studyCase, "scoring_rubric")
+		context, err := h.retrieveEnhancedRAGContext(evalCtx, projectContent, studyCase, "scoring_rubric")
 		if err != nil {
 			slog.Warn("RAG context retrieval failed for project evaluation", slog.String("job_id", jobID), slog.Any("error", err))
 		} else {
@@ -363,17 +443,12 @@ func (h *IntegratedEvaluationHandler) evaluateProjectDeliverables(ctx context.Co
 		studyInput = fmt.Sprintf("%s\n\nAdditional Evaluation Context:\n%s", studyCase, ragContext)
 	}
 
-	// First, summarize the raw project content into a compact representation. This keeps
-	// subsequent scoring prompts smaller and more reliable when using free models.
-	projectSummary, err := h.summarizeProjectContent(ctx, projectContent, jobID)
-	if err != nil {
-		return "", fmt.Errorf("AI project summarization failed: %w", err)
-	}
+	// Generate comprehensive project evaluation prompt directly from the raw
+	// project content. We intentionally skip a separate summarization call to
+	// keep the chain leaner while still providing rich context to the model.
+	fullPrompt := h.generateProjectEvaluationPrompt(projectContent, studyInput, scoringRubric)
 
-	// Generate comprehensive project evaluation prompt using the summarized content
-	fullPrompt := h.generateProjectEvaluationPrompt(projectSummary, studyInput, scoringRubric)
-
-	response, err := h.performStableEvaluation(ctx, fullPrompt, jobID)
+	response, err := h.performStableEvaluation(evalCtx, fullPrompt, jobID)
 	if err != nil {
 		return "", fmt.Errorf("AI project evaluation failed: %w", err)
 	}
@@ -394,7 +469,7 @@ CV Evaluation Results:
 Project Evaluation Results:
 %s
 
-Please think carefully about the evaluations and then provide the final evaluation in JSON format (no explanations in the output):
+Please provide the final evaluation in JSON format (no explanations in the output):
 {
   "cv_match_rate": 0.85,
   "cv_feedback": "Professional CV feedback",
@@ -407,7 +482,9 @@ Guidelines:
 - cv_match_rate: 0.0 to 1.0 (0=no match, 1=perfect match)
 - project_score: 1.0 to 10.0 (1=poor, 10=excellent)
 - Provide professional, constructive feedback
-- Return only the JSON object, no additional text or explanations`
+- Return only the JSON object, no additional text
+
+`
 
 	response, err := h.performStableEvaluation(ctx, fmt.Sprintf(prompt, cvEvaluation, projectEvaluation), jobID)
 	if err != nil {
@@ -482,7 +559,7 @@ Summarize the project in a concise, technical way focusing on:
 - Documentation and explanation quality
 - Notable creativity or bonus features
 
-Think through the project step by step internally, but in your final answer respond only with a short markdown bullet list (no JSON, no code blocks, no additional prose).`
+Return only a short markdown bullet list (no JSON, no code blocks, no additional prose).`
 
 	response, err := h.performStableEvaluation(ctx, fmt.Sprintf(prompt, projectContent), jobID)
 	if err != nil {
@@ -514,6 +591,42 @@ func (h *IntegratedEvaluationHandler) performStableEvaluation(ctx context.Contex
 		return "", fmt.Errorf("AI evaluation failed: %w", err)
 	}
 	return response, nil
+}
+
+// cleanJSONResponseWithCoTFallback first attempts to clean JSON directly and, on failure,
+// uses the AI client's CoT-cleaning endpoint as a fallback before re-attempting cleaning.
+func (h *IntegratedEvaluationHandler) cleanJSONResponseWithCoTFallback(ctx context.Context, response string, jobID string) (string, error) {
+	cleaned, err := h.cleanJSONResponse(response)
+	if err == nil {
+		return cleaned, nil
+	}
+
+	slog.Warn("primary JSON cleaning failed, attempting CoT cleaning",
+		slog.String("job_id", jobID),
+		slog.Any("error", err))
+
+	if h.ai == nil {
+		return "", err
+	}
+
+	cleanedCoT, cotErr := h.ai.CleanCoTResponse(ctx, response)
+	if cotErr != nil {
+		slog.Error("CoT cleaning failed",
+			slog.String("job_id", jobID),
+			slog.Any("error", cotErr))
+		return "", fmt.Errorf("clean JSON response after CoT cleaning: %w", err)
+	}
+
+	cleanedAfterCoT, err2 := h.cleanJSONResponse(cleanedCoT)
+	if err2 != nil {
+		slog.Error("JSON cleaning failed after CoT cleaning",
+			slog.String("job_id", jobID),
+			slog.Any("error", err2))
+		return "", fmt.Errorf("clean JSON response after CoT cleaning: %w", err2)
+	}
+
+	slog.Info("successfully cleaned JSON response after CoT cleaning", slog.String("job_id", jobID))
+	return cleanedAfterCoT, nil
 }
 
 // cleanJSONResponse cleans and validates JSON response from AI.
@@ -849,16 +962,16 @@ func (h *IntegratedEvaluationHandler) retrieveEnhancedRAGContext(ctx context.Con
 		return "", nil
 	}
 
-	// Search for relevant context in job_description collection
-	jobContext, err := h.q.Search(ctx, "job_description", embeddings[0], 5)
+	// Search for relevant context in job_description collection (fewer entries for shorter prompts)
+	jobContext, err := h.q.Search(ctx, "job_description", embeddings[0], 3)
 	if err != nil {
 		slog.Error("failed to search job description context", slog.Any("error", err))
 		// Don't fail completely, just log and continue
 		jobContext = []map[string]any{}
 	}
 
-	// Search for relevant context in scoring_rubric collection
-	rubricContext, err := h.q.Search(ctx, "scoring_rubric", embeddings[0], 3)
+	// Search for relevant context in scoring_rubric collection (fewer entries for shorter prompts)
+	rubricContext, err := h.q.Search(ctx, "scoring_rubric", embeddings[0], 2)
 	if err != nil {
 		slog.Error("failed to search scoring rubric context", slog.Any("error", err))
 		// Don't fail completely, just log and continue
@@ -1083,11 +1196,11 @@ func (h *IntegratedEvaluationHandler) generateProjectEvaluationPrompt(projectCon
 }
 
 // parseRefinedEvaluationResponse parses the refined evaluation response.
-func (h *IntegratedEvaluationHandler) parseRefinedEvaluationResponse(_ context.Context, response string, jobID string) (domain.Result, error) {
+func (h *IntegratedEvaluationHandler) parseRefinedEvaluationResponse(ctx context.Context, response string, jobID string) (domain.Result, error) {
 	slog.Info("parsing refined evaluation response", slog.String("job_id", jobID), slog.Int("response_length", len(response)))
 
-	// Clean the JSON response first
-	cleanedResponse, err := h.cleanJSONResponse(response)
+	// Clean the JSON response first (with CoT fallback when needed)
+	cleanedResponse, err := h.cleanJSONResponseWithCoTFallback(ctx, response, jobID)
 	if err != nil {
 		slog.Error("failed to clean JSON response", slog.String("job_id", jobID), slog.Any("error", err))
 		return domain.Result{}, fmt.Errorf("clean JSON response: %w", err)

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"strings"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,7 +34,16 @@ var (
 		},
 		[]string{"route", "method"},
 	)
-
+	// HTTPRequestsByID is a dev-only metric that records individual HTTP
+	// requests by request_id. This must never be enabled in production
+	// environments due to high cardinality.
+	HTTPRequestsByID = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_request_by_id_total",
+			Help: "Dev-only counter for HTTP requests by request_id, route, method, and status",
+		},
+		[]string{"request_id", "route", "method", "status"},
+	)
 	// AIRequestsTotal counts AI requests by provider and operation.
 	AIRequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -50,7 +61,6 @@ var (
 		},
 		[]string{"provider", "operation"},
 	)
-
 	// JobsEnqueuedTotal counts jobs enqueued by type.
 	JobsEnqueuedTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -58,6 +68,14 @@ var (
 			Help: "Total number of jobs enqueued",
 		},
 		[]string{"type"},
+	)
+	// JobsFailedByCodeTotal counts failed jobs by type and stable error code.
+	JobsFailedByCodeTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "jobs_failed_by_code_total",
+			Help: "Total number of jobs failed by type and error code",
+		},
+		[]string{"type", "code"},
 	)
 	// JobsProcessing is a gauge of the number of currently processing jobs by type.
 	JobsProcessing = prometheus.NewGaugeVec(
@@ -83,7 +101,6 @@ var (
 		},
 		[]string{"type"},
 	)
-
 	// CVMatchRateHistogram is the histogram of normalized cv_match_rate [0,1].
 	CVMatchRateHistogram = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
@@ -100,7 +117,6 @@ var (
 			Buckets: []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
 		},
 	)
-
 	// AITokenUsage tracks AI token consumption by provider, type, and model.
 	AITokenUsage = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -109,7 +125,6 @@ var (
 		},
 		[]string{"provider", "type", "model"},
 	)
-
 	// RAGEffectiveness tracks RAG retrieval effectiveness scores.
 	RAGEffectiveness = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -119,7 +134,6 @@ var (
 		},
 		[]string{"collection", "query_type"},
 	)
-
 	// ScoreDriftDetector tracks score drift from baseline.
 	ScoreDriftDetector = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -128,7 +142,6 @@ var (
 		},
 		[]string{"metric_type", "model_version", "corpus_version"},
 	)
-
 	// CircuitBreakerStatus tracks circuit breaker state.
 	CircuitBreakerStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -137,7 +150,6 @@ var (
 		},
 		[]string{"service", "operation"},
 	)
-
 	// RAGRetrievalErrors tracks RAG retrieval failures.
 	RAGRetrievalErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -147,6 +159,18 @@ var (
 		[]string{"collection", "error_type"},
 	)
 )
+
+// appEnv holds the current application environment (dev, prod, test).
+// It is configured once during process startup via SetAppEnv.
+var appEnv string
+
+// SetAppEnv configures the current application environment.
+func SetAppEnv(env string) {
+	appEnv = strings.ToLower(env)
+}
+
+// isDevEnv reports whether the current process is running in dev.
+func isDevEnv() bool { return appEnv == "dev" }
 
 // InitMetrics registers all Prometheus metrics with the default registry.
 func InitMetrics() {
@@ -158,6 +182,7 @@ func InitMetrics() {
 	prometheus.MustRegister(JobsProcessing)
 	prometheus.MustRegister(JobsCompletedTotal)
 	prometheus.MustRegister(JobsFailedTotal)
+	prometheus.MustRegister(JobsFailedByCodeTotal)
 	prometheus.MustRegister(CVMatchRateHistogram)
 	prometheus.MustRegister(ProjectScoreHistogram)
 	prometheus.MustRegister(AITokenUsage)
@@ -165,6 +190,9 @@ func InitMetrics() {
 	prometheus.MustRegister(ScoreDriftDetector)
 	prometheus.MustRegister(CircuitBreakerStatus)
 	prometheus.MustRegister(RAGRetrievalErrors)
+	if isDevEnv() {
+		prometheus.MustRegister(HTTPRequestsByID)
+	}
 }
 
 // HTTPMetricsMiddleware records Prometheus metrics for each request.
@@ -187,6 +215,14 @@ func HTTPMetricsMiddleware(next http.Handler) http.Handler {
 		status := ww.Status()
 		HTTPRequestsTotal.WithLabelValues(route, method, http.StatusText(status)).Inc()
 		HTTPRequestDuration.WithLabelValues(route, method).Observe(dur)
+		// Dev-only per-request metric keyed by request_id for Grafana
+		// metrics-to-logs correlation. This is guarded by environment to
+		// avoid unbounded cardinality in production.
+		if isDevEnv() {
+			if rid := r.Header.Get("X-Request-Id"); rid != "" {
+				HTTPRequestsByID.WithLabelValues(rid, route, method, http.StatusText(status)).Inc()
+			}
+		}
 	})
 }
 
@@ -210,6 +246,14 @@ func CompleteJob(jobType string) {
 func FailJob(jobType string) {
 	JobsProcessing.WithLabelValues(jobType).Dec()
 	JobsFailedTotal.WithLabelValues(jobType).Inc()
+}
+
+// RecordJobFailureByCode increments the failure counter for the given job type and error code.
+func RecordJobFailureByCode(jobType, code string) {
+	if code == "" {
+		code = "UNKNOWN"
+	}
+	JobsFailedByCodeTotal.WithLabelValues(jobType, code).Inc()
 }
 
 // ObserveEvaluation records the resulting scores from completed evaluations.

@@ -55,6 +55,15 @@ func main() {
 	logger := observability.SetupLogger(cfg)
 	slog.SetDefault(logger)
 
+	// Configure observability with the current environment so that
+	// dev-only metrics (like per-request metrics keyed by request_id)
+	// are only enabled in development.
+	observability.SetAppEnv(cfg.AppEnv)
+
+	// Register all Prometheus metrics once per process so that /metrics
+	// exposes HTTP, AI, and job instrumentation for Prometheus/Grafana.
+	observability.InitMetrics()
+
 	shutdownTracer, err := observability.SetupTracing(cfg)
 	if err != nil {
 		slog.Error("failed to setup tracing", slog.Any("error", err))
@@ -97,7 +106,10 @@ func main() {
 		}
 	}()
 
-	// AI client: always use free models for cost-effective operation
+	// AI client: always use free models for cost-effective operation.
+	// Global Redis/Postgres rate limiting has been removed; the AI client now
+	// relies solely on provider headers and its in-process rate limit cache for
+	// cooldown behavior.
 	freeModelWrapper := freemodels.NewFreeModelWrapper(cfg)
 	slog.Info("AI client initialized with free models support")
 

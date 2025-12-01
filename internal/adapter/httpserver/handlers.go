@@ -21,15 +21,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/usecase"
 	"github.com/fairyhunter13/ai-cv-evaluator/pkg/textx"
-	"github.com/gabriel-vasile/mimetype"
 )
 
 // Server aggregates handlers dependencies.
@@ -56,6 +59,14 @@ func allowedMIME(m string) bool { return allowedMIMEFor(m, "dummy.txt") }
 // - For .txt: returns sanitized text directly.
 func extractUploadedText(ctx context.Context, extractor domain.TextExtractor, h *multipart.FileHeader, data []byte) (string, error) {
 	ext := strings.ToLower(filepath.Ext(h.Filename))
+
+	tracer := otel.Tracer("http.upload")
+	ctx, span := tracer.Start(ctx, "extractUploadedText")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("upload.filename", h.Filename),
+		attribute.String("upload.ext", ext),
+	)
 	if ext == ".pdf" || ext == ".docx" {
 		if extractor == nil {
 			return "", fmt.Errorf("%w: %s requires extractor", domain.ErrInvalidArgument, strings.TrimPrefix(ext, "."))
@@ -341,13 +352,34 @@ func (s *Server) HealthzHandler() http.HandlerFunc {
 		var checks []check
 		var allHealthy bool
 
+		tracer := otel.Tracer("ai-cv-evaluator")
+
+		checkWithSpan := func(ctx context.Context, name string, fn func(context.Context) error) error {
+			ctx, span := tracer.Start(ctx, "health."+name)
+			defer span.End()
+			if err := fn(ctx); err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				span.SetAttributes(
+					attribute.String("health.component", name),
+					attribute.Bool("health.ok", false),
+				)
+				return err
+			}
+			span.SetStatus(codes.Ok, "ok")
+			span.SetAttributes(
+				attribute.String("health.component", name),
+				attribute.Bool("health.ok", true),
+			)
+			return nil
+		}
+
 		err := s.healthObservableClient.ExecuteWithMetrics(r.Context(), "health_check", func(ctx context.Context) error {
 			checks = make([]check, 0, 5)
 			allHealthy = true
 
 			// Database health check
 			if s.DBCheck != nil {
-				if err := s.DBCheck(ctx); err != nil {
+				if err := checkWithSpan(ctx, "database", s.DBCheck); err != nil {
 					checks = append(checks, check{Name: "database", OK: false, Details: err.Error()})
 					allHealthy = false
 				} else {
@@ -357,7 +389,7 @@ func (s *Server) HealthzHandler() http.HandlerFunc {
 
 			// Qdrant vector database health check
 			if s.QdrantCheck != nil {
-				if err := s.QdrantCheck(ctx); err != nil {
+				if err := checkWithSpan(ctx, "qdrant", s.QdrantCheck); err != nil {
 					checks = append(checks, check{Name: "qdrant", OK: false, Details: err.Error()})
 					allHealthy = false
 				} else {
@@ -367,7 +399,7 @@ func (s *Server) HealthzHandler() http.HandlerFunc {
 
 			// Tika document processing health check
 			if s.TikaCheck != nil {
-				if err := s.TikaCheck(ctx); err != nil {
+				if err := checkWithSpan(ctx, "tika", s.TikaCheck); err != nil {
 					checks = append(checks, check{Name: "tika", OK: false, Details: err.Error()})
 					allHealthy = false
 				} else {
@@ -430,11 +462,32 @@ func (s *Server) ReadyzHandler() http.HandlerFunc {
 		// Use observable client for readiness checks
 		var checks []check
 
+		tracer := otel.Tracer("ai-cv-evaluator")
+
+		checkWithSpan := func(ctx context.Context, name string, fn func(context.Context) error) error {
+			ctx, span := tracer.Start(ctx, "readiness."+name)
+			defer span.End()
+			if err := fn(ctx); err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				span.SetAttributes(
+					attribute.String("readiness.component", name),
+					attribute.Bool("readiness.ok", false),
+				)
+				return err
+			}
+			span.SetStatus(codes.Ok, "ok")
+			span.SetAttributes(
+				attribute.String("readiness.component", name),
+				attribute.Bool("readiness.ok", true),
+			)
+			return nil
+		}
+
 		err := s.healthObservableClient.ExecuteWithMetrics(r.Context(), "readiness_check", func(ctx context.Context) error {
 			checks = make([]check, 0, 3)
 			// DB
 			if s.DBCheck != nil {
-				if err := s.DBCheck(ctx); err != nil {
+				if err := checkWithSpan(ctx, "db", s.DBCheck); err != nil {
 					checks = append(checks, check{Name: "db", OK: false, Details: err.Error()})
 				} else {
 					checks = append(checks, check{Name: "db", OK: true})
@@ -442,7 +495,7 @@ func (s *Server) ReadyzHandler() http.HandlerFunc {
 			}
 			// Qdrant
 			if s.QdrantCheck != nil {
-				if err := s.QdrantCheck(ctx); err != nil {
+				if err := checkWithSpan(ctx, "qdrant", s.QdrantCheck); err != nil {
 					checks = append(checks, check{Name: "qdrant", OK: false, Details: err.Error()})
 				} else {
 					checks = append(checks, check{Name: "qdrant", OK: true})
@@ -450,7 +503,7 @@ func (s *Server) ReadyzHandler() http.HandlerFunc {
 			}
 			// Tika
 			if s.TikaCheck != nil {
-				if err := s.TikaCheck(ctx); err != nil {
+				if err := checkWithSpan(ctx, "tika", s.TikaCheck); err != nil {
 					checks = append(checks, check{Name: "tika", OK: false, Details: err.Error()})
 				} else {
 					checks = append(checks, check{Name: "tika", OK: true})
@@ -538,6 +591,10 @@ func BuildResultEnvelope(id string, status domain.JobStatus, result *usecase.Eva
 
 // getDashboardStats returns dashboard statistics
 func (s *Server) getDashboardStats(ctx context.Context) map[string]any {
+	tracer := otel.Tracer("http.admin")
+	ctx, span := tracer.Start(ctx, "Server.getDashboardStats")
+	defer span.End()
+
 	// Get total uploads count
 	totalUploads, err := s.Uploads.Count(ctx)
 	if err != nil {
@@ -645,6 +702,14 @@ func (s *Server) getDashboardStats(ctx context.Context) map[string]any {
 
 // getJobs returns paginated job list with filtering and search
 func (s *Server) getJobs(ctx context.Context, page, limit, search, status string) map[string]any {
+	tracer := otel.Tracer("http.admin")
+	ctx, span := tracer.Start(ctx, "Server.getJobs")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("jobs.search", search),
+		attribute.String("jobs.status", status),
+	)
+
 	// Parse pagination parameters
 	pageNum := 1
 	limitNum := 10
@@ -722,6 +787,11 @@ func (s *Server) getJobs(ctx context.Context, page, limit, search, status string
 
 // getJobDetails returns detailed information about a specific job
 func (s *Server) getJobDetails(ctx context.Context, jobID string) map[string]any {
+	tracer := otel.Tracer("http.admin")
+	ctx, span := tracer.Start(ctx, "Server.getJobDetails")
+	defer span.End()
+	span.SetAttributes(attribute.String("job.id", jobID))
+
 	// Get job from database
 	job, err := s.Evaluate.Jobs.Get(ctx, jobID)
 	if err != nil {

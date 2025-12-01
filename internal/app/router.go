@@ -84,6 +84,9 @@ func BuildRouter(cfg config.Config, srv *httpserver.Server) http.Handler {
 	r.Get("/healthz", srv.HealthzHandler()) // Enhanced health check with service status
 	r.Get("/health", srv.HealthzHandler())  // Compatibility endpoint
 	r.Get("/readyz", srv.ReadyzHandler())
+	// Prometheus scrape endpoint (public within cluster). This is scraped
+	// directly by the Prometheus container at app:8080/metrics.
+	r.Get("/metrics", promhttp.Handler().ServeHTTP)
 
 	// OpenAPI if present
 	r.Get("/openapi.yaml", srv.OpenAPIServe())

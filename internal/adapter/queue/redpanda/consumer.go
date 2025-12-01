@@ -31,6 +31,8 @@ type Consumer struct {
 	ai      domain.AIClient
 	q       *qdrantcli.Client
 
+	retryManager *RetryManager
+
 	// Observability components
 	observableClient *observability.IntegratedObservableClient
 	groupID          string
@@ -89,9 +91,9 @@ func NewConsumerWithTopic(brokers []string, groupID string, transactionalID stri
 		observability.OperationTypePoll,
 		brokers[0], // Use first broker as endpoint
 		"ai-cv-evaluator-worker",
-		60*time.Second,  // Base timeout
-		10*time.Second,  // Min timeout
-		300*time.Second, // Max timeout
+		10*time.Second, // Base timeout
+		1*time.Second,  // Min timeout
+		60*time.Second, // Max timeout
 	)
 
 	// Create topic if it doesn't exist first
@@ -427,17 +429,36 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 
 			// Queue all records for processing
 			fetches.EachRecord(func(record *kgo.Record) {
+				jobID := string(record.Key)
+				for _, h := range record.Headers {
+					if h.Key == "job_id" {
+						jobID = string(h.Value)
+						break
+					}
+				}
+
 				select {
 				case c.jobQueue <- record:
-					// Successfully queued
+					slog.Info("queued job for processing",
+						slog.String("job_id", jobID),
+						slog.Int64("offset", record.Offset),
+						slog.String("topic", record.Topic),
+						slog.Int("partition", int(record.Partition)),
+						slog.Int("queue_length", len(c.jobQueue)))
 				default:
 					// Queue is full, process synchronously
-					slog.Warn("job queue full, processing synchronously", slog.Int64("offset", record.Offset))
-					go func() { _ = c.processRecord(ctx, record) }()
+					slog.Warn("job queue full, processing synchronously",
+						slog.String("job_id", jobID),
+						slog.Int64("offset", record.Offset),
+						slog.String("topic", record.Topic),
+						slog.Int("partition", int(record.Partition)))
+					go func(rec *kgo.Record, _ string) { _ = c.processRecord(ctx, rec) }(record, jobID)
 				}
 			})
 
-			slog.Info("queued messages for processing", slog.Int("count", fetches.NumRecords()), slog.Int("queue_length", len(c.jobQueue)))
+			slog.Info("queued messages for processing",
+				slog.Int("count", fetches.NumRecords()),
+				slog.Int("queue_length", len(c.jobQueue)))
 		}
 	}
 }
@@ -577,31 +598,64 @@ func (c *Consumer) processRecord(ctx context.Context, record *kgo.Record) error 
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}
 
-	slog.Info("payload unmarshaled successfully",
+	// Attach request-scoped metadata to the worker context so that all
+	// downstream logs (including AI client logs) are correlated by request_id.
+	if payload.RequestID != "" {
+		ctx = observability.ContextWithRequestID(ctx, payload.RequestID)
+	}
+	lg := observability.LoggerFromContext(ctx).With(
 		slog.String("job_id", payload.JobID),
 		slog.String("cv_id", payload.CVID),
-		slog.String("project_id", payload.ProjectID))
+		slog.String("project_id", payload.ProjectID),
+	)
+	if payload.RequestID != "" {
+		lg = lg.With(slog.String("request_id", payload.RequestID))
+	}
+	ctx = observability.ContextWithLogger(ctx, lg)
 
-	slog.Info("processing evaluate task",
-		slog.String("job_id", payload.JobID),
-		slog.String("cv_id", payload.CVID),
-		slog.String("project_id", payload.ProjectID))
+	lg.Info("payload unmarshaled successfully")
+	lg.Info("processing evaluate task")
 
 	// Call the local evaluation handler (defaults: two-pass + chaining enabled)
-	slog.Info("calling HandleEvaluate", slog.String("job_id", payload.JobID))
+	lg.Info("calling HandleEvaluate")
 	err := HandleEvaluate(ctx, c.jobs, c.uploads, c.results, c.ai, c.q, payload)
 	if err != nil {
-		slog.Error("evaluate task failed",
-			slog.String("job_id", payload.JobID),
-			slog.Any("error", err))
+		lg.Error("evaluate task failed", slog.Any("error", err))
+
+		// If a retry manager is configured, route retryable upstream failures
+		// (rate limits and timeouts) through the higher-level retry/DLQ flow.
+		if c.retryManager != nil {
+			code := classifyFailureCode(err.Error())
+			if code == "UPSTREAM_RATE_LIMIT" || code == "UPSTREAM_TIMEOUT" {
+				retryInfo := &domain.RetryInfo{
+					AttemptCount:  0,
+					LastAttemptAt: time.Now(),
+					RetryStatus:   domain.RetryStatusNone,
+					LastError:     err.Error(),
+					ErrorHistory:  []string{err.Error()},
+					CreatedAt:     time.Now(),
+					UpdatedAt:     time.Now(),
+				}
+				if rErr := c.retryManager.RetryJob(ctx, payload.JobID, retryInfo, payload); rErr != nil {
+					lg.Error("retry manager failed to handle job failure",
+						slog.String("job_id", payload.JobID),
+						slog.String("failure_code", code),
+						slog.Any("error", rErr))
+				} else {
+					lg.Info("retry manager scheduled retry or moved job to DLQ",
+						slog.String("job_id", payload.JobID),
+						slog.String("failure_code", code))
+				}
+			}
+		}
 		return err
 	}
 
-	slog.Info("evaluate task completed successfully", slog.String("job_id", payload.JobID))
+	lg.Info("evaluate task completed successfully")
 	return nil
 }
 
-// Close closes the consumer.
+// ...
 func (c *Consumer) Close() error {
 	if c.session != nil {
 		c.session.Close()
@@ -714,4 +768,12 @@ func (c *Consumer) IsHealthy() bool {
 		return false
 	}
 	return c.observableClient.IsHealthy()
+}
+
+// WithRetryManager attaches a RetryManager to the consumer for handling
+// retryable failures via the retry/DLQ flow. When nil, the consumer behaves
+// as before and simply returns the evaluation error.
+func (c *Consumer) WithRetryManager(rm *RetryManager) *Consumer {
+	c.retryManager = rm
+	return c
 }

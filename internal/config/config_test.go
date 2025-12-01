@@ -133,15 +133,15 @@ func Test_GetAIBackoffConfig_DevelopmentEnvironment(t *testing.T) {
 
 	maxElapsed, initial, maxBackoff, multiplier := cfg.GetAIBackoffConfig()
 
-	// Development environment should use configured values from environment
-	if maxElapsed != 180*time.Second {
-		t.Errorf("expected maxElapsed 180s, got %v", maxElapsed)
+	// Development environment should use configured default values
+	if maxElapsed != 30*time.Second {
+		t.Errorf("expected maxElapsed 30s, got %v", maxElapsed)
 	}
-	if initial != 2*time.Second {
-		t.Errorf("expected initial 2s, got %v", initial)
+	if initial != 1*time.Second {
+		t.Errorf("expected initial 1s, got %v", initial)
 	}
-	if maxBackoff != 20*time.Second {
-		t.Errorf("expected max 20s, got %v", maxBackoff)
+	if maxBackoff != 5*time.Second {
+		t.Errorf("expected max 5s, got %v", maxBackoff)
 	}
 	if multiplier != 1.5 {
 		t.Errorf("expected multiplier 1.5, got %v", multiplier)

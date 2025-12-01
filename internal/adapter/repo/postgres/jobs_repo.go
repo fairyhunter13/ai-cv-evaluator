@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
@@ -28,6 +29,11 @@ func (r *JobRepo) Create(ctx domain.Context, j domain.Job) (string, error) {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.Create")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "INSERT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 	id := j.ID
 	if id == "" {
 		id = uuid.New().String()
@@ -45,6 +51,11 @@ func (r *JobRepo) UpdateStatus(ctx domain.Context, id string, status domain.JobS
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.UpdateStatus")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "UPDATE"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 
 	// Log the operation start
 	slog.Info("starting job status update with explicit transaction",
@@ -149,6 +160,11 @@ func (r *JobRepo) Get(ctx domain.Context, id string) (domain.Job, error) {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.Get")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 	q := `SELECT id, status, COALESCE(error,''), created_at, updated_at, cv_id, project_id, idempotency_key FROM jobs WHERE id=$1`
 	row := r.Pool.QueryRow(ctx, q, id)
 	var j domain.Job
@@ -168,6 +184,11 @@ func (r *JobRepo) FindByIdempotencyKey(ctx domain.Context, key string) (domain.J
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.FindByIdempotencyKey")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 	q := `SELECT id, status, COALESCE(error,''), created_at, updated_at, cv_id, project_id, idempotency_key FROM jobs WHERE idempotency_key=$1 LIMIT 1`
 	row := r.Pool.QueryRow(ctx, q, key)
 	var j domain.Job
@@ -187,6 +208,11 @@ func (r *JobRepo) Count(ctx domain.Context) (int64, error) {
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.Count")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "COUNT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 	q := `SELECT COUNT(*) FROM jobs`
 	row := r.Pool.QueryRow(ctx, q)
 	var count int64
@@ -201,6 +227,11 @@ func (r *JobRepo) CountByStatus(ctx domain.Context, status domain.JobStatus) (in
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.CountByStatus")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "COUNT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 	q := `SELECT COUNT(*) FROM jobs WHERE status = $1`
 	row := r.Pool.QueryRow(ctx, q, status)
 	var count int64
@@ -215,6 +246,11 @@ func (r *JobRepo) List(ctx domain.Context, offset, limit int) ([]domain.Job, err
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.List")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 	q := `SELECT id, status, COALESCE(error,''), created_at, updated_at, cv_id, project_id, idempotency_key FROM jobs ORDER BY created_at DESC LIMIT $1 OFFSET $2`
 	rows, err := r.Pool.Query(ctx, q, limit, offset)
 	if err != nil {
@@ -243,6 +279,11 @@ func (r *JobRepo) ListWithFilters(ctx domain.Context, offset, limit int, search,
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.ListWithFilters")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 
 	// Build dynamic query based on filters
 	baseQuery := `SELECT id, status, COALESCE(error,''), created_at, updated_at, cv_id, project_id, idempotency_key FROM jobs`
@@ -301,6 +342,11 @@ func (r *JobRepo) CountWithFilters(ctx domain.Context, search, status string) (i
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.CountWithFilters")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "COUNT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 
 	// Build dynamic query based on filters
 	baseQuery := `SELECT COUNT(*) FROM jobs`
@@ -341,6 +387,11 @@ func (r *JobRepo) GetAverageProcessingTime(ctx domain.Context) (float64, error) 
 	tracer := otel.Tracer("repo.jobs")
 	ctx, span := tracer.Start(ctx, "jobs.GetAverageProcessingTime")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.sql.table", "jobs"),
+	)
 	q := `SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))) FROM jobs WHERE status = $1`
 	row := r.Pool.QueryRow(ctx, q, domain.JobCompleted)
 	var avgTime *float64

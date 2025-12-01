@@ -7,7 +7,7 @@ The system evaluates a candidate's CV + project report against a job description
 High-level components:
 
 - **Server (app)**: HTTP API on port 8080 inside Docker.
-- **Worker**: Consumes evaluation jobs from Redpanda and calls AI providers (single worker by default, with `CONSUMER_MAX_CONCURRENCY=1` tuned for Groq/OpenRouter free tiers).
+- **Worker**: Consumes evaluation jobs from Redpanda and calls AI providers (single worker process by default, with `CONSUMER_MAX_CONCURRENCY` configurable; defaults to `1` for Groq/OpenRouter free tiers, but the dev `docker-compose.yml` uses a higher value to exercise parallelism).
 - **Queue**: Redpanda (Kafka-compatible) for async job processing.
 - **Vector DB**: Qdrant.
 - **Text Extraction**: Apache Tika.
@@ -66,6 +66,27 @@ Health endpoints (`/healthz`, `/readyz`) and ACME challenge paths are intentiona
    - Returns queued/processing/failed/completed states.
    - Contains structured `result` object when `completed`.
    - Contains structured error when `failed`.
+
+## AI Providers, RAG, and Rate Limiting
+
+- **AI providers**
+  - Groq is used as the primary chat completion provider when `GROQ_API_KEY` / `GROQ_API_KEY_2` are configured.
+  - OpenRouter is used as a fallback provider backed by a curated list of free models discovered at runtime.
+  - OpenAI is used for embeddings only (RAG) when `OPENAI_API_KEY` is present.
+
+- **LLM chaining & evaluation pipeline**
+  - The worker calls `HandleEvaluate`, which delegates to an `IntegratedEvaluationHandler`.
+  - The handler:
+    - Optionally retrieves additional RAG context from Qdrant collections (`job_description`, `scoring_rubric`) and injects it into prompts.
+    - Builds prompts that encode the standardized scoring rubric described in `submissions/project.md`.
+    - Uses `ChatJSONWithRetry` to call providers with exponential backoff and model/account fallback.
+    - Cleans and validates JSON, clamps numeric ranges, and writes rows in the `results` table with `cv_match_rate`, `cv_feedback`, `project_score`, `project_feedback`, and `overall_summary`.
+
+- **Rate limiting and DLQ cooling**
+  - A global Redis+Lua token bucket limiter is warmed from Postgres and updated from provider rate-limit headers (e.g. `retry-after`, `x-ratelimit-*`).
+  - Provider-specific blocks temporarily pause Groq or OpenRouter accounts after repeated `429` responses.
+  - Retry and backoff are applied both inside the AI client and around the evaluation handler.
+  - Persistent failures are sent to a DLQ topic; the DLQ consumer and `RetryManager.ProcessDLQJob` enforce a cooling window for `UPSTREAM_RATE_LIMIT` failures before re-queueing jobs to the main topic.
 
 ## Deployment Topology
 

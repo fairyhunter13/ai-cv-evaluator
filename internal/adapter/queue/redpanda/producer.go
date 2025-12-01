@@ -16,6 +16,10 @@ import (
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	obsctx "github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const (
@@ -88,6 +92,20 @@ func NewProducerWithTransactionalID(brokers []string, transactionalID string) (*
 
 // EnqueueDLQ enqueues a job to the Dead Letter Queue
 func (p *Producer) EnqueueDLQ(ctx domain.Context, jobID string, dlqData []byte) error {
+	tracer := otel.Tracer("queue.producer")
+	ctx, span := tracer.Start(ctx, "EnqueueDLQ")
+	defer span.End()
+
+	lg := obsctx.LoggerFromContext(ctx)
+
+	span.SetAttributes(
+		attribute.String("messaging.system", "redpanda"),
+		attribute.String("messaging.operation", "publish"),
+		attribute.String("messaging.destination", "dlq-jobs"),
+		attribute.String("messaging.kafka.transactional_id", "ai-cv-evaluator-producer"),
+		attribute.String("messaging.job_id", jobID),
+	)
+
 	// Serialize the DLQ message
 	message := map[string]interface{}{
 		"job_id":    jobID,
@@ -98,7 +116,9 @@ func (p *Producer) EnqueueDLQ(ctx domain.Context, jobID string, dlqData []byte) 
 
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
-		slog.Error("failed to marshal DLQ message", slog.String("job_id", jobID), slog.Any("error", err))
+		lg.Error("failed to marshal DLQ message", slog.String("job_id", jobID), slog.Any("error", err))
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.String("error.type", "marshal"))
 		return fmt.Errorf("marshal DLQ message: %w", err)
 	}
 
@@ -119,7 +139,9 @@ func (p *Producer) EnqueueDLQ(ctx domain.Context, jobID string, dlqData []byte) 
 
 	// Begin transaction
 	if err := p.client.BeginTransaction(); err != nil {
-		slog.Error("failed to begin transaction for DLQ", slog.String("job_id", jobID), slog.Any("error", err))
+		lg.Error("failed to begin transaction for DLQ", slog.String("job_id", jobID), slog.Any("error", err))
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.String("error.type", "begin_transaction"))
 		return fmt.Errorf("begin transaction: %w", err)
 	}
 
@@ -128,19 +150,24 @@ func (p *Producer) EnqueueDLQ(ctx domain.Context, jobID string, dlqData []byte) 
 	if err := produceResult.FirstErr(); err != nil {
 		// Abort transaction on error
 		if abortErr := p.client.EndTransaction(ctx, kgo.TryAbort); abortErr != nil {
-			slog.Error("failed to abort transaction after produce error", slog.String("job_id", jobID), slog.Any("error", abortErr))
+			lg.Error("failed to abort transaction after produce error", slog.String("job_id", jobID), slog.Any("error", abortErr))
 		}
-		slog.Error("failed to produce DLQ message", slog.String("job_id", jobID), slog.Any("error", err))
+		lg.Error("failed to produce DLQ message", slog.String("job_id", jobID), slog.Any("error", err))
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.String("error.type", "produce"))
 		return fmt.Errorf("produce DLQ message: %w", err)
 	}
 
 	// Commit transaction
 	if err := p.client.EndTransaction(ctx, kgo.TryCommit); err != nil {
-		slog.Error("failed to commit transaction for DLQ", slog.String("job_id", jobID), slog.Any("error", err))
+		lg.Error("failed to commit transaction for DLQ", slog.String("job_id", jobID), slog.Any("error", err))
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.String("error.type", "commit"))
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 
-	slog.Info("DLQ message produced successfully", slog.String("job_id", jobID))
+	lg.Info("DLQ message produced successfully", slog.String("job_id", jobID))
+	span.SetStatus(codes.Ok, "dlq message produced")
 	return nil
 }
 
@@ -152,7 +179,23 @@ func (p *Producer) EnqueueEvaluate(ctx domain.Context, payload domain.EvaluateTa
 // EnqueueEvaluateToTopic enqueues an evaluation task to a specific topic.
 // This method allows tests to use unique topics for isolation.
 func (p *Producer) EnqueueEvaluateToTopic(ctx domain.Context, payload domain.EvaluateTaskPayload, topic string) (string, error) {
-	slog.Info("enqueueing evaluate task",
+	tracer := otel.Tracer("queue.producer")
+	ctx, span := tracer.Start(ctx, "EnqueueEvaluateToTopic")
+	defer span.End()
+
+	lg := obsctx.LoggerFromContext(ctx)
+
+	span.SetAttributes(
+		attribute.String("messaging.system", "redpanda"),
+		attribute.String("messaging.operation", "publish"),
+		attribute.String("messaging.destination", topic),
+		attribute.String("messaging.kafka.transactional_id", "ai-cv-evaluator-producer"),
+		attribute.String("messaging.job_id", payload.JobID),
+		attribute.String("messaging.cv_id", payload.CVID),
+		attribute.String("messaging.project_id", payload.ProjectID),
+	)
+
+	lg.Info("enqueueing evaluate task",
 		slog.String("job_id", payload.JobID),
 		slog.String("cv_id", payload.CVID),
 		slog.String("project_id", payload.ProjectID),
@@ -160,44 +203,56 @@ func (p *Producer) EnqueueEvaluateToTopic(ctx domain.Context, payload domain.Eva
 
 	// Use channel-based synchronization to serialize transactions
 	// This allows concurrent processing while maintaining transaction safety
-	slog.Info("acquiring transaction lock", slog.String("job_id", payload.JobID))
+	lg.Info("acquiring transaction lock", slog.String("job_id", payload.JobID))
 	select {
 	case p.transactionChan <- struct{}{}:
 		// Acquired transaction lock
 		slog.Info("transaction lock acquired", slog.String("job_id", payload.JobID))
 		defer func() {
 			<-p.transactionChan
-			slog.Info("transaction lock released", slog.String("job_id", payload.JobID))
+			lg.Info("transaction lock released", slog.String("job_id", payload.JobID))
 		}() // Release lock when done
 	case <-ctx.Done():
-		slog.Error("context cancelled while acquiring transaction lock", slog.String("job_id", payload.JobID))
+		lg.Error("context cancelled while acquiring transaction lock", slog.String("job_id", payload.JobID))
 		return "", ctx.Err()
 	}
 
 	// Begin transaction for EOS semantics
-	slog.Info("beginning transaction", slog.String("job_id", payload.JobID))
+	lg.Info("beginning transaction", slog.String("job_id", payload.JobID))
 	if err := p.client.BeginTransaction(); err != nil {
-		slog.Error("failed to begin transaction",
+		lg.Error("failed to begin transaction",
 			slog.String("job_id", payload.JobID),
 			slog.Any("error", err))
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(
+			attribute.String("error.type", "begin_transaction"),
+			attribute.String("messaging.status_code", "UNAVAILABLE"),
+			attribute.String("messaging.status_message", "Failed to begin transaction"),
+		)
 		return "", fmt.Errorf("begin transaction: %w", err)
 	}
-	slog.Info("transaction begun successfully", slog.String("job_id", payload.JobID))
+	lg.Info("transaction begun successfully", slog.String("job_id", payload.JobID))
 
-	slog.Info("marshaling payload", slog.String("job_id", payload.JobID))
+	lg.Info("marshaling payload", slog.String("job_id", payload.JobID))
 	b, err := json.Marshal(payload)
 	if err != nil {
-		slog.Error("failed to marshal payload",
+		lg.Error("failed to marshal payload",
 			slog.String("job_id", payload.JobID),
 			slog.Any("error", err))
 		// Abort transaction on error
-		slog.Info("aborting transaction due to marshal error", slog.String("job_id", payload.JobID))
+		lg.Info("aborting transaction due to marshal error", slog.String("job_id", payload.JobID))
 		if abortErr := p.client.EndTransaction(ctx, kgo.TryAbort); abortErr != nil {
 			slog.Error("failed to abort transaction", slog.Any("error", abortErr))
 		}
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(
+			attribute.String("error.type", "marshal"),
+			attribute.String("messaging.status_code", "INVALID_ARGUMENT"),
+			attribute.String("messaging.status_message", "Failed to marshal payload"),
+		)
 		return "", fmt.Errorf("marshal payload: %w", err)
 	}
-	slog.Info("payload marshaled successfully",
+	lg.Info("payload marshaled successfully",
 		slog.String("job_id", payload.JobID),
 		slog.Int("payload_size", len(b)))
 
@@ -213,7 +268,7 @@ func (p *Producer) EnqueueEvaluateToTopic(ctx domain.Context, payload domain.Eva
 	}
 
 	// Use AbortingFirstErrPromise for proper error handling
-	slog.Info("producing message to topic",
+	lg.Info("producing message to topic",
 		slog.String("job_id", payload.JobID),
 		slog.String("topic", topic))
 	e := kgo.AbortingFirstErrPromise(p.client)
@@ -221,33 +276,46 @@ func (p *Producer) EnqueueEvaluateToTopic(ctx domain.Context, payload domain.Eva
 
 	// Check for production errors
 	if err := e.Err(); err != nil {
-		slog.Error("failed to produce message",
+		lg.Error("failed to produce message",
 			slog.String("job_id", payload.JobID),
 			slog.String("topic", topic),
 			slog.Any("error", err))
 		// Abort transaction on error
-		slog.Info("aborting transaction due to produce error", slog.String("job_id", payload.JobID))
+		lg.Info("aborting transaction due to produce error", slog.String("job_id", payload.JobID))
 		if abortErr := p.client.EndTransaction(ctx, kgo.TryAbort); abortErr != nil {
 			slog.Error("failed to abort transaction", slog.Any("error", abortErr))
 		}
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(
+			attribute.String("error.type", "produce"),
+			attribute.String("messaging.status_code", "UNAVAILABLE"),
+			attribute.String("messaging.status_message", "Failed to produce message"),
+		)
 		return "", fmt.Errorf("produce: %w", err)
 	}
-	slog.Info("message produced successfully",
+	lg.Info("message produced successfully",
 		slog.String("job_id", payload.JobID),
 		slog.String("topic", topic))
 
 	// Commit transaction for EOS semantics
-	slog.Info("committing transaction", slog.String("job_id", payload.JobID))
+	lg.Info("committing transaction", slog.String("job_id", payload.JobID))
 	if err := p.client.EndTransaction(ctx, kgo.TryCommit); err != nil {
-		slog.Error("failed to commit transaction",
+		lg.Error("failed to commit transaction",
 			slog.String("job_id", payload.JobID),
 			slog.Any("error", err))
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(
+			attribute.String("error.type", "commit"),
+			attribute.String("messaging.status_code", "UNAVAILABLE"),
+			attribute.String("messaging.status_message", "Failed to commit transaction"),
+		)
 		return "", fmt.Errorf("commit transaction: %w", err)
 	}
-	slog.Info("transaction committed successfully", slog.String("job_id", payload.JobID))
+	lg.Info("transaction committed successfully", slog.String("job_id", payload.JobID))
 
 	observability.EnqueueJob("evaluate")
-	slog.Info("redpanda enqueue successful", slog.String("topic", TopicEvaluate), slog.String("job_id", payload.JobID))
+	lg.Info("redpanda enqueue successful", slog.String("topic", TopicEvaluate), slog.String("job_id", payload.JobID))
+	span.SetStatus(codes.Ok, "evaluate job enqueued")
 
 	// Return job ID as task ID
 	return payload.JobID, nil
