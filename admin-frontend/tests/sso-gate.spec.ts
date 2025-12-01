@@ -84,6 +84,25 @@ const apiRequestWithRetry = async (
   }
 };
 
+const clearMailpitMessages = async (page: Page): Promise<void> => {
+  try {
+    const listResp = await apiRequestWithRetry(page, 'get', '/mailpit/api/v1/messages');
+    if (!listResp || listResp.status() !== 200) {
+      return;
+    }
+    const body = (await listResp.json()) as any;
+    const messages = body.messages ?? [];
+    if (messages.length === 0) {
+      return;
+    }
+    const ids = messages.map((m: any) => m.ID);
+    await page.request.delete('/mailpit/api/v1/messages', {
+      data: { ids },
+    });
+  } catch {
+  }
+};
+
 // Validate AI Metrics dashboard panels via Grafana API.
 const validateAiMetricsDashboard = async (page: Page): Promise<void> => {
   const aiResp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
@@ -1011,6 +1030,8 @@ test('mailpit dashboard reachable and receives alerts via Mailpit API', async ({
 
   await completeKeycloakProfileUpdate(page);
   await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+
+  await clearMailpitMessages(page);
 
   // Mailpit dashboard should load behind SSO from the portal.
   await gotoWithRetry(page, PORTAL_PATH);
