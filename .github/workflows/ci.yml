@@ -113,7 +113,7 @@ jobs:
         run: |
           docker build -f Dockerfile.server -t ${{ github.repository }}-server:${{ github.sha }} .
           docker build -f Dockerfile.worker -t ${{ github.repository }}-worker:${{ github.sha }} .
-          docker build -f admin-frontend/Dockerfile.prod -t ${{ github.repository }}-frontend:${{ github.sha }} ./admin-frontend
+          docker build -f admin-frontend/Dockerfile.prod -t ${{ github.repository }}-frontend:${{ github.sha }} .
 
       - name: Production - Multi-arch Build Test
         if: matrix.go == '1.24'
