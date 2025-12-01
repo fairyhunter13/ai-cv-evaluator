@@ -145,7 +145,10 @@ docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
 # Requires SOPS_AGE_KEY_FILE to point to age key
 export SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt
 
-# Decrypt production env
+# Decrypt dev env (.env from secrets/env.sops.yaml)
+make decrypt-env
+
+# Decrypt production env (.env.production from secrets/env.production.sops.yaml)
 make decrypt-env-production
 ```
 
@@ -168,6 +171,25 @@ make encrypt-env-production
    ```bash
    docker compose -f docker-compose.prod.yml up -d backend worker keycloak oauth2-proxy-app oauth2-proxy-dashboard
    ```
+
+### Keycloak Realm (SSO)
+
+The Keycloak realm configuration is managed via SOPS:
+
+- Canonical encrypted file: `secrets/deploy/keycloak/realm-aicv.json.sops`
+- Decrypted runtime file (gitignored): `deploy/keycloak/realm-aicv.json`
+
+To update the realm config safely:
+
+```bash
+# Decrypt to plaintext JSON
+make decrypt-keycloak-realm
+
+# Edit deploy/keycloak/realm-aicv.json as needed
+
+# Re-encrypt back to secrets/deploy/keycloak/realm-aicv.json.sops
+make encrypt-keycloak-realm
+```
 
 ## Scaling
 

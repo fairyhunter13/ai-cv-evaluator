@@ -6,6 +6,11 @@
 - Copy or decrypt env:
   - `.env` for dev (OpenRouter/OpenAI keys, admin creds)
   - `.env.production` for prod
+  - Recommended: use SOPS + Make targets backed by `secrets/env.sops.yaml` and `secrets/env.production.sops.yaml`:
+    ```bash
+    make decrypt-env            # secrets/env.sops.yaml -> .env
+    make decrypt-env-production # secrets/env.production.sops.yaml -> .env.production
+    ```
 
 - Groq and OpenRouter chat model selection is automatic; chat models are not configured via environment variables.
 

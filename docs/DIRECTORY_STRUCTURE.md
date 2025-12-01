@@ -15,9 +15,13 @@ High-level layout of the repository:
   - `keycloak/` – Keycloak realm exports for dev/prod.
   - `portal/` – static portal HTML served behind SSO.
   - `grafana/`, `prometheus/`, `redpanda/`, etc. – observability configuration.
+- `secrets/` – SOPS-encrypted artifacts (env files, project brief, CV/RFC submissions, Keycloak realm, etc.).
 - `test/e2e/` – Go-based E2E tests that exercise the full upload → evaluate → result pipeline.
 - `.github/workflows/` – GitHub Actions for CI, security scanning, deploy, SSH checks, Cloudflare DNS sync.
 - `docker-compose.yml` – local dev stack (including dev-nginx + SSO + dashboards).
 - `docker-compose.prod.yml` – production stack.
 
-See `docs/architecture/ARCHITECTURE.md` and `docs/development/FRONTEND_DEVELOPMENT.md` for more detailed explanations.
+See also:
+- `docs/architecture/ARCHITECTURE.md` – system architecture overview.
+- `docs/development/FRONTEND_DEVELOPMENT.md` – frontend development guide.
+- `docs/security/SSO_RATE_LIMITING.md` – SSO rate limiting and brute force protection.
