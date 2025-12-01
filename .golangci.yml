@@ -33,6 +33,10 @@ linters:
         linters:
           - errcheck
           - gosec
+      # Exclude typecheck on generated Postgres mocks (mockery output)
+      - path: internal/adapter/repo/postgres/mocks/
+        linters:
+          - typecheck
       # Exclude Tika file path issue
       - path: internal/adapter/textextractor/tika/tika\.go
         text: "G304:"
