@@ -120,8 +120,8 @@ jobs:
         id: build-frontend
         uses: docker/build-push-action@v5
         with:
-          context: ./admin-frontend
-          file: Dockerfile.prod
+          context: .
+          file: ./admin-frontend/Dockerfile.prod
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
