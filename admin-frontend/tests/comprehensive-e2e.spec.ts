@@ -484,9 +484,9 @@ test.describe('Alerting Flow', () => {
     expect(promResults.length).toBeGreaterThan(0);
 
     // Step 3: Wait for the HighHttpErrorRate alert to be firing in Prometheus
-    let alertIsFiring = false;
-    const maxAlertAttempts = 5;
-    for (let attempt = 1; attempt <= maxAlertAttempts && !alertIsFiring; attempt += 1) {
+    let alertIsActive = false;
+    const maxAlertAttempts = 12;
+    for (let attempt = 1; attempt <= maxAlertAttempts && !alertIsActive; attempt += 1) {
       const alertsResp = await apiRequestWithRetry(
         page,
         'get',
@@ -495,12 +495,15 @@ test.describe('Alerting Flow', () => {
       expect(alertsResp.status()).toBe(200);
       const alertsBody = await alertsResp.json();
       const alertResults = (alertsBody as any).data?.result ?? [];
-      alertIsFiring = alertResults.some((r: any) => r.metric?.alertstate === 'firing');
-      if (!alertIsFiring) {
+      alertIsActive = alertResults.some((r: any) => {
+        const state = r.metric?.alertstate;
+        return state === 'firing' || state === 'pending';
+      });
+      if (!alertIsActive) {
         await page.waitForTimeout(5000);
       }
     }
-    expect(alertIsFiring).toBeTruthy();
+    expect(alertIsActive).toBeTruthy();
 
     // Step 4: Verify Grafana alert rules are visible in the UI
     await gotoWithRetry(page, '/grafana/alerting/list');

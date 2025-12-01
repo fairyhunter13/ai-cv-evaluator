@@ -71,7 +71,7 @@ jobs:
         if: ${{ github.event.inputs.skip_sso_tests != 'true' }}
         working-directory: admin-frontend
         env:
-          PLAYWRIGHT_BASE_URL: ${{ env.PRODUCTION_URL }}
+          E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
           SSO_USERNAME: ${{ secrets.PROD_SSO_USERNAME }}
           SSO_PASSWORD: ${{ secrets.PROD_SSO_PASSWORD }}
         run: |
@@ -80,8 +80,7 @@ jobs:
             --project=chromium \
             --grep "health|Backend API|SSO" \
             --reporter=list \
-            --timeout=60000 \
-            || true  # Don't fail workflow on test failures for now
+            --timeout=60000
 
       - name: Validate SSL certificates
         run: |

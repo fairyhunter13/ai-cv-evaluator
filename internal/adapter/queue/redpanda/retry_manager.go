@@ -12,16 +12,22 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
 
+// retryProducer defines the minimal producer behaviour needed by RetryManager.
+type retryProducer interface {
+	EnqueueEvaluate(ctx context.Context, payload domain.EvaluateTaskPayload) (string, error)
+	EnqueueDLQ(ctx context.Context, jobID string, dlqData []byte) error
+}
+
 // RetryManager handles automatic retries and DLQ management
 type RetryManager struct {
-	producer    *Producer
-	dlqProducer *Producer
+	producer    retryProducer
+	dlqProducer retryProducer
 	jobs        domain.JobRepository
 	config      domain.RetryConfig
 }
 
 // NewRetryManager creates a new retry manager
-func NewRetryManager(producer, dlqProducer *Producer, jobs domain.JobRepository, config domain.RetryConfig) *RetryManager {
+func NewRetryManager(producer, dlqProducer retryProducer, jobs domain.JobRepository, config domain.RetryConfig) *RetryManager {
 	return &RetryManager{
 		producer:    producer,
 		dlqProducer: dlqProducer,

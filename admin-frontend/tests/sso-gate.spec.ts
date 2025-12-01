@@ -2,6 +2,8 @@ import { test, expect, Page } from '@playwright/test';
 
 const PORTAL_PATH = '/';
 const PROTECTED_PATHS = ['/app/', '/grafana/', '/prometheus/', '/jaeger/', '/redpanda/', '/admin/'];
+const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
+const SSO_PASSWORD = process.env.SSO_PASSWORD || 'admin123';
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
@@ -243,8 +245,8 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
   const passwordInput = page.locator('input#password');
 
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
 
     // Keycloak 25 uses a submit button with name or text containing "Sign in"
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
@@ -762,8 +764,8 @@ test('Grafana Request Drilldown dashboard links work correctly', async ({ page, 
   // Check if we're on the login page
   const isLoginPage = page.url().includes('/oauth2/sign_in');
   if (isLoginPage) {
-    await page.fill('input[name="username"]', 'admin');
-    await page.fill('input[name="password"]', 'admin123');
+    await page.fill('input[name="username"]', SSO_USERNAME);
+    await page.fill('input[name="password"]', SSO_PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForURL('http://localhost:8088/app/', { timeout: 10000 });
   }

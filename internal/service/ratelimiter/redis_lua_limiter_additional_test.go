@@ -2,7 +2,10 @@ package ratelimiter
 
 import (
 	"context"
+	"strconv"
 	"testing"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func TestNewBucketConfigFromPerMinute(t *testing.T) {
@@ -60,4 +63,81 @@ func TestToInt64AndToFloat64(t *testing.T) {
 
 func isNaN(f float64) bool {
 	return f != f
+}
+
+func TestAllow_ScriptError_FailOpen(t *testing.T) {
+	ctx := context.Background()
+	limiter, cleanup := newTestRedisLuaLimiter(t)
+	// Close Redis before calling Allow so that the Lua script fails at runtime.
+	cleanup()
+
+	key := "bucket-script-error"
+	limiter.SetBucketConfig(key, BucketConfig{Capacity: 1, RefillRate: 1})
+
+	allowed, retryAfter, err := limiter.Allow(ctx, key, 1)
+	if err == nil {
+		t.Fatalf("expected error from script when redis is closed")
+	}
+	if !allowed {
+		t.Fatalf("expected limiter to fail open on script error")
+	}
+	if retryAfter != 0 {
+		t.Fatalf("expected zero retryAfter on script error, got %v", retryAfter)
+	}
+}
+
+func TestAllow_UnexpectedScriptResult_FailOpen(t *testing.T) {
+	ctx := context.Background()
+	limiter, cleanup := newTestRedisLuaLimiter(t)
+	defer cleanup()
+
+	key := "bucket-unexpected-result"
+	limiter.SetBucketConfig(key, BucketConfig{Capacity: 1, RefillRate: 1})
+
+	// Force the script to return a single scalar instead of the expected 4-element array.
+	limiter.script = redis.NewScript("return 1")
+
+	allowed, retryAfter, err := limiter.Allow(ctx, key, 1)
+	if err != nil {
+		t.Fatalf("expected no error for unexpected script result, got %v", err)
+	}
+	if !allowed {
+		t.Fatalf("expected limiter to fail open on unexpected script result")
+	}
+	if retryAfter != 0 {
+		t.Fatalf("expected zero retryAfter on unexpected script result, got %v", retryAfter)
+	}
+}
+
+func TestAllow_NonPositiveCostNormalizesToOne(t *testing.T) {
+	ctx := context.Background()
+	limiter, cleanup := newTestRedisLuaLimiter(t)
+	defer cleanup()
+
+	key := "bucket-nonpositive-cost"
+	limiter.SetBucketConfig(key, BucketConfig{Capacity: 1, RefillRate: 1})
+
+	allowed, retryAfter, err := limiter.Allow(ctx, key, 0)
+	if err != nil {
+		t.Fatalf("unexpected error from Allow with non-positive cost: %v", err)
+	}
+	if !allowed {
+		t.Fatalf("expected request with non-positive cost to be allowed")
+	}
+	if retryAfter != 0 {
+		t.Fatalf("expected zero retryAfter for non-positive cost, got %v", retryAfter)
+	}
+
+	// The underlying Lua script should have seen cost=1 and consumed the only token.
+	val, err := limiter.redis.HGet(ctx, "rate:"+key, "tokens").Result()
+	if err != nil {
+		t.Fatalf("failed to read tokens from redis: %v", err)
+	}
+	tokens, err := strconv.ParseFloat(val, 64)
+	if err != nil {
+		t.Fatalf("failed to parse tokens value %q: %v", val, err)
+	}
+	if tokens != 0 {
+		t.Fatalf("expected tokens=0 after non-positive cost normalized to 1, got %v", tokens)
+	}
 }

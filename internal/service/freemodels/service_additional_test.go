@@ -353,3 +353,144 @@ func TestService_GetFreeModels_RefreshAfterDuration(t *testing.T) {
 	require.Len(t, models2, 1)
 	require.Equal(t, 2, callCount) // Should have made another API call
 }
+
+func TestService_FetchAllModelsFromAPI(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(OpenRouterResponse{
+				Data: []Model{
+					{ID: "model-1", Name: "Model 1", Pricing: Pricing{Prompt: "0.01", Completion: "0.01", Request: "0.02"}},
+					{ID: "model-2", Name: "Model 2", Pricing: Pricing{Prompt: "0.02", Completion: "0.02", Request: "0.04"}},
+				},
+			})
+		}))
+		defer server.Close()
+
+		service := NewService("test-key", server.URL, 1*time.Hour)
+		models, err := service.fetchAllModelsFromAPI(context.Background())
+		require.NoError(t, err)
+		require.Len(t, models, 2)
+		assert.Equal(t, "model-1", models[0].ID)
+		assert.Equal(t, "model-2", models[1].ID)
+	})
+
+	t.Run("non_200_status", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("internal error"))
+		}))
+		defer server.Close()
+
+		service := NewService("test-key", server.URL, 1*time.Hour)
+		models, err := service.fetchAllModelsFromAPI(context.Background())
+		require.Error(t, err)
+		assert.Nil(t, models)
+	})
+
+	t.Run("invalid_json", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("not-json"))
+		}))
+		defer server.Close()
+
+		service := NewService("test-key", server.URL, 1*time.Hour)
+		models, err := service.fetchAllModelsFromAPI(context.Background())
+		require.Error(t, err)
+		assert.Nil(t, models)
+	})
+}
+
+func TestService_GetCheapestPaidModels(t *testing.T) {
+	t.Parallel()
+
+	t.Run("zero_limit_returns_nil", func(t *testing.T) {
+		t.Parallel()
+
+		service := NewService("test-key", "http://example", 1*time.Hour)
+		models, err := service.GetCheapestPaidModels(context.Background(), 0)
+		require.NoError(t, err)
+		assert.Nil(t, models)
+	})
+
+	t.Run("fetch_error_propagated", func(t *testing.T) {
+		t.Parallel()
+
+		// Use an invalid base URL to force a request error
+		service := NewService("test-key", "http://127.0.0.1:0", 1*time.Hour)
+		models, err := service.GetCheapestPaidModels(context.Background(), 3)
+		require.Error(t, err)
+		assert.Nil(t, models)
+	})
+
+	t.Run("sorts_and_limits_paid_models", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(OpenRouterResponse{
+				Data: []Model{
+					{
+						ID:   "free-model",
+						Name: "Free Model",
+						Pricing: Pricing{
+							Prompt:     "0",
+							Completion: "0",
+							Request:    "0",
+							Image:      "0",
+						},
+					},
+					{
+						ID:   "paid-cheap",
+						Name: "Paid Cheap",
+						Pricing: Pricing{
+							Prompt:     "0.001",
+							Completion: "0.001",
+							Request:    "0",
+						},
+					},
+					{
+						ID:   "paid-expensive",
+						Name: "Paid Expensive",
+						Pricing: Pricing{
+							Request: "0.05",
+						},
+					},
+					{
+						ID:   "openrouter/auto",
+						Name: "Auto Banned",
+						Pricing: Pricing{
+							Request: "0.000001",
+						},
+					},
+				},
+			})
+		}))
+		defer server.Close()
+
+		service := NewService("test-key", server.URL, 1*time.Hour)
+		ctx := context.Background()
+
+		// limit larger than candidates exercises minInt when a >= b
+		allPaid, err := service.GetCheapestPaidModels(ctx, 10)
+		require.NoError(t, err)
+		require.Len(t, allPaid, 2)
+		assert.Equal(t, "paid-cheap", allPaid[0].ID)
+		assert.Equal(t, "paid-expensive", allPaid[1].ID)
+
+		// limit smaller than candidates exercises other minInt branch
+		cheapestOnly, err := service.GetCheapestPaidModels(ctx, 1)
+		require.NoError(t, err)
+		require.Len(t, cheapestOnly, 1)
+		assert.Equal(t, "paid-cheap", cheapestOnly[0].ID)
+	})
+}
