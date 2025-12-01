@@ -109,7 +109,7 @@ fmt:
 	goimports -w .
 
 lint:
-	@which golangci-lint >/dev/null 2>&1 || (echo "Installing golangci-lint..." && GOBIN=$(PWD)/bin $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1)
+	@which golangci-lint >/dev/null 2>&1 || (echo "Installing golangci-lint..." && GOBIN=$(PWD)/bin $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2)
 	golangci-lint run ./...
 
 vet:
@@ -712,7 +712,7 @@ docker-build-ci:
 
  tools:
 	GOBIN=$(PWD)/bin $(GO) install github.com/mgechev/revive@latest
-	GOBIN=$(PWD)/bin $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.59.1
+	GOBIN=$(PWD)/bin $(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2
 	GOBIN=$(PWD)/bin $(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	GOBIN=$(PWD)/bin $(GO) install gotest.tools/gotestsum@latest
 
