@@ -622,7 +622,7 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
 
       let promRouteResults: any[] = [];
       for (let attempt = 0; attempt < 10; attempt += 1) {
-        const promRouteResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/query', {
+        const promRouteResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
           params: { query: 'sum(rate(http_requests_total[5m])) by (route)' },
         });
 
@@ -642,7 +642,7 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
 
       let promStatusResults: any[] = [];
       for (let attempt = 0; attempt < 10; attempt += 1) {
-        const promStatusResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/query', {
+        const promStatusResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
           params: { query: 'sum(http_requests_total) by (status)' },
         });
 
