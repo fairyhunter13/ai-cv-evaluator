@@ -281,8 +281,8 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
   const passwordInput = page.locator('input#password');
 
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
     await submitButton.first().click();
   }
