@@ -312,6 +312,10 @@ jobs:
           if [ -f secrets/env.production.sops.yaml ]; then
             make decrypt-env-production
           fi
+          # Decrypt Keycloak realm config
+          if [ -f secrets/deploy/keycloak/realm-aicv.json.sops ]; then
+            make decrypt-keycloak-realm
+          fi
           scp docker-compose.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           if [ -f .env.production ]; then

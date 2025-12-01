@@ -4,6 +4,7 @@
 docs/project.md
 docs/rfc/
 docs/rfc.backups/
+deploy/keycloak/realm-aicv.json
 # Generated files and directories
 coverage/
 logs/
@@ -28,3 +29,5 @@ artifacts/
 
 # Project reports and submissions
 submissions/admin-frontend/test-results/
+submissions/
+admin-frontend/test-results/

@@ -39,10 +39,27 @@ server {
     proxy_set_header Content-Length "";
   }
 
-  # oauth2-proxy public endpoints
+  # oauth2-proxy public endpoints with rate limiting to prevent brute force
   location /oauth2/ {
     auth_request off;
+    # Rate limit: 10 req/s with burst of 20, excess requests delayed
+    limit_req zone=oauth2_login_zone burst=20 delay=10;
+    limit_req_status 429;
+    limit_req_log_level warn;
     proxy_pass http://oauth2-proxy-app:4180/oauth2/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Stricter rate limit for oauth2 callback to prevent replay attacks
+  location = /oauth2/callback {
+    auth_request off;
+    limit_req zone=oauth2_callback_zone burst=5 nodelay;
+    limit_req_status 429;
+    limit_req_log_level warn;
+    proxy_pass http://oauth2-proxy-app:4180/oauth2/callback;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

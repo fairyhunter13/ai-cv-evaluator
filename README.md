@@ -18,11 +18,11 @@ All documentation is organized in the [`docs/`](docs/) directory:
 ## Quick Start
 
 - Prereqs: Docker, Docker Compose, Go 1.24+, Node.js 18+
-- Copy and edit env (or decrypt the committed encrypted env):
+- Set up env for dev (one of):
   ```bash
   cp .env.sample .env
   # or, if available
-  sops -d .env.sops.yaml > .env && chmod 600 .env
+  make decrypt-env   # uses secrets/env.sops.yaml -> .env
   ```
 
 ### Development Environment
@@ -119,11 +119,14 @@ See `docs/README.md` for complete documentation index and `docs/architecture/ARC
 
 This repository uses SOPS (with age) to encrypt sensitive files so they can be committed safely.
 
-- Encrypted artifacts:
-  - `project.md.sops` (encrypted project brief)
-  - `.env.sops.yaml` (encrypted development environment configuration)
-  - `.env.production.sops.yaml` (encrypted production environment configuration)
-- Do NOT commit plaintext files such as `project.md` or `.env`. Both are listed in `.gitignore`.
+- Encrypted artifacts (all under `secrets/`):
+  - `secrets/env.sops.yaml` – encrypted development environment configuration
+  - `secrets/env.production.sops.yaml` – encrypted production environment configuration
+  - `secrets/project.md.sops` and `secrets/project.md.enc` – encrypted study case project brief
+  - `secrets/rfc/**.sops` – encrypted RFC submission markdowns
+  - `secrets/cv/**.sops` – encrypted CV files (optimized + original)
+  - `secrets/deploy/keycloak/realm-aicv.json.sops` – encrypted Keycloak realm config (SSO + brute force settings)
+- Plaintext counterparts such as `.env`, `.env.production`, `submissions/**` (CVs, RFCs, project.md) and `deploy/keycloak/realm-aicv.json` are **gitignored** and should not be committed.
 
 ### Local prerequisites
 - Install `sops` and `age`.
@@ -134,42 +137,47 @@ This repository uses SOPS (with age) to encrypt sensitive files so they can be c
   ```
 
 ### Decrypt
-- Project brief:
+- Dev/prod env (recommended):
   ```bash
-  sops -d --input-type binary --output-type binary secrets/project.md.sops > docs/project.md
+  # From secrets/env.sops.yaml -> .env
+  make decrypt-env
+
+  # From secrets/env.production.sops.yaml -> .env.production
+  make decrypt-env-production
   ```
-- Encrypted env:
+- Project brief (for local inspection):
   ```bash
-  sops -d .env.sops.yaml > .env
-  chmod 600 .env
+  # From secrets/project.md.enc -> submissions/project.md
+  make decrypt-project
   ```
 
 ### Edit and re-encrypt
 For `secrets/project.md.sops` (binary), decrypt to plaintext, edit, then re-encrypt:
 ```bash
 # decrypt to plaintext, edit it
-sops -d --input-type binary --output-type binary secrets/project.md.sops > docs/project.md
+SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
+  sops -d --input-type binary --output-type binary secrets/project.md.sops > submissions/project.md
 
 # re-encrypt to .sops using your age key (or use Makefile target for .enc)
 SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
-  sops --encrypt --input-type binary --output-type binary docs/project.md > secrets/project.md.sops
+  sops --encrypt --input-type binary --output-type binary submissions/project.md > secrets/project.md.sops
 ```
 
-For `.env.sops.yaml` / `.env.production.sops.yaml` (YAML), you can edit in place and SOPS will re-encrypt on save:
+For env files, you can edit the encrypted YAML in place and SOPS will re-encrypt on save:
 ```bash
-sops .env.sops.yaml
+sops secrets/env.sops.yaml
 # or
-sops .env.production.sops.yaml
+sops secrets/env.production.sops.yaml
 ```
 
 ### CI/CD
 - Store the age private key in a secret (e.g., `SOPS_AGE_KEY`).
-- In CI, write the key to `~/.config/sops/age/keys.txt`, then decrypt:
+- In CI, write the key to `~/.config/sops/age/keys.txt`, then use Make targets to decrypt:
   ```bash
-  sops -d .env.sops.yaml > .env
-  chmod 600 .env
+  make decrypt-env           # for dev/test
+  make decrypt-env-production  # for production deploy
   ```
-- See the CI rules for a full example.
+- See the CI rules for full examples in `.github/workflows/ci.yml` and `.github/workflows/deploy.yml`.
 
 ## Observability
 - Metrics:

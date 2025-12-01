@@ -1,12 +1,109 @@
 groups:
-  - name: ai-cv-evaluator-http-errors
+  - name: ai-cv-evaluator-core-alerts
     rules:
+      # Existing HTTP error alert used by Grafana HTTP alerting rule.
       - alert: HighHttpErrorRate
         expr: sum(rate(http_requests_total{status!="OK"}[5m])) > 0
         for: 0m
         labels:
           severity: warning
           service: ai-cv-evaluator
+          area: http
         annotations:
           summary: "HTTP errors detected in ai-cv-evaluator"
           description: "One or more HTTP requests with non-OK status (4xx/5xx) have been observed in the last 5 minutes."
+
+      # HTTP latency: 95th percentile response time too high.
+      - alert: HighHttpLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          area: http
+        annotations:
+          summary: "High HTTP latency (p95) in ai-cv-evaluator"
+          description: "The 95th percentile HTTP response time has been above 1s for the last 5 minutes."
+
+      # Job queue: too many jobs processing concurrently (backlog risk).
+      - alert: HighJobsProcessing
+        expr: sum(jobs_processing) > 20
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          area: jobs
+        annotations:
+          summary: "High number of jobs processing"
+          description: "The jobs_processing gauge indicates a sustained backlog of more than 20 jobs in progress."
+
+      # Job queue: any recent job failures, per job type.
+      - alert: JobFailuresDetected
+        expr: sum(rate(jobs_failed_total[5m])) by (type) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          area: jobs
+        annotations:
+          summary: "Job failures detected in ai-cv-evaluator"
+          description: "One or more jobs have failed within the last 5 minutes. Check job-queue metrics and worker logs."
+
+      # AI layer: high p95 latency across providers/operations.
+      - alert: HighAIRequestLatency
+        expr: histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[5m])) by (le)) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          area: ai
+        annotations:
+          summary: "High AI request latency (p95)"
+          description: "The 95th percentile AI request latency has been above 5 seconds for the last 5 minutes. This may indicate provider slowness or rate limiting."
+
+      # RAG: any retrieval errors.
+      - alert: RAGRetrievalErrors
+        expr: sum(rate(rag_retrieval_errors_total[5m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          area: rag
+        annotations:
+          summary: "RAG retrieval errors detected"
+          description: "RAG retrieval failures have occurred in the last 5 minutes. Check vector store connectivity and query patterns."
+
+      # Circuit breaker: any breaker opened.
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_status > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: ai-cv-evaluator
+          area: circuit-breaker
+        annotations:
+          summary: "Circuit breaker open or half-open"
+          description: "At least one circuit breaker is open or half-open, indicating instability in an upstream dependency."
+
+      # Evaluation score drift: drift from baseline too large.
+      - alert: EvaluationScoreDriftHigh
+        expr: abs(evaluation_score_drift) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          area: evaluation
+        annotations:
+          summary: "Evaluation score drift exceeds threshold"
+          description: "evaluation_score_drift has exceeded an absolute value of 1 for at least 10 minutes, indicating possible model or data drift."
+
+      - alert: EvaluationCvMatchRateLow
+        expr: sum(rate(evaluation_cv_match_rate_sum[1h])) / sum(rate(evaluation_cv_match_rate_count[1h])) < 0.4
+        for: 30m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          area: evaluation
+        annotations:
+          summary: "Evaluation CV match rate is low"
+          description: "Average evaluation_cv_match_rate over the last hour has been below 0.4 for at least 30 minutes, indicating poor CV-to-job matching quality."

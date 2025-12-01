@@ -32,3 +32,197 @@ groups:
           severity: warning
           service: ai-cv-evaluator
           source: prometheus-rule
+
+  - orgId: 1
+    name: ai-cv-evaluator-core-metrics-alerts
+    folder: "AI CV Evaluator"
+    interval: 60s
+    rules:
+      - uid: high-jobs-processing
+        title: High Jobs Processing
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="HighJobsProcessing", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "High number of jobs processing"
+          description: "Prometheus alert HighJobsProcessing is firing, indicating a sustained backlog of jobs in progress."
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          source: prometheus-rule
+
+      - uid: job-failures-detected
+        title: Job Failures Detected
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="JobFailuresDetected", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Job failures detected"
+          description: "Prometheus alert JobFailuresDetected is firing, indicating recent job failures in the worker."
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          source: prometheus-rule
+
+      - uid: high-ai-request-latency
+        title: High AI Request Latency
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="HighAIRequestLatency", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "High AI request latency"
+          description: "Prometheus alert HighAIRequestLatency is firing, indicating elevated p95 AI request latency."
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          source: prometheus-rule
+
+      - uid: rag-retrieval-errors
+        title: RAG Retrieval Errors
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="RAGRetrievalErrors", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "RAG retrieval errors detected"
+          description: "Prometheus alert RAGRetrievalErrors is firing, indicating failures in RAG retrieval."
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          source: prometheus-rule
+
+      - uid: circuit-breaker-open
+        title: Circuit Breaker Open
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="CircuitBreakerOpen", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Circuit breaker open"
+          description: "Prometheus alert CircuitBreakerOpen is firing, indicating instability in an upstream dependency."
+        labels:
+          severity: critical
+          service: ai-cv-evaluator
+          source: prometheus-rule
+
+      - uid: evaluation-score-drift-high
+        title: Evaluation Score Drift High
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="EvaluationScoreDriftHigh", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Evaluation score drift exceeds threshold"
+          description: "Prometheus alert EvaluationScoreDriftHigh is firing, indicating score drift beyond configured threshold."
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          source: prometheus-rule
+
+      - uid: evaluation-cv-match-rate-low
+        title: Evaluation CV Match Rate Low
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="EvaluationCvMatchRateLow", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "Evaluation CV match rate is low"
+          description: "Prometheus alert EvaluationCvMatchRateLow is firing, indicating that the average evaluation_cv_match_rate has been below the configured threshold."
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          source: prometheus-rule
