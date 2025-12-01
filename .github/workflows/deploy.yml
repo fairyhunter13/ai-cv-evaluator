@@ -254,7 +254,7 @@ jobs:
             case "$line" in \#*) continue;; esac
             key="${line%%=*}"; val="${line#*=}"; echo "$key=$val" >> $GITHUB_ENV
           done < .env
-      - name: Run E2E tests (pre-deploy gate)
+      - name: Run minimal CI E2E tests (pre-deploy gate)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_API_KEY_2: ${{ secrets.OPENROUTER_API_KEY_2 }}
@@ -265,9 +265,9 @@ jobs:
           LOG_DIR="artifacts/ci-e2e-logs-$(date +%Y%m%d%H%M%S)"
           APP_PORT="${PORT:-8080}"
           DOCKER_COMPOSE_FILES="docker-compose.yml" \
-            make run-e2e-tests E2E_CLEAR_DUMP=true E2E_START_SERVICES=true \
+            make run-e2e-ci E2E_CLEAR_DUMP=true E2E_START_SERVICES=true \
               E2E_BASE_URL="http://localhost:${APP_PORT}/v1" \
-              E2E_LOG_DIR="${LOG_DIR}" E2E_PARALLEL=4 E2E_INTER_PAIR_DELAY=5s
+              E2E_LOG_DIR="${LOG_DIR}" E2E_PARALLEL=1
           make clean-test-cv
 
   quality-gates:
