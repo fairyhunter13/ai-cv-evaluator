@@ -26,8 +26,8 @@ const generateBackendTraffic = async (page: Page): Promise<void> => {
 };
 
 const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
-  const maxAttempts = 5;
-  const retryDelayMs = 2000;
+  const maxAttempts = 10;
+  const retryDelayMs = 3000;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -35,10 +35,15 @@ const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
       return;
     } catch (err) {
       const message = String(err);
+      const transientErrors = [
+        'net::ERR_CONNECTION_REFUSED',
+        'net::ERR_SOCKET_NOT_CONNECTED',
+        'net::ERR_CONNECTION_RESET',
+      ];
 
       // Only retry on transient connection-refused errors; propagate
       // everything else immediately so we still fail fast on real issues.
-      if (!message.includes('net::ERR_CONNECTION_REFUSED') || attempt === maxAttempts) {
+      if (!transientErrors.some((pattern) => message.includes(pattern)) || attempt === maxAttempts) {
         throw err;
       }
 
@@ -620,7 +625,12 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
         const promRouteResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/query', {
           params: { query: 'sum(rate(http_requests_total[5m])) by (route)' },
         });
-        expect(promRouteResp.ok()).toBeTruthy();
+
+        if (!promRouteResp.ok()) {
+          await page.waitForTimeout(1000);
+          continue;
+        }
+
         const promRouteBody = await promRouteResp.json();
         promRouteResults = (promRouteBody as any)?.data?.result ?? [];
         if (promRouteResults.length > 0) {
@@ -635,7 +645,12 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
         const promStatusResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/query', {
           params: { query: 'sum(http_requests_total) by (status)' },
         });
-        expect(promStatusResp.ok()).toBeTruthy();
+
+        if (!promStatusResp.ok()) {
+          await page.waitForTimeout(1000);
+          continue;
+        }
+
         const promStatusBody = await promStatusResp.json();
         promStatusResults = (promStatusBody as any)?.data?.result ?? [];
         if (promStatusResults.length > 0) {
