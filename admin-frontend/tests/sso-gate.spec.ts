@@ -39,6 +39,7 @@ const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
         'net::ERR_CONNECTION_REFUSED',
         'net::ERR_SOCKET_NOT_CONNECTED',
         'net::ERR_CONNECTION_RESET',
+        'net::ERR_EMPTY_RESPONSE',
       ];
 
       // Only retry on transient connection-refused errors; propagate
@@ -661,8 +662,22 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
       expect(promStatusResults.length).toBeGreaterThan(0);
 
       // Prometheus alerting: ensure the HighHttpErrorRate alert rule is loaded.
-      const promRulesResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/rules');
-      expect(promRulesResp.ok()).toBeTruthy();
+      // Use the Prometheus datasource UID and a small retry loop to tolerate
+      // startup delays and transient 5xx/HTML responses.
+      let promRulesResp: any = null;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const resp = await page.request.get(
+          '/grafana/api/datasources/proxy/uid/prometheus/api/v1/rules',
+        );
+        if (!resp.ok()) {
+          await page.waitForTimeout(1000);
+          continue;
+        }
+        promRulesResp = resp;
+        break;
+      }
+
+      expect(promRulesResp && promRulesResp.ok()).toBeTruthy();
       const promRulesBody = await promRulesResp.json();
       const ruleGroups: any[] = ((promRulesBody as any)?.data?.groups ?? []) as any[];
       const allRules = ruleGroups.flatMap((g: any) => (g.rules ?? []));
