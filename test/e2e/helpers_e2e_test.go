@@ -80,6 +80,22 @@ func getenv(k, def string) string {
 	return def
 }
 
+// isSmokeMode returns true if E2E_SMOKE environment variable is set to "1" or "true".
+// In smoke mode, heavy tests that may trigger AI provider rate limits should be skipped.
+func isSmokeMode() bool {
+	v := os.Getenv("E2E_SMOKE")
+	return v == "1" || v == "true"
+}
+
+// skipIfSmokeMode skips the test if running in smoke mode (E2E_SMOKE=1).
+// Use this for heavy tests that make multiple AI provider calls and may trigger rate limits.
+func skipIfSmokeMode(t *testing.T, reason string) {
+	t.Helper()
+	if isSmokeMode() {
+		t.Skipf("Skipping in smoke mode (E2E_SMOKE=1): %s", reason)
+	}
+}
+
 func waitForAppReady(t *testing.T, client *http.Client, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)

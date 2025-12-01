@@ -354,7 +354,7 @@ test.describe('Alerting Flow', () => {
     test.setTimeout(60000);
     await loginViaSSO(page);
 
-    const resp = await apiRequestWithRetry(page, 'get', '/prometheus/api/v1/rules');
+    const resp = await apiRequestWithRetry(page, 'get', '/grafana/api/datasources/proxy/7/api/v1/rules');
     expect(resp.status()).toBe(200);
     const rulesBody = (await resp.json()) as any;
     const groups = rulesBody.data?.groups ?? [];
@@ -472,7 +472,7 @@ test.describe('Alerting Flow', () => {
     const promResp = await apiRequestWithRetry(
       page,
       'get',
-      '/prometheus/api/v1/query?query=sum%20by(status)%20(rate(http_requests_total{status!="OK"}[5m]))',
+      '/grafana/api/datasources/proxy/7/api/v1/query?query=sum%20by(status)%20(rate(http_requests_total{status!="OK"}[5m]))',
     );
     expect(promResp.status()).toBe(200);
     const promBody = await promResp.json();
@@ -486,7 +486,7 @@ test.describe('Alerting Flow', () => {
       const alertsResp = await apiRequestWithRetry(
         page,
         'get',
-        '/prometheus/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}',
+        '/grafana/api/datasources/proxy/7/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}',
       );
       expect(alertsResp.status()).toBe(200);
       const alertsBody = await alertsResp.json();
@@ -864,15 +864,16 @@ test.describe('Observability Dashboards', () => {
   test('Prometheus is accessible and has targets', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
     await loginViaSSO(page);
-
-    await gotoWithRetry(page, '/prometheus/targets');
-    await page.waitForLoadState('networkidle');
-
-    // Prometheus targets page should load
-    const body = await page.locator('body').textContent();
-    expect(body).toBeTruthy();
-    // Should contain some target information
-    expect(body?.toLowerCase()).toContain('target');
+    const resp = await apiRequestWithRetry(
+      page,
+      'get',
+      '/grafana/api/datasources/proxy/7/api/v1/targets',
+    );
+    expect(resp.status()).toBe(200);
+    const json = (await resp.json()) as any;
+    const data = json.data ?? {};
+    const activeTargets = ((data.activeTargets ?? data.targets) ?? []) as any[];
+    expect(activeTargets.length).toBeGreaterThan(0);
   });
 
   test('Jaeger is accessible and has services', async ({ page, baseURL }) => {

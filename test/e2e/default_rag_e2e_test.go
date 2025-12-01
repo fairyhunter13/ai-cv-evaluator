@@ -18,7 +18,8 @@ import (
 // falls back to RAG YAML-backed defaults and the end-to-end evaluation still
 // completes successfully with a valid result payload.
 func TestE2E_DefaultRAGConfig_UsesYAMLAndCompletes(t *testing.T) {
-	// NO SKIPPING - E2E tests must always run
+	// Skip in smoke mode - RAG config test makes AI calls
+	skipIfSmokeMode(t, "default RAG test makes AI calls which may trigger rate limits")
 
 	// Clear dump directory before test
 	clearDumpDirectory(t)

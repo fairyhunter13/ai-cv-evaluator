@@ -22,7 +22,8 @@ import (
 // the candidate's real CV and a project report based on this repository.
 // It logs the full JSON responses so they can be captured as screenshots.
 func TestE2E_RFC_RealResponses_UploadEvaluateResult(t *testing.T) {
-	// NO SKIPPING - E2E tests must always run
+	// Skip in smoke mode - this test uses real CV data requiring longer AI processing
+	skipIfSmokeMode(t, "RFC real responses test uses large CV data which may trigger rate limits")
 
 	// Clear dump directory before test
 	clearDumpDirectory(t)

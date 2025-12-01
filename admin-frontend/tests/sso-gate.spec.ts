@@ -598,7 +598,7 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
 
       let promRouteResults: any[] = [];
       for (let attempt = 0; attempt < 10; attempt += 1) {
-        const promRouteResp = await page.request.get('/prometheus/api/v1/query', {
+        const promRouteResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/query', {
           params: { query: 'sum(rate(http_requests_total[5m])) by (route)' },
         });
         expect(promRouteResp.ok()).toBeTruthy();
@@ -613,7 +613,7 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
 
       let promStatusResults: any[] = [];
       for (let attempt = 0; attempt < 10; attempt += 1) {
-        const promStatusResp = await page.request.get('/prometheus/api/v1/query', {
+        const promStatusResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/query', {
           params: { query: 'sum(http_requests_total) by (status)' },
         });
         expect(promStatusResp.ok()).toBeTruthy();
@@ -627,7 +627,7 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
       expect(promStatusResults.length).toBeGreaterThan(0);
 
       // Prometheus alerting: ensure the HighHttpErrorRate alert rule is loaded.
-      const promRulesResp = await page.request.get('/prometheus/api/v1/rules');
+      const promRulesResp = await page.request.get('/grafana/api/datasources/proxy/7/api/v1/rules');
       expect(promRulesResp.ok()).toBeTruthy();
       const promRulesBody = await promRulesResp.json();
       const ruleGroups: any[] = ((promRulesBody as any)?.data?.groups ?? []) as any[];

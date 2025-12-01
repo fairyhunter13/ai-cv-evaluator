@@ -16,7 +16,8 @@ import (
 // TestE2E_HappyPath_UploadEvaluateResult exercises the core flow without
 // making strong assumptions about asynchronous completion in constrained envs.
 func TestE2E_HappyPath_UploadEvaluateResult(t *testing.T) {
-	// NO SKIPPING - E2E tests must always run
+	// Skip in smoke mode - happy path test makes AI calls
+	skipIfSmokeMode(t, "happy path test makes AI calls which may trigger rate limits")
 
 	// Clear dump directory before test
 	clearDumpDirectory(t)

@@ -346,14 +346,18 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 			if err != nil {
 				slog.Error("poll fetches failed with observable metrics", slog.Any("error", err))
 				// Add exponential backoff for connection errors
+				backoffDuration := nextInterval
 				if strings.Contains(err.Error(), "context deadline exceeded") ||
 					strings.Contains(err.Error(), "connection") ||
 					strings.Contains(err.Error(), "timeout") {
 					slog.Warn("connection error detected, using exponential backoff", slog.Any("error", err))
-					time.Sleep(time.Duration(pollCount) * 2 * time.Second) // Exponential backoff
-				} else {
-					time.Sleep(nextInterval)
+					backoffDuration = time.Duration(pollCount) * 2 * time.Second
+					if backoffDuration > 10*time.Second {
+						backoffDuration = 10 * time.Second
+					}
 				}
+				c.adaptivePoller.RecordFailure()
+				time.Sleep(backoffDuration)
 				continue
 			}
 
@@ -389,8 +393,8 @@ func (c *Consumer) messageFetcher(ctx context.Context) {
 					if err.Err != nil && err.Err.Error() == "context deadline exceeded" {
 						// Exponential backoff for context deadline exceeded errors
 						backoffDuration = time.Duration(pollCount) * 2 * time.Second
-						if backoffDuration > 30*time.Second {
-							backoffDuration = 30 * time.Second
+						if backoffDuration > 10*time.Second {
+							backoffDuration = 10 * time.Second
 						}
 						slog.Warn("context deadline exceeded, using exponential backoff",
 							slog.Duration("backoff_duration", backoffDuration),

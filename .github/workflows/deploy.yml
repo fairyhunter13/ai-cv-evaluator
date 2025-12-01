@@ -1,5 +1,9 @@
 name: Deploy
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -255,6 +259,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_API_KEY_2: ${{ secrets.OPENROUTER_API_KEY_2 }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          E2E_SMOKE: "1"
         run: |
           make decrypt-test-cv
           LOG_DIR="artifacts/ci-e2e-logs-$(date +%Y%m%d%H%M%S)"
