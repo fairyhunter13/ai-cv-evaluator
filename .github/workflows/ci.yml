@@ -15,8 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install SOPS and AGE
         run: |
+          set -e
           sudo apt-get update
-          sudo apt-get install -y age sops
+          sudo apt-get install -y age
+          SOPS_VERSION="3.8.1"
+          curl -L "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" -o sops
+          sudo install -m 0755 sops /usr/local/bin/sops
+          sops --version
       - name: Prepare SOPS age key
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
@@ -125,8 +130,13 @@ jobs:
 
       - name: Install SOPS and AGE
         run: |
+          set -e
           sudo apt-get update
-          sudo apt-get install -y age sops
+          sudo apt-get install -y age
+          SOPS_VERSION="3.8.1"
+          curl -L "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" -o sops
+          sudo install -m 0755 sops /usr/local/bin/sops
+          sops --version
 
       - name: Prepare SOPS age key
         env:
