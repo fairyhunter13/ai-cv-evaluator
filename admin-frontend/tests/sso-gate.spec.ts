@@ -714,7 +714,7 @@ test('Grafana Request Drilldown dashboard links work correctly', async ({ page, 
   const isLoginPage = page.url().includes('/oauth2/sign_in');
   if (isLoginPage) {
     await page.fill('input[name="username"]', 'admin');
-    await page.fill('input[name="password"]', 'admin');
+    await page.fill('input[name="password"]', 'admin123');
     await page.click('button[type="submit"]');
     await page.waitForURL('http://localhost:8088/app/', { timeout: 10000 });
   }

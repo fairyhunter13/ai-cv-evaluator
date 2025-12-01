@@ -467,18 +467,18 @@ run-e2e-core:
 	$(call log_info,Core E2E test completed successfully)
 
 # Run CI-focused E2E tests (single canonical variant, rate-limit safe)
-# This is the recommended target for CI pipelines - runs the core test only
+# This is the recommended target for CI pipelines - runs the single-job core test only
 test-e2e-ci:
 	@set -euo pipefail; \
-	$(call log_info,Running CI-focused E2E tests (core variant only)...); \
+	$(call log_info,Running CI-focused E2E tests (single-job core variant only)...); \
 	$(call load_env); \
 	$(GO) test -tags=e2e -v -race -timeout=10m -count=1 \
-		-run "TestE2E_Core_RateLimitFriendly$$" ./test/e2e/...
+		-run "TestE2E_Core_SingleJob$$" ./test/e2e/...
 
-# Run CI E2E with service startup and cleanup
+# Run CI E2E with service startup and cleanup (single-job core test only)
 run-e2e-ci:
 	@set -euo pipefail; \
-	$(call log_info,Starting CI-focused E2E suite (core variant only)...); \
+	$(call log_info,Starting CI-focused E2E suite (single-job core variant only)...); \
 	$(call load_env); \
 	rm -rf $(ARTIFACTS_DIR)/* || true; \
 	mkdir -p $(ARTIFACTS_DIR); \
@@ -488,11 +488,11 @@ run-e2e-ci:
 	$(call wait_for_postgres); \
 	$(call verify_database_schema); \
 	$(call wait_for_healthz); \
-	$(call log_info,Running CI E2E tests (core variant only)...); \
-	E2E_INTER_JOB_COOLDOWN=15s \
+	$(call log_info,Running CI E2E tests (single-job core variant only)...); \
+	E2E_INTER_JOB_COOLDOWN=0s \
 	E2E_PER_JOB_TIMEOUT=120s \
 	$(GO) test -tags=e2e -v -race -timeout=10m -count=1 \
-		-run "TestE2E_Core_RateLimitFriendly$$" ./test/e2e/...; \
+		-run "TestE2E_Core_SingleJob$$" ./test/e2e/...; \
 	$(call log_info,CI E2E tests completed successfully)
 
 # Run core E2E multiple times consecutively to validate rate-limit safety
