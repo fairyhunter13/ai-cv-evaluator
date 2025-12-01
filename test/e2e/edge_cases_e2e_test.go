@@ -15,6 +15,9 @@ import (
 // TestE2E_EdgeCase_MinimalTexts_Complete verifies that very small but non-empty
 // CV and project contents still produce a successful completed evaluation.
 func TestE2E_EdgeCase_MinimalTexts_Complete(t *testing.T) {
+	// Skip in smoke mode - edge case tests make AI calls
+	skipIfSmokeMode(t, "edge case tests make AI calls which may trigger rate limits")
+
 	// Clear dump directory before test
 	clearDumpDirectory(t)
 
@@ -83,6 +86,9 @@ func TestE2E_EdgeCase_MinimalTexts_Complete(t *testing.T) {
 // TestE2E_EdgeCase_LongCV_ShortProject_Complete verifies that longer CV content
 // with a short project description still completes successfully.
 func TestE2E_EdgeCase_LongCV_ShortProject_Complete(t *testing.T) {
+	// Skip in smoke mode - edge case tests make AI calls
+	skipIfSmokeMode(t, "edge case tests make AI calls which may trigger rate limits")
+
 	clearDumpDirectory(t)
 
 	httpTimeout := 15 * time.Second
@@ -142,6 +148,9 @@ func TestE2E_EdgeCase_LongCV_ShortProject_Complete(t *testing.T) {
 // TestE2E_EdgeCase_ShortCV_LongProject_Complete verifies that a short CV with a
 // much more detailed project description completes successfully.
 func TestE2E_EdgeCase_ShortCV_LongProject_Complete(t *testing.T) {
+	// Skip in smoke mode - edge case tests make AI calls
+	skipIfSmokeMode(t, "edge case tests make AI calls which may trigger rate limits")
+
 	clearDumpDirectory(t)
 
 	httpTimeout := 15 * time.Second

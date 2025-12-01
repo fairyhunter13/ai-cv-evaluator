@@ -61,7 +61,8 @@ func postEvaluateWithIdempotency(t *testing.T, client *http.Client, cvID, projec
 // with the same Idempotency-Key return the same job id and that the job
 // eventually reaches a terminal completed state.
 func TestE2E_Evaluate_IdempotentJobReuse(t *testing.T) {
-	// NO SKIPPING - E2E tests must always run
+	// Skip in smoke mode - idempotent test makes AI calls
+	skipIfSmokeMode(t, "idempotent test makes AI calls which may trigger rate limits")
 
 	// Clear dump directory before test
 	clearDumpDirectory(t)

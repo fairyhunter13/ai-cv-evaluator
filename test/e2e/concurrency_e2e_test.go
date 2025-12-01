@@ -16,6 +16,9 @@ import (
 // in parallel when CONSUMER_MAX_CONCURRENCY > 1 by comparing aggregate per-job
 // processing time to wall-clock elapsed time.
 func TestE2E_ParallelJobs_Concurrency(t *testing.T) {
+	// Skip in smoke mode - this test makes multiple concurrent AI calls
+	skipIfSmokeMode(t, "concurrency test makes multiple parallel AI calls which may trigger rate limits")
+
 	// Clear dump directory before test
 	clearDumpDirectory(t)
 

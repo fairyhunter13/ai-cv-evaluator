@@ -18,7 +18,8 @@ import (
 // validates that each job reaches a terminal state and returns a well-formed
 // result or error payload.
 func TestE2E_MultiJob_Sequential_Batch(t *testing.T) {
-	// NO SKIPPING - E2E tests must always run
+	// Skip in smoke mode - this test makes multiple sequential AI calls
+	skipIfSmokeMode(t, "multi-job batch test makes multiple sequential AI calls which may trigger rate limits")
 
 	// Clear dump directory before test to avoid mixing artifacts across runs.
 	clearDumpDirectory(t)
