@@ -4,6 +4,7 @@ run:
   timeout: 5m
   skip-dirs:
     - internal/adapter/repo/postgres/mocks
+    - internal/domain/mocks
 
 linters:
   enable:
