@@ -217,19 +217,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y age sops
       - name: Prepare SOPS age key
-        if: ${{ secrets.SOPS_AGE_KEY != '' }}
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: |
+          if [ -z "$SOPS_AGE_KEY" ]; then
+            echo "SOPS_AGE_KEY not set; skipping SOPS age key setup"
+            exit 0
+          fi
           mkdir -p ~/.config/sops/age
           printf %s "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
           chmod 600 ~/.config/sops/age/keys.txt
       - name: Decrypt env for E2E (.env from secrets/env.sops.yaml)
-        if: ${{ secrets.SOPS_AGE_KEY != '' }}
-        run: make decrypt-env
-      - name: Export .env to job environment
-        if: ${{ secrets.SOPS_AGE_KEY != '' }}
         run: |
+          if [ ! -f secrets/env.sops.yaml ]; then
+            echo "secrets/env.sops.yaml not found; skipping decrypt-env"
+            exit 0
+          fi
+          make decrypt-env
+      - name: Export .env to job environment
+        run: |
+          if [ ! -f .env ]; then
+            echo ".env not found; skipping export to GITHUB_ENV"
+            exit 0
+          fi
           while IFS= read -r line; do
             [ -z "$line" ] && continue
             case "$line" in \#*) continue;; esac
