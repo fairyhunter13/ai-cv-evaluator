@@ -33,6 +33,10 @@ linters:
         linters:
           - errcheck
           - gosec
+      # Exclude generated Postgres mocks from typecheck (they are validated via go build, but golangci typecheck hits false positives)
+      - path: internal/adapter/repo/postgres/mocks/
+        linters:
+          - typecheck
       # Exclude Tika file path issue
       - path: internal/adapter/textextractor/tika/tika\.go
         text: "G304:"

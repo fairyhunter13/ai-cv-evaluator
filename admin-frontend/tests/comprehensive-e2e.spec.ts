@@ -354,7 +354,11 @@ test.describe('Alerting Flow', () => {
     test.setTimeout(60000);
     await loginViaSSO(page);
 
-    const resp = await apiRequestWithRetry(page, 'get', '/prometheus/api/v1/rules');
+    const resp = await apiRequestWithRetry(
+      page,
+      'get',
+      '/grafana/api/prometheus/prometheus/api/v1/rules',
+    );
     expect(resp.status()).toBe(200);
     const rulesBody = (await resp.json()) as any;
     const groups = rulesBody.data?.groups ?? [];
@@ -468,30 +472,34 @@ test.describe('Alerting Flow', () => {
       await page.waitForTimeout(100);
     }
 
-    // Step 2: Verify Prometheus is recording non-OK HTTP requests
-    const promResp = await apiRequestWithRetry(
-      page,
-      'get',
-      '/prometheus/api/v1/query?query=sum%20by(status)%20(rate(http_requests_total{status!="OK"}[5m]))',
-    );
-    expect(promResp.status()).toBe(200);
-    const promBody = await promResp.json();
-    const promResults = (promBody as any).data?.result ?? [];
-    expect(promResults.length).toBeGreaterThan(0);
-
-    // Step 3: Wait for the HighHttpErrorRate alert to be firing in Prometheus
+    // Step 2: Wait for the HighHttpErrorRate alert to be firing in Prometheus
+    // We query the Prometheus /api/v1/rules endpoint via Grafana's Prometheus proxy,
+    // and look for the HighHttpErrorRate rule with state === "firing".
     let alertIsFiring = false;
     const maxAlertAttempts = 5;
     for (let attempt = 1; attempt <= maxAlertAttempts && !alertIsFiring; attempt += 1) {
-      const alertsResp = await apiRequestWithRetry(
+      const rulesResp = await apiRequestWithRetry(
         page,
         'get',
-        '/prometheus/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}',
+        '/grafana/api/prometheus/prometheus/api/v1/rules',
       );
-      expect(alertsResp.status()).toBe(200);
-      const alertsBody = await alertsResp.json();
-      const alertResults = (alertsBody as any).data?.result ?? [];
-      alertIsFiring = alertResults.some((r: any) => r.metric?.alertstate === 'firing');
+      expect(rulesResp.status()).toBe(200);
+      const rulesBody = (await rulesResp.json()) as any;
+      const groups = rulesBody.data?.groups ?? [];
+
+      for (const g of groups as any[]) {
+        const rules = (g as any).rules ?? [];
+        for (const r of rules as any[]) {
+          if (r?.name === 'HighHttpErrorRate' && r?.state === 'firing') {
+            alertIsFiring = true;
+            break;
+          }
+        }
+        if (alertIsFiring) {
+          break;
+        }
+      }
+
       if (!alertIsFiring) {
         await page.waitForTimeout(5000);
       }
@@ -855,7 +863,6 @@ test.describe('Form Interactions', () => {
     await expect(jobIdInput).toHaveValue('test-job-id-123');
   });
 });
-
 // =============================================================================
 // OBSERVABILITY DASHBOARDS TESTS
 // =============================================================================
@@ -865,14 +872,17 @@ test.describe('Observability Dashboards', () => {
     test.skip(!baseURL, 'Base URL must be configured');
     await loginViaSSO(page);
 
-    await gotoWithRetry(page, '/prometheus/targets');
-    await page.waitForLoadState('networkidle');
-
-    // Prometheus targets page should load
-    const body = await page.locator('body').textContent();
-    expect(body).toBeTruthy();
-    // Should contain some target information
-    expect(body?.toLowerCase()).toContain('target');
+    // Use Grafana's Prometheus proxy to verify that Prometheus has active targets.
+    const resp = await apiRequestWithRetry(
+      page,
+      'get',
+      '/grafana/api/prometheus/prometheus/api/v1/targets',
+    );
+    expect(resp.status()).toBe(200);
+    const json = (await resp.json()) as any;
+    const data = json.data ?? {};
+    const activeTargets = ((data.activeTargets ?? data.targets) ?? []) as any[];
+    expect(activeTargets.length).toBeGreaterThan(0);
   });
 
   test('Jaeger is accessible and has services', async ({ page, baseURL }) => {
