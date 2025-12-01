@@ -371,7 +371,7 @@ func TestRateLimitCache_SetMaxFailures(t *testing.T) {
 	assert.Equal(t, 10, cache.maxFailures)
 }
 
-func TestRateLimitCache_ConcurrentAccess(t *testing.T) {
+func TestRateLimitCache_ConcurrentAccess(_ *testing.T) {
 	cache := NewRateLimitCache()
 	defer cache.Stop()
 
@@ -379,7 +379,7 @@ func TestRateLimitCache_ConcurrentAccess(t *testing.T) {
 
 	// Concurrent writers
 	for i := 0; i < 10; i++ {
-		go func(id int) {
+		go func(_ int) {
 			for j := 0; j < 50; j++ {
 				cache.RecordFailure("model-concurrent")
 				cache.RecordSuccess("model-concurrent")
@@ -391,7 +391,7 @@ func TestRateLimitCache_ConcurrentAccess(t *testing.T) {
 
 	// Concurrent readers
 	for i := 0; i < 10; i++ {
-		go func(id int) {
+		go func(_ int) {
 			for j := 0; j < 50; j++ {
 				cache.IsModelBlocked("model-concurrent")
 				cache.GetBlockedModels()

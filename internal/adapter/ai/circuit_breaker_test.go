@@ -24,8 +24,11 @@ func TestCircuitBreaker_ShouldAttempt(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "closed circuit allows attempts",
-			setup:    func(cb *CircuitBreaker) {},
+			name: "closed circuit allows attempts",
+			setup: func(cb *CircuitBreaker) {
+				// no-op setup; reference cb to satisfy linters
+				_ = cb
+			},
 			expected: true,
 		},
 		{

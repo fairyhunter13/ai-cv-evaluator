@@ -444,6 +444,8 @@ test.describe('Alerting Flow', () => {
     test.skip(!baseURL, 'Base URL must be configured');
     await loginViaSSO(page);
 
+    await clearMailpitMessages(page);
+
     // Navigate to Mailpit
     await gotoWithRetry(page, '/mailpit/');
     await page.waitForLoadState('domcontentloaded');
@@ -457,6 +459,8 @@ test.describe('Alerting Flow', () => {
     test.skip(!baseURL, 'Base URL must be configured');
     test.setTimeout(180000); // 3 minutes for alerting flow
     await loginViaSSO(page);
+
+    await clearMailpitMessages(page);
 
     // Note: We don't clear Mailpit messages here because Grafana's repeat_interval means
     // it won't send duplicate emails immediately. Instead we verify emails exist from the

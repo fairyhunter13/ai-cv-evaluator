@@ -239,7 +239,7 @@ func TestModelCache_Clear(t *testing.T) {
 	assert.False(t, found)
 }
 
-func TestModelCache_ConcurrentAccess(t *testing.T) {
+func TestModelCache_ConcurrentAccess(_ *testing.T) {
 	mc := NewModelCache(1000, 5*time.Minute)
 	var wg sync.WaitGroup
 
