@@ -1,0 +1,34 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: ai-cv-evaluator-http-alerts
+    folder: "AI CV Evaluator"
+    interval: 60s
+    rules:
+      - uid: high-http-error-rate
+        title: High HTTP Error Rate (Grafana)
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              editorMode: code
+              expr: ALERTS{alertname="HighHttpErrorRate", alertstate="firing"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: "High HTTP error rate detected (via Prometheus rule HighHttpErrorRate)"
+          description: "Prometheus alert HighHttpErrorRate is firing, indicating HTTP 4xx/5xx activity."
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+          source: prometheus-rule

@@ -9,11 +9,16 @@ package httpserver
 import (
 	"context"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/oklog/ulid/v2"
 	"go.opentelemetry.io/otel/trace"
+
+	obsctx "github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 )
 
 // Recoverer ensures panics don't crash the server and responds 500 safely.
@@ -38,6 +43,7 @@ func RequestID() func(http.Handler) http.Handler {
 			reqID := r.Header.Get("X-Request-Id")
 			if reqID == "" {
 				reqID = newReqID()
+				r.Header.Set("X-Request-Id", reqID)
 			}
 			spanCtx := trace.SpanContextFromContext(r.Context())
 			logger := slog.Default().With(
@@ -46,6 +52,8 @@ func RequestID() func(http.Handler) http.Handler {
 				slog.String("span_id", spanCtx.SpanID().String()),
 			)
 			ctx := context.WithValue(r.Context(), loggerKey{}, logger)
+			ctx = obsctx.ContextWithLogger(ctx, logger)
+			ctx = obsctx.ContextWithRequestID(ctx, reqID)
 			w.Header().Set("X-Request-Id", reqID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -83,8 +91,17 @@ func LoggerFrom(r *http.Request) *slog.Logger {
 	return slog.Default()
 }
 
+var ulidEntropy = ulid.Monotonic(rand.New(rand.NewSource(time.Now().UnixNano())), 0)
+
 func newReqID() string {
-	return time.Now().UTC().Format("20060102150405.000000000")
+	// Generate a ULID-based request ID for better global uniqueness and
+	// lexicographic ordering while remaining URL/header friendly.
+	id, err := ulid.New(ulid.Timestamp(time.Now()), ulidEntropy)
+	if err != nil {
+		// Fallback to timestamp-based ID if ULID generation fails for any reason.
+		return time.Now().UTC().Format("20060102150405.000000000")
+	}
+	return id.String()
 }
 
 // AccessLog logs basic request/response information at info level.
@@ -97,15 +114,37 @@ func AccessLog() func(http.Handler) http.Handler {
 			dur := time.Since(start)
 			spanCtx := trace.SpanContextFromContext(r.Context())
 			lg := LoggerFrom(r)
-			lg.Info("http_access",
+			// Derive the same route pattern used by Prometheus metrics so that
+			// Loki route labels can line up with the Prometheus route label.
+			var route string
+			if rc := chi.RouteContext(r.Context()); rc != nil {
+				route = rc.RoutePattern()
+			}
+			if route == "" {
+				route = r.URL.Path
+			}
+			statusCode := ww.Status()
+			statusText := http.StatusText(statusCode)
+			attrs := []slog.Attr{
 				slog.String("method", r.Method),
 				slog.String("path", r.URL.Path),
-				slog.Int("status", ww.Status()),
+				slog.String("route", route),
+				slog.Int("status", statusCode),
+				slog.String("status_text", statusText),
 				slog.Duration("duration_ms", dur),
 				slog.String("request_id", r.Header.Get("X-Request-Id")),
 				slog.String("trace_id", spanCtx.TraceID().String()),
 				slog.String("span_id", spanCtx.SpanID().String()),
-			)
+			}
+			// Log at appropriate level based on status code
+			switch {
+			case statusCode >= 500:
+				lg.LogAttrs(r.Context(), slog.LevelError, "http_access", attrs...)
+			case statusCode >= 400:
+				lg.LogAttrs(r.Context(), slog.LevelWarn, "http_access", attrs...)
+			default:
+				lg.LogAttrs(r.Context(), slog.LevelInfo, "http_access", attrs...)
+			}
 		})
 	}
 }

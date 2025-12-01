@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Pinger is the minimal interface for a database pool capable of Ping.
@@ -45,6 +46,12 @@ func BuildReadinessChecks(cfg config.Config, pool Pinger) (
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return nil
 		}
+		if span := ctx.Value("otel.span"); span != nil {
+			// Best-effort: attach status code as attribute if span is present in context
+			if s, ok := span.(interface{ SetAttributes(...attribute.KeyValue) }); ok {
+				s.SetAttributes(attribute.Int("readiness.qdrant.status_code", resp.StatusCode))
+			}
+		}
 		return fmt.Errorf("qdrant status %d", resp.StatusCode)
 	}
 	tikaCheck := func(ctx context.Context) error {
@@ -60,6 +67,11 @@ func BuildReadinessChecks(cfg config.Config, pool Pinger) (
 		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return nil
+		}
+		if span := ctx.Value("otel.span"); span != nil {
+			if s, ok := span.(interface{ SetAttributes(...attribute.KeyValue) }); ok {
+				s.SetAttributes(attribute.Int("readiness.tika.status_code", resp.StatusCode))
+			}
 		}
 		return fmt.Errorf("tika status %d", resp.StatusCode)
 	}

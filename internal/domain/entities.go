@@ -187,6 +187,9 @@ type EvaluateTaskPayload struct {
 	JobDescription string
 	StudyCaseBrief string
 	ScoringRubric  string
+	// RequestID carries the originating HTTP request identifier so that
+	// background workers can correlate their logs with the frontend request.
+	RequestID string
 }
 
 // Context is an alias to allow decoupling from std context in domain

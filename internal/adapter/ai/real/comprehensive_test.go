@@ -359,7 +359,7 @@ func TestCallGroqChat_Success(t *testing.T) {
 	}
 	client := NewTestClient(cfg)
 
-	result, err := client.callGroqChat(context.Background(), "system", "user", 100)
+	result, err := client.callGroqChat(context.Background(), cfg.GroqAPIKey, "system", "user", 100)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestCallGroqChat_TriesNextModelOn4xx(t *testing.T) {
 	}
 	client := NewTestClient(cfg)
 
-	result, err := client.callGroqChat(context.Background(), "system", "user", 100)
+	result, err := client.callGroqChat(context.Background(), cfg.GroqAPIKey, "system", "user", 100)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -448,7 +448,7 @@ func TestCallGroqChat_StopsOn429AndDoesNotTryOtherModels(t *testing.T) {
 	}
 	client := NewTestClient(cfg)
 
-	_, err := client.callGroqChat(context.Background(), "system", "user", 100)
+	_, err := client.callGroqChat(context.Background(), cfg.GroqAPIKey, "system", "user", 100)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -1020,8 +1020,8 @@ func TestNew_DevEnvironment(t *testing.T) {
 	}
 	client := New(cfg)
 
-	if client.chatHC.Timeout != 300*time.Second {
-		t.Fatalf("expected chat timeout to be 300s in dev, got %v", client.chatHC.Timeout)
+	if client.chatHC.Timeout != 90*time.Second {
+		t.Fatalf("expected chat timeout to be 90s in dev, got %v", client.chatHC.Timeout)
 	}
 	if client.embedHC.Timeout != 60*time.Second {
 		t.Fatalf("expected embed timeout to be 60s in dev, got %v", client.embedHC.Timeout)

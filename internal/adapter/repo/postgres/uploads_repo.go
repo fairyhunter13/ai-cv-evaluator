@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 )
@@ -40,6 +41,11 @@ func (r *UploadRepo) Create(ctx domain.Context, u domain.Upload) (string, error)
 	tracer := otel.Tracer("repo.uploads")
 	ctx, span := tracer.Start(ctx, "uploads.Create")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "INSERT"),
+		attribute.String("db.sql.table", "uploads"),
+	)
 	id := u.ID
 	if id == "" {
 		id = uuid.New().String()
@@ -57,6 +63,11 @@ func (r *UploadRepo) Get(ctx domain.Context, id string) (domain.Upload, error) {
 	tracer := otel.Tracer("repo.uploads")
 	ctx, span := tracer.Start(ctx, "uploads.Get")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.sql.table", "uploads"),
+	)
 	q := `SELECT id, type, text, filename, mime, size, created_at FROM uploads WHERE id=$1`
 	row := r.Pool.QueryRow(ctx, q, id)
 	var u domain.Upload
@@ -71,6 +82,11 @@ func (r *UploadRepo) Count(ctx domain.Context) (int64, error) {
 	tracer := otel.Tracer("repo.uploads")
 	ctx, span := tracer.Start(ctx, "uploads.Count")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "COUNT"),
+		attribute.String("db.sql.table", "uploads"),
+	)
 	q := `SELECT COUNT(*) FROM uploads`
 	row := r.Pool.QueryRow(ctx, q)
 	var count int64
@@ -85,6 +101,11 @@ func (r *UploadRepo) CountByType(ctx domain.Context, uploadType string) (int64, 
 	tracer := otel.Tracer("repo.uploads")
 	ctx, span := tracer.Start(ctx, "uploads.CountByType")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "COUNT"),
+		attribute.String("db.sql.table", "uploads"),
+	)
 	q := `SELECT COUNT(*) FROM uploads WHERE type = $1`
 	row := r.Pool.QueryRow(ctx, q, uploadType)
 	var count int64

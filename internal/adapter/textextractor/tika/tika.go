@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/pkg/textx"
 )
 
@@ -30,13 +31,24 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	obs        *observability.IntegratedObservableClient
 }
 
 // New constructs a Tika client with a default timeout.
 func New(baseURL string) *Client {
+	obsClient := observability.NewIntegratedObservableClient(
+		observability.ConnectionTypeTika,
+		observability.OperationTypeExtract,
+		baseURL,
+		"tika",
+		15*time.Second, // base timeout
+		5*time.Second,  // min timeout
+		60*time.Second, // max timeout
+	)
 	return &Client{
 		baseURL:    baseURL,
 		httpClient: &http.Client{Timeout: 15 * time.Second},
+		obs:        obsClient,
 	}
 }
 
@@ -88,37 +100,45 @@ func (c *Client) ExtractPath(ctx context.Context, fileName, path string) (string
 		return "", err
 	}
 
-	u := c.baseURL
-	if u == "" {
-		u = "http://localhost:9998"
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u+"/tika", bytes.NewReader(bfile))
-	if err != nil {
+	var result string
+	if err := c.obs.ExecuteWithMetrics(ctx, "extract", func(callCtx context.Context) error {
+		u := c.baseURL
+		if u == "" {
+			u = "http://localhost:9998"
+		}
+		req, err := http.NewRequestWithContext(callCtx, http.MethodPut, u+"/tika", bytes.NewReader(bfile))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Accept", "text/plain")
+		// Content-Type best-effort from extension
+		ct := contentTypeFromExt(filepath.Ext(fileName))
+		if ct != "" {
+			req.Header.Set("Content-Type", ct)
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("tika status %d", resp.StatusCode)
+		}
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		// Sanitize control characters and then collapse all whitespace to single spaces
+		sanitized := textx.SanitizeText(string(b))
+		fields := strings.Fields(sanitized)
+		result = strings.Join(fields, " ")
+		return nil
+	}); err != nil {
 		return "", err
-	}
-	req.Header.Set("Accept", "text/plain")
-	// Content-Type best-effort from extension
-	ct := contentTypeFromExt(filepath.Ext(fileName))
-	if ct != "" {
-		req.Header.Set("Content-Type", ct)
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("tika status %d", resp.StatusCode)
-	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	// Sanitize control characters and then collapse all whitespace to single spaces
-	sanitized := textx.SanitizeText(string(b))
-	fields := strings.Fields(sanitized)
-	return strings.Join(fields, " "), nil
+	return result, nil
 }
 
 func contentTypeFromExt(ext string) string {

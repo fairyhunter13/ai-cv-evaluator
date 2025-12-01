@@ -9,14 +9,16 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"go.opentelemetry.io/otel"
 
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
+	adapterobs "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	qdrantcli "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/vector/qdrant"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	obsctx "github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 )
 
 // HandleEvaluate processes an evaluation task with the given dependencies.
@@ -33,6 +35,10 @@ func HandleEvaluate(
 	tracer := otel.Tracer("queue.handler")
 	ctx, span := tracer.Start(ctx, "HandleEvaluate")
 	defer span.End()
+
+	lg := obsctx.LoggerFromContext(ctx)
+
+	start := time.Now()
 
 	// Check for nil dependencies
 	if jobs == nil {
@@ -51,18 +57,63 @@ func HandleEvaluate(
 	// FIXED: Add timeout handling for stuck processing jobs
 	// Create a timeout context for the entire evaluation process
 	timeoutDuration := 5 * time.Minute // 5 minutes timeout for AI processing
+	if v := os.Getenv("E2E_AI_TIMEOUT"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			timeoutDuration = d
+		}
+	}
 	evalCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
 	defer cancel()
 
+	// If the job is already in a terminal state, skip processing entirely. This
+	// prevents re-delivered messages for completed/failed jobs from being
+	// counted as additional failed evaluations in Prometheus metrics.
 	job, err := jobs.Get(ctx, payload.JobID)
-	if err == nil && job.Status == domain.JobCompleted {
-		slog.Info("job already completed; skipping evaluation", slog.String("job_id", payload.JobID))
+	if err == nil && (job.Status == domain.JobCompleted || job.Status == domain.JobFailed) {
+		slog.Info("job already in terminal state; skipping evaluation",
+			slog.String("job_id", payload.JobID),
+			slog.String("status", string(job.Status)))
 		return nil
 	}
 
+	// Track job processing lifecycle for Prometheus job-queue metrics. These
+	// metrics live in the worker process and are scraped via the worker's
+	// /metrics endpoint. We only start tracking after confirming the job is not
+	// already in a terminal state so that re-deliveries do not skew success
+	// rates.
+	adapterobs.StartProcessingJob("evaluate")
+	success := false
+	defer func() {
+		if success {
+			adapterobs.CompleteJob("evaluate")
+			return
+		}
+
+		adapterobs.FailJob("evaluate")
+
+		if jobs == nil {
+			return
+		}
+
+		j, err := jobs.Get(context.Background(), payload.JobID)
+		if err != nil {
+			lg.Error("failed to load job in deferred cleanup", slog.String("job_id", payload.JobID), slog.Any("error", err))
+			return
+		}
+		if j.Status != domain.JobProcessing {
+			return
+		}
+		msg := "job failed: evaluation did not reach a terminal state"
+		if err := jobs.UpdateStatus(context.Background(), payload.JobID, domain.JobFailed, &msg); err != nil {
+			lg.Error("failed to update job status to failed in deferred cleanup", slog.String("job_id", payload.JobID), slog.Any("error", err))
+		} else {
+			adapterobs.RecordJobFailureByCode("evaluate", classifyFailureCode(msg))
+		}
+	}()
+
 	// Update job status to processing
 	if err := jobs.UpdateStatus(evalCtx, payload.JobID, domain.JobProcessing, nil); err != nil {
-		slog.Error("failed to update job status to processing", slog.String("job_id", payload.JobID), slog.Any("error", err))
+		lg.Error("failed to update job status to processing", slog.String("job_id", payload.JobID), slog.Any("error", err))
 		return fmt.Errorf("update job status: %w", err)
 	}
 
@@ -77,37 +128,47 @@ func HandleEvaluate(
 			return
 		}
 
-		slog.Warn("job processing timeout exceeded, marking as failed",
+		lg.Warn("job processing timeout exceeded, marking as failed",
 			slog.String("job_id", payload.JobID),
 			slog.Duration("timeout", timeoutDuration))
 
 		// Try to update job status to failed
 		timeoutMsg := fmt.Sprintf("job processing timeout after %v", timeoutDuration)
 		if err := jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, &timeoutMsg); err != nil {
-			slog.Error("failed to update job status to failed after timeout",
+			lg.Error("failed to update job status to failed after timeout",
 				slog.String("job_id", payload.JobID),
 				slog.Any("error", err))
+			return
 		}
+		code := classifyFailureCode(timeoutMsg)
+		adapterobs.RecordJobFailureByCode("evaluate", code)
+		lg.Info("job failure recorded",
+			slog.String("job_id", payload.JobID),
+			slog.String("error_code", code))
 	}()
 
 	// Get CV content
 	cvUpload, err := uploads.Get(evalCtx, payload.CVID)
 	if err != nil {
-		slog.Error("failed to get CV content", slog.String("job_id", payload.JobID), slog.String("cv_id", payload.CVID), slog.Any("error", err))
-		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr("failed to get CV content"))
+		lg.Error("failed to get CV content", slog.String("job_id", payload.JobID), slog.String("cv_id", payload.CVID), slog.Any("error", err))
+		msg := "failed to get CV content"
+		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr(msg))
+		adapterobs.RecordJobFailureByCode("evaluate", classifyFailureCode(msg))
 		return fmt.Errorf("get CV content: %w", err)
 	}
 
 	// Get project content
 	projectUpload, err := uploads.Get(evalCtx, payload.ProjectID)
 	if err != nil {
-		slog.Error("failed to get project content", slog.String("job_id", payload.JobID), slog.String("project_id", payload.ProjectID), slog.Any("error", err))
-		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr("failed to get project content"))
+		lg.Error("failed to get project content", slog.String("job_id", payload.JobID), slog.String("project_id", payload.ProjectID), slog.Any("error", err))
+		msg := "failed to get project content"
+		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr(msg))
+		adapterobs.RecordJobFailureByCode("evaluate", classifyFailureCode(msg))
 		return fmt.Errorf("get project content: %w", err)
 	}
 
 	// Perform enhanced AI evaluation with retry logic and model fallback
-	slog.Info("performing enhanced AI evaluation with retry logic", slog.String("job_id", payload.JobID))
+	lg.Info("performing enhanced AI evaluation with retry logic", slog.String("job_id", payload.JobID))
 	handler := NewIntegratedEvaluationHandler(ai, q)
 
 	// Retry evaluation with exponential backoff
@@ -120,11 +181,11 @@ func HandleEvaluate(
 
 		result, lastErr = handler.PerformIntegratedEvaluation(evalCtx, cvUpload.Text, projectUpload.Text, payload.JobDescription, payload.StudyCaseBrief, payload.ScoringRubric, payload.JobID)
 		if lastErr == nil {
-			slog.Info("evaluation succeeded", slog.String("job_id", payload.JobID), slog.Int("attempt", attempt))
+			lg.Info("evaluation succeeded", slog.String("job_id", payload.JobID), slog.Int("attempt", attempt))
 			break
 		}
 
-		slog.Warn("evaluation attempt failed",
+		lg.Warn("evaluation attempt failed",
 			slog.String("job_id", payload.JobID),
 			slog.Int("attempt", attempt),
 			slog.Int("max_retries", maxRetries),
@@ -133,13 +194,13 @@ func HandleEvaluate(
 		// If this is not the last attempt, wait before retrying
 		if attempt < maxRetries {
 			backoffDuration := time.Duration(attempt) * 2 * time.Second
-			slog.Info("waiting before retry", slog.String("job_id", payload.JobID), slog.Duration("backoff", backoffDuration))
+			lg.Info("waiting before retry", slog.String("job_id", payload.JobID), slog.Duration("backoff", backoffDuration))
 			time.Sleep(backoffDuration)
 		}
 	}
 
 	if lastErr != nil {
-		slog.Error("enhanced evaluation failed after all retries",
+		lg.Error("enhanced evaluation failed after all retries",
 			slog.String("job_id", payload.JobID),
 			slog.Int("attempts", maxRetries),
 			slog.Any("error", lastErr))
@@ -182,26 +243,47 @@ func HandleEvaluate(
 		}
 
 		_ = jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, ptr(msg))
+		code := classifyFailureCode(msg)
+		adapterobs.RecordJobFailureByCode("evaluate", code)
+		slog.Info("job failure recorded",
+			slog.String("job_id", payload.JobID),
+			slog.String("error_code", code))
 		return fmt.Errorf("enhanced evaluation failed after %d attempts: %w", maxRetries, lastErr)
 	}
 
 	// Store the result FIRST
-	slog.Info("storing evaluation result", slog.String("job_id", payload.JobID))
+	lg.Info("storing evaluation result", slog.String("job_id", payload.JobID))
 	if err := results.Upsert(ctx, result); err != nil {
-		slog.Error("failed to store result", slog.String("job_id", payload.JobID), slog.Any("error", err))
+		lg.Error("failed to store result", slog.String("job_id", payload.JobID), slog.Any("error", err))
+		failMsg := "failed to store evaluation result"
+		if jobs != nil {
+			if errStatus := jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, &failMsg); errStatus != nil {
+				lg.Error("failed to update job status to failed after store error", slog.String("job_id", payload.JobID), slog.Any("error", errStatus))
+			}
+		}
+		adapterobs.RecordJobFailureByCode("evaluate", classifyFailureCode(failMsg))
 		return fmt.Errorf("store result: %w", err)
 	}
-	slog.Info("evaluation result stored successfully", slog.String("job_id", payload.JobID))
+	lg.Info("evaluation result stored successfully", slog.String("job_id", payload.JobID))
 
 	// Update job status to completed AFTER storing result
-	slog.Info("updating job status to completed", slog.String("job_id", payload.JobID))
+	lg.Info("updating job status to completed", slog.String("job_id", payload.JobID))
 	if err := jobs.UpdateStatus(ctx, payload.JobID, domain.JobCompleted, nil); err != nil {
-		slog.Error("failed to update job status to completed", slog.String("job_id", payload.JobID), slog.Any("error", err))
+		lg.Error("failed to update job status to completed", slog.String("job_id", payload.JobID), slog.Any("error", err))
+		failMsg := "failed to mark job as completed after evaluation"
+		if jobs != nil {
+			if errStatus := jobs.UpdateStatus(ctx, payload.JobID, domain.JobFailed, &failMsg); errStatus != nil {
+				lg.Error("failed to update job status to failed after completion error", slog.String("job_id", payload.JobID), slog.Any("error", errStatus))
+			}
+		}
+		adapterobs.RecordJobFailureByCode("evaluate", classifyFailureCode(failMsg))
 		return fmt.Errorf("update job status: %w", err)
 	}
-	slog.Info("job status updated to completed successfully", slog.String("job_id", payload.JobID))
-	observability.CompleteJob("evaluate")
-	slog.Info("job completed", slog.String("job_id", payload.JobID))
+	lg.Info("job status updated to completed successfully", slog.String("job_id", payload.JobID))
+	success = true
+	lg.Info("job completed",
+		slog.String("job_id", payload.JobID),
+		slog.Duration("processing_duration", time.Since(start)))
 	return nil
 }
 

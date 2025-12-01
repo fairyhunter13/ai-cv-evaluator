@@ -16,10 +16,12 @@ import (
 
 // Model represents a model from OpenRouter API
 type Model struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Pricing     Pricing `json:"pricing"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Description      string            `json:"description"`
+	Pricing          Pricing           `json:"pricing"`
+	ContextLength    float64           `json:"context_length"`
+	PerRequestLimits *PerRequestLimits `json:"per_request_limits"`
 }
 
 // Pricing represents the pricing information for a model
@@ -28,6 +30,12 @@ type Pricing struct {
 	Completion string `json:"completion"`
 	Request    string `json:"request"`
 	Image      string `json:"image"`
+}
+
+// PerRequestLimits represents per-request token limits for a model.
+type PerRequestLimits struct {
+	PromptTokens     float64 `json:"prompt_tokens"`
+	CompletionTokens float64 `json:"completion_tokens"`
 }
 
 // OpenRouterResponse represents the response from OpenRouter API
@@ -226,6 +234,24 @@ func (s *Service) filterFreeModels(models []Model) []Model {
 		slog.Int("free_models", len(freeModels)),
 		slog.Int("paid_models", len(paidModels)))
 
+	// Order free models by their estimated capacity (per-request limits / context
+	// length) and then by effective price. This ensures that higher-capacity, more
+	// suitable free models are preferred when the AI client performs enhanced
+	// model switching, while still spreading load across all eligible free
+	// models.
+	if len(freeModels) > 1 {
+		sort.SliceStable(freeModels, func(i, j int) bool {
+			ci := capacityScore(freeModels[i])
+			cj := capacityScore(freeModels[j])
+			if ci != cj {
+				return ci > cj
+			}
+			costi := effectivePrice(freeModels[i].Pricing)
+			costj := effectivePrice(freeModels[j].Pricing)
+			return costi < costj
+		})
+	}
+
 	if len(paidModels) > 0 {
 		slog.Debug("paid models excluded",
 			slog.String("paid_model_ids", fmt.Sprintf("%v", paidModels)))
@@ -420,6 +446,31 @@ func parsePrice(v string) float64 {
 		return 0
 	}
 	return f
+}
+
+// capacityScore returns a heuristic capacity score for a model based on its
+// per-request token limits and context length. Higher scores indicate models
+// that can handle larger prompts/completions and are therefore better suited
+// for heavy evaluation workloads.
+func capacityScore(m Model) float64 {
+	var perReq float64
+	if m.PerRequestLimits != nil {
+		perReq = m.PerRequestLimits.PromptTokens + m.PerRequestLimits.CompletionTokens
+	}
+	if perReq <= 0 && m.ContextLength > 0 {
+		perReq = m.ContextLength
+	}
+	return perReq
+}
+
+// effectivePrice returns a comparable price score for a model based on its
+// request or prompt/completion pricing. Lower scores indicate cheaper models.
+func effectivePrice(p Pricing) float64 {
+	req := parsePrice(p.Request)
+	if req > 0 {
+		return req
+	}
+	return parsePrice(p.Prompt) + parsePrice(p.Completion)
 }
 
 func minInt(a, b int) int {

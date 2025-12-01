@@ -13,6 +13,8 @@ All documentation is organized in the [`docs/`](docs/) directory:
 - **[🔄 Migration Status](docs/migration/MIGRATION_SUMMARY.md)** - Current migration status
 - **[📁 Directory Structure](docs/DIRECTORY_STRUCTURE.md)** - Project structure overview
 
+- **[🌐 Provider Documentation](docs/providers/README.md)** - External AI provider APIs, models, and rate limits used by this service
+
 ## Quick Start
 
 - Prereqs: Docker, Docker Compose, Go 1.24+, Node.js 18+

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
@@ -31,7 +32,21 @@ func NewRetryManager(producer, dlqProducer *Producer, jobs domain.JobRepository,
 
 // RetryJob attempts to retry a failed job
 func (rm *RetryManager) RetryJob(ctx context.Context, jobID string, retryInfo *domain.RetryInfo, payload domain.EvaluateTaskPayload) error {
-	// Check if job should be retried
+	// For upstream rate-limit and timeout failures, bypass immediate inline
+	// retries and route the job directly to DLQ so that the DLQ consumer can
+	// enforce a cooling window before requeueing. This prevents hammering AI
+	// providers that have already signaled backpressure or long latencies.
+	code := classifyFailureCode(retryInfo.LastError)
+	if code == "UPSTREAM_RATE_LIMIT" || code == "UPSTREAM_TIMEOUT" {
+		reason := retryInfo.LastError
+		slog.Info("routing upstream failure to DLQ for cooldown",
+			slog.String("job_id", jobID),
+			slog.String("error_code", code),
+			slog.String("last_error", retryInfo.LastError))
+		return rm.moveToDLQ(ctx, jobID, payload, retryInfo, reason)
+	}
+
+	// Check if job should be retried under generic retry policy
 	if !retryInfo.ShouldRetry(fmt.Errorf("%s", retryInfo.LastError), rm.config) {
 		slog.Info("job should not be retried, moving to DLQ",
 			slog.String("job_id", jobID),
@@ -176,7 +191,41 @@ func (rm *RetryManager) ProcessDLQJob(ctx context.Context, dlqJob domain.DLQJob)
 		return fmt.Errorf("DLQ job cannot be reprocessed")
 	}
 
-	// Update job status to queued
+	// For upstream rate-limit and timeout failures, enforce a cooling window
+	// before reprocessing. This prevents immediately hammering upstream
+	// providers that have signaled temporary rate limiting or produced repeated
+	// timeouts.
+	loweredReason := strings.ToLower(dlqJob.FailureReason)
+	loweredError := strings.ToLower(dlqJob.RetryInfo.LastError)
+	combined := loweredReason + " " + loweredError
+	isRateLimitOrTimeout := strings.Contains(combined, "rate limit") ||
+		strings.Contains(combined, "timeout") ||
+		strings.Contains(combined, "deadline exceeded")
+	const rateLimitDLQCooldown = 30 * time.Second
+	if isRateLimitOrTimeout {
+		cooldownUntil := dlqJob.MovedToDLQAt.Add(rateLimitDLQCooldown)
+		if delay := time.Until(cooldownUntil); delay > 0 {
+			slog.Info("DLQ cooling in effect for upstream rate limit/timeout",
+				slog.String("job_id", dlqJob.JobID),
+				slog.Duration("cooling_remaining", delay))
+			go func(job domain.DLQJob, d time.Duration) {
+				time.Sleep(d)
+				if err := rm.requeueFromDLQ(context.Background(), job); err != nil {
+					slog.Error("failed to requeue cooled DLQ job",
+						slog.String("job_id", job.JobID),
+						slog.Any("error", err))
+				}
+			}(dlqJob, delay)
+			return nil
+		}
+	}
+
+	return rm.requeueFromDLQ(ctx, dlqJob)
+}
+
+// requeueFromDLQ updates job status and enqueues the original payload back to the
+// main evaluate topic for reprocessing.
+func (rm *RetryManager) requeueFromDLQ(ctx context.Context, dlqJob domain.DLQJob) error {
 	if err := rm.jobs.UpdateStatus(ctx, dlqJob.JobID, domain.JobQueued, nil); err != nil {
 		slog.Error("failed to update job status for DLQ reprocessing",
 			slog.String("job_id", dlqJob.JobID),
@@ -184,7 +233,6 @@ func (rm *RetryManager) ProcessDLQJob(ctx context.Context, dlqJob domain.DLQJob)
 		return fmt.Errorf("update job status for DLQ reprocessing: %w", err)
 	}
 
-	// Enqueue job for reprocessing
 	_, err := rm.producer.EnqueueEvaluate(ctx, dlqJob.OriginalPayload)
 	if err != nil {
 		slog.Error("failed to enqueue DLQ job for reprocessing",

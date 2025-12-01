@@ -105,3 +105,83 @@ jobs:
         run: make verify-test-placement
       
       # E2E tests on tags are handled in the deploy workflow's e2e-verify job
+
+  playwright-e2e:
+    needs: build-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SOPS and AGE
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age sops
+
+      - name: Prepare SOPS age key
+        if: ${{ secrets.SOPS_AGE_KEY != '' }}
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          printf %s "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+
+      - name: Decrypt env for CI (.env from secrets/env.sops.yaml)
+        if: ${{ secrets.SOPS_AGE_KEY != '' }}
+        run: make decrypt-env
+
+      - name: Export .env to job environment
+        if: ${{ secrets.SOPS_AGE_KEY != '' }}
+        run: |
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            case "$line" in \#*) continue;; esac
+            key="${line%%=*}"; val="${line#*=}"; echo "$key=$val" >> $GITHUB_ENV
+          done < .env
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright and frontend dependencies
+        run: |
+          cd admin-frontend
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Start observability stack (docker-compose)
+        run: |
+          docker compose up -d
+
+      - name: Wait for backend readiness
+        run: |
+          set -e
+          ATTEMPTS=60
+          for i in $(seq 1 $ATTEMPTS); do
+            if curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "Waiting for backend readyz... ($i/$ATTEMPTS)"
+            sleep 2
+          done
+          echo "Backend failed to become ready in time"
+          docker compose ps
+          exit 1
+
+      - name: Run Playwright SSO + Grafana E2E spec
+        run: |
+          cd admin-frontend
+          npm run test:e2e -- tests/sso-gate.spec.ts
+
+      - name: Dump docker logs on failure
+        if: failure()
+        run: |
+          docker compose logs
+
+      - name: Teardown observability stack
+        if: always()
+        run: |
+          docker compose down -v

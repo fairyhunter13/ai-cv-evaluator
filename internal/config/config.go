@@ -11,25 +11,33 @@ import (
 
 // Config holds all application configuration parsed from environment variables.
 type Config struct {
-	AppEnv                string        `env:"APP_ENV" envDefault:"dev"`
-	Port                  int           `env:"PORT" envDefault:"8080"`
-	DBURL                 string        `env:"DB_URL" envDefault:"postgres://postgres:postgres@localhost:5432/app?sslmode=disable"`
-	KafkaBrokers          []string      `env:"KAFKA_BROKERS" envSeparator:"," envDefault:"localhost:19092"`
-	OpenRouterAPIKey      string        `env:"OPENROUTER_API_KEY"`
-	OpenRouterAPIKey2     string        `env:"OPENROUTER_API_KEY_2"`
-	OpenRouterBaseURL     string        `env:"OPENROUTER_BASE_URL" envDefault:"https://openrouter.ai/api/v1"`
-	OpenRouterReferer     string        `env:"OPENROUTER_REFERER"`
-	OpenRouterTitle       string        `env:"OPENROUTER_TITLE" envDefault:"AI CV Evaluator"`
-	OpenRouterMinInterval time.Duration `env:"OPENROUTER_MIN_INTERVAL" envDefault:"5s"`
+	AppEnv            string   `env:"APP_ENV" envDefault:"dev"`
+	Port              int      `env:"PORT" envDefault:"8080"`
+	DBURL             string   `env:"DB_URL" envDefault:"postgres://postgres:postgres@localhost:5432/app?sslmode=disable"`
+	KafkaBrokers      []string `env:"KAFKA_BROKERS" envSeparator:"," envDefault:"localhost:19092"`
+	OpenRouterAPIKey  string   `env:"OPENROUTER_API_KEY"`
+	OpenRouterAPIKey2 string   `env:"OPENROUTER_API_KEY_2"`
+	OpenRouterBaseURL string   `env:"OPENROUTER_BASE_URL" envDefault:"https://openrouter.ai/api/v1"`
+	OpenRouterReferer string   `env:"OPENROUTER_REFERER"`
+	OpenRouterTitle   string   `env:"OPENROUTER_TITLE" envDefault:"AI CV Evaluator"`
+	// OpenRouterMinInterval controls the minimal spacing between OpenRouter calls
+	// per process. Default is tuned for real-world usage and E2E tests without
+	// requiring manual environment overrides.
+	OpenRouterMinInterval time.Duration `env:"OPENROUTER_MIN_INTERVAL" envDefault:"1s"`
 	// FreeModelsRefresh: how often to refresh the list of available free models
 	FreeModelsRefresh time.Duration `env:"FREE_MODELS_REFRESH" envDefault:"1h"`
 	OpenAIAPIKey      string        `env:"OPENAI_API_KEY"`
 	OpenAIBaseURL     string        `env:"OPENAI_BASE_URL" envDefault:"https://api.openai.com/v1"`
 	EmbeddingsModel   string        `env:"EMBEDDINGS_MODEL" envDefault:"text-embedding-3-small"`
 	GroqAPIKey        string        `env:"GROQ_API_KEY"`
+	GroqAPIKey2       string        `env:"GROQ_API_KEY_2"`
 	GroqBaseURL       string        `env:"GROQ_BASE_URL" envDefault:"https://api.groq.com/openai/v1"`
 	QdrantURL         string        `env:"QDRANT_URL" envDefault:"http://localhost:6333"`
 	QdrantAPIKey      string        `env:"QDRANT_API_KEY"`
+	// Redis configuration for global rate limiting and other shared state.
+	RedisAddr     string `env:"REDIS_ADDR" envDefault:"redis:6379"`
+	RedisPassword string `env:"REDIS_PASSWORD" envDefault:""`
+	RedisDB       int    `env:"REDIS_DB" envDefault:"0"`
 	// TikaURL specifies the base URL for the Apache Tika server used for text extraction
 	TikaURL         string `env:"TIKA_URL" envDefault:"http://tika:9998"`
 	OTLPEndpoint    string `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:""`
@@ -56,10 +64,11 @@ type Config struct {
 	// its minimal call interval by this factor so that aggregate QPS across all
 	// workers stays within free-tier limits.
 	AIWorkerReplicas int `env:"AI_WORKER_REPLICAS" envDefault:"1"`
-	// AI Backoff Configuration
-	AIBackoffMaxElapsedTime  time.Duration `env:"AI_BACKOFF_MAX_ELAPSED_TIME" envDefault:"180s"`
-	AIBackoffInitialInterval time.Duration `env:"AI_BACKOFF_INITIAL_INTERVAL" envDefault:"2s"`
-	AIBackoffMaxInterval     time.Duration `env:"AI_BACKOFF_MAX_INTERVAL" envDefault:"20s"`
+	// AI Backoff Configuration (defaults tuned for real-world usage and E2E
+	// tests to avoid excessively long retries while still allowing resilience).
+	AIBackoffMaxElapsedTime  time.Duration `env:"AI_BACKOFF_MAX_ELAPSED_TIME" envDefault:"30s"`
+	AIBackoffInitialInterval time.Duration `env:"AI_BACKOFF_INITIAL_INTERVAL" envDefault:"1s"`
+	AIBackoffMaxInterval     time.Duration `env:"AI_BACKOFF_MAX_INTERVAL" envDefault:"5s"`
 	AIBackoffMultiplier      float64       `env:"AI_BACKOFF_MULTIPLIER" envDefault:"1.5"`
 	// Queue Consumer Configuration
 	ConsumerMaxConcurrency int `env:"CONSUMER_MAX_CONCURRENCY" envDefault:"1"`

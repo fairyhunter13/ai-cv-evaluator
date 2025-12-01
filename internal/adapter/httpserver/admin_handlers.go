@@ -3,12 +3,15 @@ package httpserver
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
-    "strings"
-    "time"
+	"strings"
+	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/go-chi/chi/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // AdminServer handles admin API routes
@@ -32,39 +35,52 @@ func NewAdminServer(cfg config.Config, server *Server) (*AdminServer, error) {
 
 // AdminTokenHandler issues a JWT for admin APIs (alternative to cookie sessions)
 func (a *AdminServer) AdminTokenHandler() http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        // Support form or JSON payload
-        var username, password string
-        ct := r.Header.Get("Content-Type")
-        if strings.HasPrefix(strings.ToLower(ct), "application/json") {
-            var body map[string]string
-            _ = json.NewDecoder(r.Body).Decode(&body)
-            username = strings.TrimSpace(body["username"])
-            password = strings.TrimSpace(body["password"])
-        } else {
-            username = strings.TrimSpace(r.FormValue("username"))
-            password = strings.TrimSpace(r.FormValue("password"))
-        }
+	return func(w http.ResponseWriter, r *http.Request) {
+		tracer := otel.Tracer("http.admin")
+		_, span := tracer.Start(r.Context(), "AdminServer.AdminTokenHandler")
+		defer span.End()
 
-        if username != a.cfg.AdminUsername || password != a.cfg.AdminPassword {
-            http.Error(w, "Invalid credentials", http.StatusUnauthorized)
-            return
-        }
+		lg := LoggerFrom(r)
+		// Support form or JSON payload
+		var username, password string
+		ct := r.Header.Get("Content-Type")
+		if strings.HasPrefix(strings.ToLower(ct), "application/json") {
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			username = strings.TrimSpace(body["username"])
+			password = strings.TrimSpace(body["password"])
+		} else {
+			username = strings.TrimSpace(r.FormValue("username"))
+			password = strings.TrimSpace(r.FormValue("password"))
+		}
 
-        // Issue JWT (24h)
-        token, err := a.sessionManager.GenerateJWT(username, 24*time.Hour)
-        if err != nil {
-            http.Error(w, "Failed to issue token", http.StatusInternalServerError)
-            return
-        }
-        w.Header().Set("Content-Type", "application/json")
-        w.WriteHeader(http.StatusOK)
-        _ = json.NewEncoder(w).Encode(map[string]any{
-            "token":    token,
-            "username": username,
-            "expires":  time.Now().Add(24 * time.Hour).Unix(),
-        })
-    }
+		if username != a.cfg.AdminUsername || password != a.cfg.AdminPassword {
+			span.SetAttributes(attribute.Bool("auth.success", false))
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			lg.Error("invalid credentials", slog.Any("username", username))
+			return
+		}
+
+		// Issue JWT (24h)
+		token, err := a.sessionManager.GenerateJWT(username, 24*time.Hour)
+		if err != nil {
+			http.Error(w, "Failed to issue token", http.StatusInternalServerError)
+			lg.Error("failed to issue token", slog.Any("error", err))
+			return
+		}
+		span.SetAttributes(
+			attribute.Bool("auth.success", true),
+			attribute.String("admin.username", username),
+		)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"token":    token,
+			"username": username,
+			"expires":  time.Now().Add(24 * time.Hour).Unix(),
+		})
+		lg.Info("issued token", slog.Any("username", username))
+	}
 }
 
 // AdminLogoutHandler removed: JWT is stateless; clients can discard token.
@@ -72,50 +88,60 @@ func (a *AdminServer) AdminTokenHandler() http.HandlerFunc {
 // AdminStatusHandler returns dashboard statistics
 func (a *AdminServer) AdminStatusHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-        // Prefer SSO header injected by reverse proxy (Authentik outpost)
-        username := getSSOUsernameFromHeaders(r)
-        if username == "" {
-            // Fallback to Bearer JWT
-            authz := strings.TrimSpace(r.Header.Get("Authorization"))
-            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-            token := strings.TrimSpace(authz[len("Bearer "):])
-            sub, err := a.sessionManager.ValidateJWT(token)
-            if err != nil || sub == "" {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-            username = sub
-        }
+		tracer := otel.Tracer("http.admin")
+		_, span := tracer.Start(r.Context(), "AdminServer.AdminStatusHandler")
+		defer span.End()
+
+		lg := LoggerFrom(r)
+		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		username := getSSOUsernameFromHeaders(r)
+		if username == "" {
+			// Fallback to Bearer JWT
+			authz := strings.TrimSpace(r.Header.Get("Authorization"))
+			if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				lg.Error("unauthorized", slog.Any("authz", authz))
+				return
+			}
+			token := strings.TrimSpace(authz[len("Bearer "):])
+			sub, err := a.sessionManager.ValidateJWT(token)
+			if err != nil || sub == "" {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				lg.Error("invalid token", slog.Any("error", err))
+				return
+			}
+			username = sub
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-        _, _ = w.Write([]byte(`{"status": "authenticated", "username": "` + username + `"}`))
+		_, _ = w.Write([]byte(`{"status": "authenticated", "username": "` + username + `"}`))
 	}
 }
 
 // AdminStatsHandler returns dashboard statistics
 func (a *AdminServer) AdminStatsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-        // Prefer SSO header injected by reverse proxy (Authentik outpost)
-        if getSSOUsernameFromHeaders(r) == "" {
-            // Fallback to Bearer JWT
-            authz := strings.TrimSpace(r.Header.Get("Authorization"))
-            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-            token := strings.TrimSpace(authz[len("Bearer "):])
-            if _, err := a.sessionManager.ValidateJWT(token); err != nil {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-        }
+		tracer := otel.Tracer("http.admin")
+		ctx, span := tracer.Start(r.Context(), "AdminServer.AdminStatsHandler")
+		defer span.End()
+		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		if getSSOUsernameFromHeaders(r) == "" {
+			// Fallback to Bearer JWT
+			authz := strings.TrimSpace(r.Header.Get("Authorization"))
+			if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			token := strings.TrimSpace(authz[len("Bearer "):])
+			if _, err := a.sessionManager.ValidateJWT(token); err != nil {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
 
 		// Get stats from the main server
-		stats := a.server.getDashboardStats(r.Context())
+		stats := a.server.getDashboardStats(ctx)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -131,20 +157,23 @@ func (a *AdminServer) AdminStatsHandler() http.HandlerFunc {
 // AdminJobsHandler returns paginated job list
 func (a *AdminServer) AdminJobsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-        // Prefer SSO header injected by reverse proxy (Authentik outpost)
-        if getSSOUsernameFromHeaders(r) == "" {
-            // Fallback to Bearer JWT
-            authz := strings.TrimSpace(r.Header.Get("Authorization"))
-            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-            token := strings.TrimSpace(authz[len("Bearer "):])
-            if _, err := a.sessionManager.ValidateJWT(token); err != nil {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-        }
+		tracer := otel.Tracer("http.admin")
+		ctx, span := tracer.Start(r.Context(), "AdminServer.AdminJobsHandler")
+		defer span.End()
+		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		if getSSOUsernameFromHeaders(r) == "" {
+			// Fallback to Bearer JWT
+			authz := strings.TrimSpace(r.Header.Get("Authorization"))
+			if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			token := strings.TrimSpace(authz[len("Bearer "):])
+			if _, err := a.sessionManager.ValidateJWT(token); err != nil {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
 
 		// Parse and validate query parameters
 		page := SanitizeString(r.URL.Query().Get("page"))
@@ -201,7 +230,7 @@ func (a *AdminServer) AdminJobsHandler() http.HandlerFunc {
 		}
 
 		// Get jobs from the main server
-		jobs := a.server.getJobs(r.Context(), page, limit, search, status)
+		jobs := a.server.getJobs(ctx, page, limit, search, status)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -217,23 +246,27 @@ func (a *AdminServer) AdminJobsHandler() http.HandlerFunc {
 // AdminJobDetailsHandler returns individual job details
 func (a *AdminServer) AdminJobDetailsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-        // Prefer SSO header injected by reverse proxy (Authentik outpost)
-        if getSSOUsernameFromHeaders(r) == "" {
-            // Fallback to Bearer JWT
-            authz := strings.TrimSpace(r.Header.Get("Authorization"))
-            if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-            token := strings.TrimSpace(authz[len("Bearer "):])
-            if _, err := a.sessionManager.ValidateJWT(token); err != nil {
-                http.Error(w, "Unauthorized", http.StatusUnauthorized)
-                return
-            }
-        }
+		tracer := otel.Tracer("http.admin")
+		ctx, span := tracer.Start(r.Context(), "AdminServer.AdminJobDetailsHandler")
+		defer span.End()
+		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		if getSSOUsernameFromHeaders(r) == "" {
+			// Fallback to Bearer JWT
+			authz := strings.TrimSpace(r.Header.Get("Authorization"))
+			if !strings.HasPrefix(strings.ToLower(authz), "bearer ") {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			token := strings.TrimSpace(authz[len("Bearer "):])
+			if _, err := a.sessionManager.ValidateJWT(token); err != nil {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
 
 		// Get and validate job ID from URL path
 		jobID := SanitizeJobID(chi.URLParam(r, "id"))
+		span.SetAttributes(attribute.String("job.id", jobID))
 
 		// Validate job ID
 		if validation := ValidateJobID(jobID); !validation.Valid {
@@ -252,7 +285,7 @@ func (a *AdminServer) AdminJobDetailsHandler() http.HandlerFunc {
 		}
 
 		// Get job details from the main server
-		jobDetails := a.server.getJobDetails(r.Context(), jobID)
+		jobDetails := a.server.getJobDetails(ctx, jobID)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

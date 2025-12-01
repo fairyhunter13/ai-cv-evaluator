@@ -1,0 +1,1 @@
+Dummy project content for Playwright upload test.

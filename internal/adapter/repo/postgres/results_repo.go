@@ -11,6 +11,7 @@ import (
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // ResultRepo persists and loads evaluation results from PostgreSQL.
@@ -24,6 +25,11 @@ func (r *ResultRepo) Upsert(ctx domain.Context, res domain.Result) error {
 	tracer := otel.Tracer("repo.results")
 	ctx, span := tracer.Start(ctx, "results.Upsert")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "UPSERT"),
+		attribute.String("db.sql.table", "results"),
+	)
 	q := `INSERT INTO results (job_id, cv_match_rate, cv_feedback, project_score, project_feedback, overall_summary, created_at)
 	VALUES ($1,$2,$3,$4,$5,$6,$7)
 	ON CONFLICT (job_id)
@@ -40,6 +46,11 @@ func (r *ResultRepo) GetByJobID(ctx domain.Context, jobID string) (domain.Result
 	tracer := otel.Tracer("repo.results")
 	ctx, span := tracer.Start(ctx, "results.GetByJobID")
 	defer span.End()
+	span.SetAttributes(
+		attribute.String("db.system", "postgresql"),
+		attribute.String("db.operation", "SELECT"),
+		attribute.String("db.sql.table", "results"),
+	)
 	q := `SELECT job_id, cv_match_rate, cv_feedback, project_score, project_feedback, overall_summary, created_at FROM results WHERE job_id=$1`
 	row := r.Pool.QueryRow(ctx, q, jobID)
 	var res domain.Result

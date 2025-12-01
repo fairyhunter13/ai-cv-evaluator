@@ -2,8 +2,11 @@
 package real
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -20,10 +24,11 @@ import (
 	"log/slog"
 
 	aiadapter "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	intobs "github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/freemodels"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/ratelimiter"
 )
 
 // Client implements domain.AIClient using OpenRouter (chat) and OpenAI (embeddings).
@@ -35,13 +40,24 @@ type Client struct {
 	modelCounter         int64                     // Counter for round-robin model selection
 	providerCounter      int64                     // Counter to balance load between Groq and OpenRouter when both are available
 	rlc                  *aiadapter.RateLimitCache // Client-side rate-limit model cache
-	lastORCall           atomic.Int64              // unix nano timestamp of last OpenRouter call (client-level throttle)
-	lastGroqCall         atomic.Int64              // unix nano timestamp of last Groq call (client-level throttle)
-	groqBlocked          atomic.Int64              // unix nano timestamp until which Groq is blocked due to 429
-	openRouterBlocked    atomic.Int64              // unix nano timestamp until which OpenRouter is blocked (legacy provider-level block)
+	limiter              ratelimiter.Limiter
+	lastORCall           atomic.Int64 // unix nano timestamp of last OpenRouter call (client-level throttle)
+	lastGroqCall         atomic.Int64 // unix nano timestamp of last Groq call (client-level throttle)
+	groq1Blocked         atomic.Int64 // unix nano timestamp until which Groq primary key is blocked due to 429
+	groq2Blocked         atomic.Int64 // unix nano timestamp until which Groq secondary key is blocked due to 429
+	openRouterBlocked    atomic.Int64 // unix nano timestamp until which OpenRouter is blocked (legacy provider-level block)
 	openRouterKeyCounter int64
 	openRouter1Blocked   atomic.Int64 // unix nano timestamp until which OpenRouter primary key is blocked due to 429
 	openRouter2Blocked   atomic.Int64 // unix nano timestamp until which OpenRouter secondary key is blocked due to 429
+	groqModels           []string     // Cached Groq chat-capable models ordered by capacity
+	groqModelsLastFetch  time.Time    // Last time the Groq models cache was refreshed
+	groqModelsMu         sync.RWMutex // Protects access to groqModels and groqModelsLastFetch
+
+	// Integrated observability for external AI calls
+	obsOpenRouterChat *intobs.IntegratedObservableClient
+	obsGroqChat       *intobs.IntegratedObservableClient
+	obsOpenAIEmbed    *intobs.IntegratedObservableClient
+	obsCotClean       *intobs.IntegratedObservableClient
 }
 
 // readSnippet reads up to n bytes from r and returns it as a string, non-destructively where possible.
@@ -71,17 +87,144 @@ func (l *limitedReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// readSSEChatStream parses a text/event-stream response from OpenAI-compatible
+// chat completions and accumulates the content from each chunk. It supports
+// both OpenAI-style {"choices":[{"delta":{"content":"..."}}]} and
+// fallback to {"choices":[{"message":{"content":"..."}}]} payloads.
+//
+// It also enforces a sliding idle timeout: if no new SSE line is received
+// within idleTimeout, the stream is considered idle and an error is returned.
+func readSSEChatStream(r io.Reader, provider, model string, idleTimeout time.Duration) (string, error) {
+	if idleTimeout <= 0 {
+		idleTimeout = 20 * time.Second
+	}
+
+	scanner := bufio.NewScanner(r)
+	// Allow reasonably large SSE lines (up to 1MB) to avoid truncation for
+	// long prompts or safety messages.
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	type lineMsg struct {
+		line string
+		err  error
+	}
+
+	lines := make(chan lineMsg)
+
+	// Goroutine to read lines from the SSE stream and forward them over a
+	// channel so the main goroutine can apply a sliding idle timeout.
+	go func() {
+		defer close(lines)
+		for scanner.Scan() {
+			lines <- lineMsg{line: scanner.Text()}
+		}
+		if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
+			lines <- lineMsg{err: err}
+		}
+	}()
+
+	var sb strings.Builder
+	timer := time.NewTimer(idleTimeout)
+	defer timer.Stop()
+
+	for {
+		select {
+		case msg, ok := <-lines:
+			if !ok {
+				// Stream ended normally
+				return sb.String(), nil
+			}
+			if msg.err != nil {
+				return "", msg.err
+			}
+
+			// Got activity: reset idle timer and parse the line
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			_ = timer.Reset(idleTimeout)
+
+			line := strings.TrimSpace(msg.line)
+			if line == "" {
+				continue
+			}
+			// Skip comment/heartbeat lines (e.g. ":keep-alive")
+			if strings.HasPrefix(line, ":") {
+				continue
+			}
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+			data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if data == "" {
+				continue
+			}
+			if data == "[DONE]" {
+				return sb.String(), nil
+			}
+
+			var chunk struct {
+				Choices []struct {
+					Delta struct {
+						Content string `json:"content"`
+					} `json:"delta"`
+					Message struct {
+						Content string `json:"content"`
+					} `json:"message"`
+				} `json:"choices"`
+			}
+
+			if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+				slog.Error("failed to decode streaming chat chunk",
+					slog.String("provider", provider),
+					slog.String("model", model),
+					slog.String("data", data),
+					slog.Any("error", err))
+				continue
+			}
+			if len(chunk.Choices) == 0 {
+				continue
+			}
+			c := chunk.Choices[0]
+			piece := c.Delta.Content
+			if piece == "" {
+				piece = c.Message.Content
+			}
+			if piece != "" {
+				_, _ = sb.WriteString(piece)
+			}
+
+		case <-timer.C:
+			// No activity within idleTimeout: treat as idle and abort the stream.
+			if closer, ok := r.(io.Closer); ok {
+				_ = closer.Close()
+			}
+			return "", fmt.Errorf("stream idle for %s", idleTimeout)
+		}
+	}
+}
+
 // New constructs a real AI client with sensible timeouts.
 func New(cfg config.Config) *Client {
+	return NewWithLimiter(cfg, nil)
+}
 
-	// Use more aggressive timeouts for E2E tests
-	chatTimeout := 60 * time.Second  // Increased for free models
-	embedTimeout := 30 * time.Second // Increased for embeddings
+func NewWithLimiter(cfg config.Config, lim ratelimiter.Limiter) *Client {
 
-	// If running in dev environment, use reasonable timeouts for E2E tests
+	// Use more aggressive timeouts by default.
+	chatTimeout := 60 * time.Second  // Base timeout for chat completions
+	embedTimeout := 30 * time.Second // Base timeout for embeddings
+
+	// In dev (including E2E), allow a slightly higher chat timeout but keep it
+	// well below the worker's 5-minute job-level SLA so stuck provider calls
+	// fail fast and flow through our retry/timeout handling.
 	if cfg.AppEnv == "dev" {
-		chatTimeout = 300 * time.Second // Increased for free model reliability (5 minutes)
-		embedTimeout = 60 * time.Second // Increased for embeddings
+		chatTimeout = 90 * time.Second
+		embedTimeout = 60 * time.Second
 	}
 
 	// Initialize free models service. Prefer primary OpenRouter key but
@@ -93,12 +236,55 @@ func New(cfg config.Config) *Client {
 	}
 	freeModelsSvc := freemodels.NewService(openRouterKey, cfg.OpenRouterBaseURL, cfg.FreeModelsRefresh)
 
+	// Build integrated observable clients for AI providers
+	openRouterObs := intobs.NewIntegratedObservableClient(
+		intobs.ConnectionTypeAI,
+		intobs.OperationTypeChat,
+		"openrouter",
+		"ai-client",
+		chatTimeout,
+		5*time.Second,
+		2*chatTimeout,
+	)
+	groqObs := intobs.NewIntegratedObservableClient(
+		intobs.ConnectionTypeAI,
+		intobs.OperationTypeChat,
+		"groq",
+		"ai-client",
+		chatTimeout,
+		5*time.Second,
+		2*chatTimeout,
+	)
+	embedObs := intobs.NewIntegratedObservableClient(
+		intobs.ConnectionTypeAI,
+		intobs.OperationTypeEmbed,
+		"openai",
+		"ai-client",
+		embedTimeout,
+		5*time.Second,
+		2*embedTimeout,
+	)
+	cotCleanObs := intobs.NewIntegratedObservableClient(
+		intobs.ConnectionTypeAI,
+		intobs.OperationTypeChat,
+		"openrouter",
+		"ai-client",
+		chatTimeout,
+		5*time.Second,
+		2*chatTimeout,
+	)
+
 	return &Client{
-		cfg:           cfg,
-		chatHC:        &http.Client{Timeout: chatTimeout},
-		embedHC:       &http.Client{Timeout: embedTimeout},
-		freeModelsSvc: freeModelsSvc,
-		rlc:           aiadapter.NewRateLimitCache(),
+		cfg:               cfg,
+		chatHC:            &http.Client{Timeout: chatTimeout},
+		embedHC:           &http.Client{Timeout: embedTimeout},
+		freeModelsSvc:     freeModelsSvc,
+		rlc:               aiadapter.NewRateLimitCache(),
+		limiter:           lim,
+		obsOpenRouterChat: openRouterObs,
+		obsGroqChat:       groqObs,
+		obsOpenAIEmbed:    embedObs,
+		obsCotClean:       cotCleanObs,
 	}
 }
 
@@ -157,15 +343,17 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 	openRouterKey := c.getOpenRouterAPIKey()
 	hasOpenRouter := openRouterKey != ""
 
+	lg := intobs.LoggerFromContext(ctx)
+
 	// 1) Primary: Groq when configured and not blocked
 	var groqErr error
-	if hasGroq && !c.isGroqBlocked() {
-		res, err := c.callGroqChat(ctx, systemPrompt, userPrompt, maxTokens)
+	if hasGroq && !c.isGroqAccountBlocked(groqKey) {
+		res, err := c.callGroqChat(ctx, groqKey, systemPrompt, userPrompt, maxTokens)
 		if err == nil {
 			return res, nil
 		}
 		groqErr = err
-		slog.Warn("Groq ChatJSON primary attempt failed",
+		lg.Warn("Groq ChatJSON primary attempt failed",
 			slog.String("provider", "groq"),
 			slog.Any("error", err))
 
@@ -173,14 +361,14 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		if !hasOpenRouter {
 			return "", groqErr
 		}
-	} else if hasGroq && c.isGroqBlocked() {
-		slog.Info("skipping Groq due to active rate limit block", slog.String("provider", "groq"))
+	} else if hasGroq && c.isGroqAccountBlocked(groqKey) {
+		lg.Info("skipping Groq due to active rate limit block", slog.String("provider", "groq"))
 		groqErr = errors.New("groq rate limited and blocked")
 	}
 
 	// 2) Secondary: OpenRouter free models
 	if !hasOpenRouter {
-		slog.Error("OpenRouter API key missing", slog.String("provider", "openrouter"))
+		lg.Error("OpenRouter API key missing", slog.String("provider", "openrouter"))
 		if hasGroq {
 			// Normally unreachable because !hasOpenRouter with hasGroq returns above, but keep for safety.
 			return "", groqErr
@@ -189,35 +377,34 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 	}
 
 	// Get free models from the service with retry logic
-	slog.Debug("calling free models service to get available models")
+	lg.Debug("calling free models service to get available models")
 	freeModels, err := c.freeModelsSvc.GetFreeModels(ctx)
 	if err != nil {
-		slog.Error("failed to get free models from service",
+		lg.Error("failed to get free models from service",
 			slog.Any("error", err),
 			slog.String("service", "freemodels"))
 
 		// Try to refresh models and retry once
-		slog.Info("attempting to refresh free models and retry")
+		lg.Info("attempting to refresh free models and retry")
 		if refreshErr := c.freeModelsSvc.Refresh(ctx); refreshErr != nil {
-			slog.Error("failed to refresh free models", slog.Any("error", refreshErr))
+			lg.Error("failed to refresh free models", slog.Any("error", refreshErr))
 			return "", fmt.Errorf("failed to get free models: %w", err)
 		}
 
 		// Retry after refresh
 		freeModels, err = c.freeModelsSvc.GetFreeModels(ctx)
 		if err != nil {
-			slog.Error("failed to get free models after refresh",
+			lg.Error("failed to get free models after refresh",
 				slog.Any("error", err),
 				slog.String("service", "freemodels"))
 			return "", fmt.Errorf("failed to get free models after refresh: %w", err)
 		}
 	}
 
-	slog.Debug("free models service returned models",
+	lg.Debug("free models service returned models",
 		slog.Int("count", len(freeModels)))
-
 	if len(freeModels) == 0 {
-		slog.Error("no free models available", slog.String("provider", "openrouter"))
+		lg.Error("no free models available", slog.String("provider", "openrouter"))
 		return "", fmt.Errorf("no free models available from OpenRouter API")
 	}
 
@@ -265,7 +452,7 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		if err == nil && len(paidModels) > 0 {
 			// Prefer the cheapest paid as primary, then remaining paid, then shortest-wait free
 			selectedModel = paidModels[0]
-			slog.Info("using paid model as fallback (all free models blocked)",
+			lg.Info("using paid model as fallback (all free models blocked)",
 				slog.String("model", selectedModel.ID),
 				slog.String("model_name", selectedModel.Name),
 				slog.Int("paid_models_available", len(paidModels)))
@@ -282,7 +469,7 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 			}
 		} else {
 			// No paid models available or error: use shortest-wait free models
-			slog.Warn("paid model fallback unavailable, using shortest-wait free models",
+			lg.Warn("paid model fallback unavailable, using shortest-wait free models",
 				slog.Any("error", err),
 				slog.Int("free_models_count", len(freeModels)))
 			all := append([]freemodels.Model{}, freeModels...)
@@ -303,7 +490,7 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 	for i, m := range freeModels {
 		modelIDs[i] = m.ID
 	}
-	slog.Debug("available free models", slog.Any("models", modelIDs))
+	lg.Debug("available free models", slog.Any("models", modelIDs))
 
 	selectionLog := []any{
 		slog.String("model", model),
@@ -317,9 +504,9 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 			slog.Int("available_models", len(available)),
 			slog.Int("blocked_models", len(blocked)))
 	}
-	slog.Info("using free model (rate-limit-aware round-robin)", selectionLog...)
+	lg.Info("using free model (rate-limit-aware round-robin)", selectionLog...)
 
-	slog.Info("calling OpenRouter API", slog.String("provider", "openrouter"), slog.String("model", model), slog.Int("max_tokens", maxTokens))
+	lg.Info("calling OpenRouter API", slog.String("provider", "openrouter"), slog.String("model", model), slog.Int("max_tokens", maxTokens))
 	body := map[string]any{
 		"model":       model,
 		"temperature": 0.2,
@@ -329,11 +516,16 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 			{"role": "user", "content": userPrompt},
 		},
 	}
+	// For non-test environments, request streaming responses so we can detect
+	// inactivity and fail fast if the provider stops sending chunks.
+	if !c.cfg.IsTest() {
+		body["stream"] = true
+	}
 
 	// Add fallback models if available
 	if len(fallbackModels) > 0 {
 		body["models"] = fallbackModels
-		slog.Debug("added fallback models", slog.String("fallback_models", fmt.Sprintf("%v", fallbackModels)))
+		lg.Debug("added fallback models", slog.String("fallback_models", fmt.Sprintf("%v", fallbackModels)))
 	}
 	b, _ := json.Marshal(body)
 	slog.Debug("OpenRouter API request body", slog.String("body", string(b)))
@@ -346,152 +538,226 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		} `json:"choices"`
 	}
 	openRouterKey = c.getOpenRouterAPIKey()
-	op := func() error {
-		start := time.Now()
-		connectionStart := time.Now()
-		// Recreate request each attempt to avoid reusing consumed bodies
-		// Client-level minimal spacing between OpenRouter calls to reduce 429s
-		c.waitOpenRouterMinInterval()
 
-		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
-		r.Header.Set("Authorization", "Bearer "+openRouterKey)
-		r.Header.Set("Content-Type", "application/json")
-		if ref := strings.TrimSpace(c.cfg.OpenRouterReferer); ref != "" {
-			r.Header.Set("HTTP-Referer", ref)
+	var result string
+	err = c.obsOpenRouterChat.ExecuteWithMetrics(ctx, "chat", func(callCtx context.Context) error {
+		expo := c.getBackoffConfig()
+		// For non-test environments, enforce a stricter per-call timeout so that
+		// if the provider does not send any response within ~20s, the call fails
+		// and is retried via the existing backoff logic. Tests keep the original
+		// behaviour to avoid flakiness.
+		if !c.cfg.IsTest() {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(callCtx, 20*time.Second)
+			defer cancel()
 		}
-		if title := strings.TrimSpace(c.cfg.OpenRouterTitle); title != "" {
-			r.Header.Set("X-Title", title)
-		}
+		bo := backoff.WithContext(expo, callCtx)
 
-		// Log connection start
-		slog.Debug("starting OpenRouter API connection",
-			slog.String("model", model),
-			slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"),
-			slog.Time("connection_start", connectionStart))
+		slog.Info("starting OpenRouter API retry logic", slog.String("provider", "openrouter"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
 
-		resp, err := c.chatHC.Do(r)
-		c.markOpenRouterCall()
-		connectionDuration := time.Since(connectionStart)
+		op := func() error {
+			// Global limiter gate for OpenRouter account across workers
+			if c.limiter != nil {
+				allowed, retryAfter, err := c.limiter.Allow(callCtx, openRouterBucketKey(openRouterKey), 1)
+				if err != nil {
+					slog.Error("global rate limiter error for OpenRouter", slog.Any("error", err))
+				} else if !allowed {
+					slog.Warn("global rate limiter denied OpenRouter call",
+						slog.String("provider", "openrouter"),
+						slog.Duration("retry_after", retryAfter))
+					c.blockOpenRouterAccount(openRouterKey, retryAfter)
+					return backoff.Permanent(fmt.Errorf("rate limited: global limiter"))
+				}
+			}
+			connectionStart := time.Now()
+			// Recreate request each attempt to avoid reusing consumed bodies
+			// Client-level minimal spacing between OpenRouter calls to reduce 429s
+			c.waitOpenRouterMinInterval()
 
-		if err != nil {
-			// Log without touching resp
-			slog.Info("OpenRouter API connection attempt failed",
+			r, _ := http.NewRequestWithContext(callCtx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
+			r.Header.Set("Authorization", "Bearer "+openRouterKey)
+			r.Header.Set("Content-Type", "application/json")
+			if ref := strings.TrimSpace(c.cfg.OpenRouterReferer); ref != "" {
+				r.Header.Set("HTTP-Referer", ref)
+			}
+			if title := strings.TrimSpace(c.cfg.OpenRouterTitle); title != "" {
+				r.Header.Set("X-Title", title)
+			}
+
+			// Log connection start
+			slog.Debug("starting OpenRouter API connection",
 				slog.String("model", model),
-				slog.Duration("connection_duration", connectionDuration))
-			observability.AIRequestsTotal.WithLabelValues("openrouter", "chat").Inc()
-			observability.AIRequestDuration.WithLabelValues("openrouter", "chat").Observe(time.Since(start).Seconds())
-			return err
+				slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"),
+				slog.Time("connection_start", connectionStart))
+
+			resp, err := c.chatHC.Do(r)
+			c.markOpenRouterCall()
+			connectionDuration := time.Since(connectionStart)
+
+			if err != nil {
+				// Log without touching resp
+				slog.Info("OpenRouter API connection attempt failed",
+					slog.String("model", model),
+					slog.Duration("connection_duration", connectionDuration))
+				return err
+			}
+
+			// Log connection duration
+			slog.Info("OpenRouter API connection completed",
+				slog.String("model", model),
+				slog.Duration("connection_duration", connectionDuration),
+				slog.Int("status_code", resp.StatusCode),
+				slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
+
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode == 429 {
+				// Retryable: let backoff handle retries. We don't need the body content
+				// here, but we keep the branch structure consistent with other status
+				// handlers for logging and rate-limit bookkeeping.
+				slog.Warn("ai provider rate limited", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
+				retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
+				if c.rlc != nil {
+					c.rlc.RecordRateLimit(model, retryAfter)
+				}
+				c.blockOpenRouter(retryAfter)
+				c.updateOpenRouterLimiterFromRetryAfter(openRouterKey, retryAfter)
+				return fmt.Errorf("rate limited: 429")
+			}
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				// Client error: non-retryable
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				bodySnippet := string(bodyBytes)
+				if len(bodySnippet) > 512 {
+					bodySnippet = bodySnippet[:512]
+				}
+				slog.Warn("ai provider 4xx", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
+				slog.Error("OpenRouter API 4xx error details", slog.String("response_body", bodySnippet), slog.String("request_body", string(b)))
+				if c.rlc != nil {
+					c.rlc.RecordFailure(model)
+				}
+				return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
+			}
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				// 5xx and others: retryable
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				bodySnippet := string(bodyBytes)
+				if len(bodySnippet) > 512 {
+					bodySnippet = bodySnippet[:512]
+				}
+				slog.Error("ai provider non-2xx", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
+				if c.rlc != nil {
+					c.rlc.RecordFailure(model)
+				}
+				return fmt.Errorf("chat status %d", resp.StatusCode)
+			}
+			// At this point we have a successful 2xx status code. Prefer SSE
+			// parsing when the provider returns a streaming content type.
+			contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+			isStream := strings.Contains(contentType, "text/event-stream") && !c.cfg.IsTest()
+			if isStream {
+				content, err := readSSEChatStream(resp.Body, "openrouter", model, 20*time.Second)
+				if err != nil {
+					slog.Error("failed to read OpenRouter streaming response", slog.String("provider", "openrouter"), slog.String("model", model), slog.Any("error", err))
+					if c.rlc != nil {
+						c.rlc.RecordFailure(model)
+					}
+					return err
+				}
+				if content == "" {
+					slog.Error("OpenRouter streaming response produced empty content", slog.String("provider", "openrouter"), slog.String("model", model))
+					if c.rlc != nil {
+						c.rlc.RecordFailure(model)
+					}
+					return errors.New("empty content from OpenRouter streaming response")
+				}
+				// Populate out so downstream logic (model substitution, success
+				// recording) can remain unchanged.
+				out.Model = model
+				out.Choices = []struct {
+					Message struct {
+						Content string `json:"content"`
+					} `json:"message"`
+				}{
+					{Message: struct {
+						Content string `json:"content"`
+					}{Content: content}},
+				}
+				return nil
+			}
+
+			// Non-streaming JSON response
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				slog.Error("failed to read response body", slog.String("provider", "openrouter"), slog.Any("error", err))
+				return err
+			}
+			if err := json.Unmarshal(bodyBytes, &out); err != nil {
+				slog.Error("ai provider decode error", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.Any("error", err))
+				if c.rlc != nil {
+					c.rlc.RecordFailure(model)
+				}
+				return err
+			}
+			return nil
 		}
 
-		// Log connection duration
-		slog.Info("OpenRouter API connection completed",
-			slog.String("model", model),
-			slog.Duration("connection_duration", connectionDuration),
-			slog.Int("status_code", resp.StatusCode),
-			slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
-
-		observability.AIRequestsTotal.WithLabelValues("openrouter", "chat").Inc()
-		observability.AIRequestDuration.WithLabelValues("openrouter", "chat").Observe(time.Since(start).Seconds())
-		defer func() { _ = resp.Body.Close() }()
-
-		// Read response body once and reuse it
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			slog.Error("failed to read response body", slog.String("provider", "openrouter"), slog.Any("error", err))
-			return err
+		if err := backoff.Retry(op, bo); err != nil {
+			slog.Error("OpenRouter API failed after retries", slog.String("provider", "openrouter"), slog.Any("error", err))
+			return fmt.Errorf("openrouter api failed: %w", err)
 		}
 
-		if resp.StatusCode == 429 {
-			// Retryable: let backoff handle retries
-			slog.Warn("ai provider rate limited", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
-			retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
-			if c.rlc != nil {
-				c.rlc.RecordRateLimit(model, retryAfter)
-			}
-			c.blockOpenRouter(retryAfter)
-			return fmt.Errorf("rate limited: 429")
+		if len(out.Choices) == 0 {
+			slog.Error("OpenRouter API returned empty choices", slog.String("provider", "openrouter"))
+			return errors.New("empty choices from OpenRouter API")
 		}
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			// Client error: non-retryable
-			bodySnippet := string(bodyBytes)
-			if len(bodySnippet) > 512 {
-				bodySnippet = bodySnippet[:512]
+
+		// Log successful API call with model verification
+		actualModel := "unknown"
+		if len(out.Choices) > 0 && out.Choices[0].Message.Content != "" {
+			// Check if the actual model used was different from requested
+			if out.Model != "" && out.Model != model {
+				slog.Warn("model substitution detected",
+					slog.String("requested_model", model),
+					slog.String("actual_model", out.Model),
+					slog.String("provider", "openrouter"))
+				actualModel = out.Model
+			} else {
+				actualModel = model
 			}
-			slog.Warn("ai provider 4xx", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
-			slog.Error("OpenRouter API 4xx error details", slog.String("response_body", bodySnippet), slog.String("request_body", string(b)))
-			if c.rlc != nil {
-				c.rlc.RecordFailure(model)
-			}
-			return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
 		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			// 5xx and others: retryable
-			bodySnippet := string(bodyBytes)
-			if len(bodySnippet) > 512 {
-				bodySnippet = bodySnippet[:512]
-			}
-			slog.Error("ai provider non-2xx", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
-			if c.rlc != nil {
-				c.rlc.RecordFailure(model)
-			}
-			return fmt.Errorf("chat status %d", resp.StatusCode)
+
+		// Record success for actual model used
+		if c.rlc != nil && actualModel != "" && actualModel != "unknown" {
+			c.rlc.RecordSuccess(actualModel)
 		}
-		if err := json.Unmarshal(bodyBytes, &out); err != nil {
-			slog.Error("ai provider decode error", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.Any("error", err))
-			if c.rlc != nil {
-				c.rlc.RecordFailure(model)
-			}
-			return err
-		}
+
+		slog.Info("OpenRouter API call successful",
+			slog.String("provider", "openrouter"),
+			slog.Int("choices_count", len(out.Choices)),
+			slog.String("requested_model", model),
+			slog.String("actual_model", actualModel))
+
+		result = out.Choices[0].Message.Content
 		return nil
-	}
-	expo := c.getBackoffConfig()
-	bo := backoff.WithContext(expo, ctx)
-
-	slog.Info("starting OpenRouter API retry logic", slog.String("provider", "openrouter"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
-	if err := backoff.Retry(op, bo); err != nil {
-		slog.Error("OpenRouter API failed after retries", slog.String("provider", "openrouter"), slog.Any("error", err))
-		return "", fmt.Errorf("openrouter api failed: %w", err)
+	})
+	if err != nil {
+		return "", err
 	}
 
-	if len(out.Choices) == 0 {
-		slog.Error("OpenRouter API returned empty choices", slog.String("provider", "openrouter"))
-		return "", errors.New("empty choices from OpenRouter API")
-	}
-
-	// Log successful API call with model verification
-	actualModel := "unknown"
-	if len(out.Choices) > 0 && out.Choices[0].Message.Content != "" {
-		// Check if the actual model used was different from requested
-		if out.Model != "" && out.Model != model {
-			slog.Warn("model substitution detected",
-				slog.String("requested_model", model),
-				slog.String("actual_model", out.Model),
-				slog.String("provider", "openrouter"))
-			actualModel = out.Model
-		} else {
-			actualModel = model
-		}
-	}
-
-	// Record success for actual model used
-	if c.rlc != nil && actualModel != "" && actualModel != "unknown" {
-		c.rlc.RecordSuccess(actualModel)
-	}
-
-	slog.Info("OpenRouter API call successful",
-		slog.String("provider", "openrouter"),
-		slog.Int("choices_count", len(out.Choices)),
-		slog.String("requested_model", model),
-		slog.String("actual_model", actualModel))
-	return out.Choices[0].Message.Content, nil
+	return result, nil
 }
 
 // ChatJSONWithRetry performs chat with enhanced retry and model switching, preferring Groq
 // when configured and falling back to OpenRouter free models when available.
 func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
-	groqKey := strings.TrimSpace(c.cfg.GroqAPIKey)
-	hasGroq := groqKey != ""
+	lg := intobs.LoggerFromContext(ctx)
+
+	groqPrimary := strings.TrimSpace(c.cfg.GroqAPIKey)
+	groqSecondary := strings.TrimSpace(c.cfg.GroqAPIKey2)
+	hasGroq1 := groqPrimary != ""
+	hasGroq2 := groqSecondary != ""
+	hasAnyGroq := hasGroq1 || hasGroq2
 	orPrimary, orSecondary := c.getOpenRouterKeys()
 	hasOR1 := orPrimary != ""
 	hasOR2 := orSecondary != ""
@@ -500,19 +766,40 @@ func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt 
 	var orErr error
 	var freeModels []freemodels.Model
 
-	// 1) Primary: Groq, when configured and not blocked
-	if hasGroq && !c.isGroqBlocked() {
-		res, err := c.callGroqChat(ctx, systemPrompt, userPrompt, maxTokens)
-		if err == nil {
-			return res, nil
+	// 1) Primary/secondary: Groq accounts, when configured and not individually blocked
+	hasUnblockedGroq1 := hasGroq1 && !c.isGroqAccountBlocked(groqPrimary)
+	hasUnblockedGroq2 := hasGroq2 && !c.isGroqAccountBlocked(groqSecondary)
+	if hasUnblockedGroq1 || hasUnblockedGroq2 {
+		// Groq account 1
+		if hasUnblockedGroq1 {
+			res, err := c.callGroqChat(ctx, groqPrimary, systemPrompt, userPrompt, maxTokens)
+			if err == nil {
+				return res, nil
+			}
+			groqErr = err
+			lg.Warn("Groq ChatJSONWithRetry primary account attempt failed",
+				slog.String("provider", "groq"),
+				slog.Any("error", err))
 		}
-		groqErr = err
-		slog.Warn("Groq ChatJSONWithRetry attempt failed",
-			slog.String("provider", "groq"),
-			slog.Any("error", err))
-	} else if hasGroq && c.isGroqBlocked() {
-		slog.Info("skipping Groq due to active rate limit block", slog.String("provider", "groq"))
-		groqErr = errors.New("groq rate limited and blocked")
+
+		// Groq account 2
+		if hasUnblockedGroq2 {
+			res, err := c.callGroqChat(ctx, groqSecondary, systemPrompt, userPrompt, maxTokens)
+			if err == nil {
+				return res, nil
+			}
+			if groqErr == nil {
+				groqErr = err
+			} else {
+				groqErr = fmt.Errorf("groq secondary account failed: %v; %w", err, groqErr)
+			}
+			lg.Warn("Groq ChatJSONWithRetry secondary account attempt failed",
+				slog.String("provider", "groq"),
+				slog.Any("error", err))
+		}
+	} else if hasAnyGroq {
+		lg.Info("skipping Groq due to active rate limit block on all accounts", slog.String("provider", "groq"))
+		groqErr = errors.New("groq rate limited and all accounts blocked")
 	}
 
 	// 2) Secondary: OpenRouter free models via primary account, then secondary account
@@ -535,6 +822,8 @@ func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt 
 				if err != nil {
 					slog.Error("failed to get free models after refresh", slog.Any("error", err))
 					orErr = fmt.Errorf("openrouter free models unavailable after refresh: %w", err)
+				} else {
+					freeModels = models
 				}
 			}
 		} else {
@@ -579,10 +868,10 @@ func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt 
 	}
 
 	// Aggregate final error based on which providers were configured
-	if hasGroq && (hasOR1 || hasOR2) {
+	if hasAnyGroq && (hasOR1 || hasOR2) {
 		return "", fmt.Errorf("groq chat failed: %v; openrouter chat failed: %w", groqErr, orErr)
 	}
-	if hasGroq {
+	if hasAnyGroq {
 		// Groq was configured but failed and OpenRouter is not available
 		return "", groqErr
 	}
@@ -874,141 +1163,207 @@ func (c *Client) callOpenRouterWithModelForKey(ctx domain.Context, apiKey, model
 		return "", fmt.Errorf("%w: OPENROUTER_API_KEY missing", domain.ErrInvalidArgument)
 	}
 
-	op := func() error {
-		start := time.Now()
-		connectionStart := time.Now()
-		// Client-level minimal spacing between OpenRouter calls to reduce 429s
-		c.waitOpenRouterMinInterval()
-
-		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
-		r.Header.Set("Authorization", "Bearer "+openRouterKey)
-		r.Header.Set("Content-Type", "application/json")
-		if ref := strings.TrimSpace(c.cfg.OpenRouterReferer); ref != "" {
-			r.Header.Set("HTTP-Referer", ref)
+	var result string
+	err := c.obsOpenRouterChat.ExecuteWithMetrics(ctx, "chat_retry", func(callCtx context.Context) error {
+		expo := c.getBackoffConfig()
+		if !c.cfg.IsTest() {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(callCtx, 20*time.Second)
+			defer cancel()
 		}
-		if title := strings.TrimSpace(c.cfg.OpenRouterTitle); title != "" {
-			r.Header.Set("X-Title", title)
-		}
+		bo := backoff.WithContext(expo, callCtx)
 
-		// Log connection start for model switching
-		slog.Debug("starting OpenRouter API connection (model switching)",
-			slog.String("model", model),
-			slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"),
-			slog.Time("connection_start", connectionStart))
+		op := func() error {
+			// Global limiter gate for OpenRouter account across workers
+			if c.limiter != nil {
+				allowed, retryAfter, err := c.limiter.Allow(callCtx, openRouterBucketKey(openRouterKey), 1)
+				if err != nil {
+					slog.Error("global rate limiter error for OpenRouter (model switching)", slog.Any("error", err))
+				} else if !allowed {
+					slog.Warn("global rate limiter denied OpenRouter call (model switching)",
+						slog.String("provider", "openrouter"),
+						slog.Duration("retry_after", retryAfter))
+					c.blockOpenRouterAccount(openRouterKey, retryAfter)
+					return backoff.Permanent(fmt.Errorf("rate limited: global limiter"))
+				}
+			}
+			connectionStart := time.Now()
+			// Client-level minimal spacing between OpenRouter calls to reduce 429s
+			c.waitOpenRouterMinInterval()
 
-		resp, err := c.chatHC.Do(r)
-		c.markOpenRouterCall()
-		connectionDuration := time.Since(connectionStart)
+			r, _ := http.NewRequestWithContext(callCtx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
+			r.Header.Set("Authorization", "Bearer "+openRouterKey)
+			r.Header.Set("Content-Type", "application/json")
+			if ref := strings.TrimSpace(c.cfg.OpenRouterReferer); ref != "" {
+				r.Header.Set("HTTP-Referer", ref)
+			}
+			if title := strings.TrimSpace(c.cfg.OpenRouterTitle); title != "" {
+				r.Header.Set("X-Title", title)
+			}
 
-		if err != nil {
-			// Log without touching resp
-			slog.Info("OpenRouter API connection attempt failed (model switching)",
+			// Log connection start for model switching
+			slog.Debug("starting OpenRouter API connection (model switching)",
 				slog.String("model", model),
-				slog.Duration("connection_duration", connectionDuration))
-			observability.AIRequestsTotal.WithLabelValues("openrouter", "chat_retry").Inc()
-			observability.AIRequestDuration.WithLabelValues("openrouter", "chat_retry").Observe(time.Since(start).Seconds())
-			return err
+				slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"),
+				slog.Time("connection_start", connectionStart))
+
+			resp, err := c.chatHC.Do(r)
+			c.markOpenRouterCall()
+			connectionDuration := time.Since(connectionStart)
+
+			if err != nil {
+				// Log without touching resp
+				slog.Info("OpenRouter API connection attempt failed (model switching)",
+					slog.String("model", model),
+					slog.Duration("connection_duration", connectionDuration))
+				return err
+			}
+
+			// Log connection duration for model switching
+			slog.Info("OpenRouter API connection completed (model switching)",
+				slog.String("model", model),
+				slog.Duration("connection_duration", connectionDuration),
+				slog.Int("status_code", resp.StatusCode),
+				slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
+
+			defer func() { _ = resp.Body.Close() }()
+
+			if resp.StatusCode == 429 {
+				// Rate limit: log and record without needing the body content.
+				slog.Warn("ai provider rate limited", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode))
+				retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
+				if c.rlc != nil {
+					c.rlc.RecordRateLimit(model, retryAfter)
+				}
+				c.blockOpenRouterAccount(openRouterKey, retryAfter)
+				c.updateOpenRouterLimiterFromRetryAfter(openRouterKey, retryAfter)
+				return fmt.Errorf("rate limited: 429")
+			}
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				bodySnippet := string(bodyBytes)
+				if len(bodySnippet) > 512 {
+					bodySnippet = bodySnippet[:512]
+				}
+				slog.Warn("ai provider 4xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
+				if c.rlc != nil {
+					c.rlc.RecordFailure(model)
+				}
+				return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
+			}
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				bodySnippet := string(bodyBytes)
+				if len(bodySnippet) > 512 {
+					bodySnippet = bodySnippet[:512]
+				}
+				slog.Error("ai provider non-2xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
+				if c.rlc != nil {
+					c.rlc.RecordFailure(model)
+				}
+				return fmt.Errorf("chat status %d", resp.StatusCode)
+			}
+			contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+			isStream := strings.Contains(contentType, "text/event-stream") && !c.cfg.IsTest()
+			if isStream {
+				content, err := readSSEChatStream(resp.Body, "openrouter", model, 20*time.Second)
+				if err != nil {
+					slog.Error("failed to read OpenRouter streaming response (model switching)", slog.String("provider", "openrouter"), slog.String("model", model), slog.Any("error", err))
+					if c.rlc != nil {
+						c.rlc.RecordFailure(model)
+					}
+					return err
+				}
+				if content == "" {
+					slog.Error("OpenRouter streaming response produced empty content (model switching)", slog.String("provider", "openrouter"), slog.String("model", model))
+					if c.rlc != nil {
+						c.rlc.RecordFailure(model)
+					}
+					return fmt.Errorf("openrouter streaming response empty for model %s", model)
+				}
+				out.Model = model
+				out.Choices = []struct {
+					Message struct {
+						Content string `json:"content"`
+					} `json:"message"`
+				}{
+					{Message: struct {
+						Content string `json:"content"`
+					}{Content: content}},
+				}
+				return nil
+			}
+
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				slog.Error("failed to read response body", slog.String("provider", "openrouter"), slog.Any("error", err))
+				return err
+			}
+			if err := json.Unmarshal(bodyBytes, &out); err != nil {
+				slog.Error("ai provider decode error", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.Any("error", err))
+				if c.rlc != nil {
+					c.rlc.RecordFailure(model)
+				}
+				return err
+			}
+			return nil
 		}
 
-		// Log connection duration for model switching
-		slog.Info("OpenRouter API connection completed (model switching)",
-			slog.String("model", model),
-			slog.Duration("connection_duration", connectionDuration),
-			slog.Int("status_code", resp.StatusCode),
-			slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
-
-		observability.AIRequestsTotal.WithLabelValues("openrouter", "chat_retry").Inc()
-		observability.AIRequestDuration.WithLabelValues("openrouter", "chat_retry").Observe(time.Since(start).Seconds())
-		defer func() { _ = resp.Body.Close() }()
-
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			slog.Error("failed to read response body", slog.String("provider", "openrouter"), slog.Any("error", err))
-			return err
+		if err := backoff.Retry(op, bo); err != nil {
+			slog.Error("OpenRouter API failed after retries", slog.String("provider", "openrouter"), slog.String("model", model), slog.Any("error", err))
+			return fmt.Errorf("openrouter api failed for model %s: %w", model, err)
 		}
 
-		if resp.StatusCode == 429 {
-			slog.Warn("ai provider rate limited", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode))
-			retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
-			if c.rlc != nil {
-				c.rlc.RecordRateLimit(model, retryAfter)
-			}
-			c.blockOpenRouterAccount(openRouterKey, retryAfter)
-			return fmt.Errorf("rate limited: 429")
+		if len(out.Choices) == 0 {
+			slog.Error("OpenRouter API returned empty choices", slog.String("provider", "openrouter"), slog.String("model", model))
+			return fmt.Errorf("openrouter api returned empty choices for model %s", model)
 		}
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			bodySnippet := string(bodyBytes)
-			if len(bodySnippet) > 512 {
-				bodySnippet = bodySnippet[:512]
-			}
-			slog.Warn("ai provider 4xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
-			if c.rlc != nil {
-				c.rlc.RecordFailure(model)
-			}
-			return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
-		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			bodySnippet := string(bodyBytes)
-			if len(bodySnippet) > 512 {
-				bodySnippet = bodySnippet[:512]
-			}
-			slog.Error("ai provider non-2xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
-			if c.rlc != nil {
-				c.rlc.RecordFailure(model)
-			}
-			return fmt.Errorf("chat status %d", resp.StatusCode)
-		}
-		if err := json.Unmarshal(bodyBytes, &out); err != nil {
-			slog.Error("ai provider decode error", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.Any("error", err))
-			if c.rlc != nil {
-				c.rlc.RecordFailure(model)
-			}
-			return err
-		}
+
+		result = out.Choices[0].Message.Content
 		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 
-	expo := c.getBackoffConfig()
-	bo := backoff.WithContext(expo, ctx)
-
-	if err := backoff.Retry(op, bo); err != nil {
-		slog.Error("OpenRouter API failed after retries", slog.String("provider", "openrouter"), slog.String("model", model), slog.Any("error", err))
-		return "", fmt.Errorf("openrouter api failed for model %s: %w", model, err)
-	}
-
-	if len(out.Choices) == 0 {
-		slog.Error("OpenRouter API returned empty choices", slog.String("provider", "openrouter"), slog.String("model", model))
-		return "", fmt.Errorf("openrouter api returned empty choices for model %s", model)
-	}
-
-	return out.Choices[0].Message.Content, nil
+	return result, nil
 }
 
 // callGroqChat calls Groq's OpenAI-compatible chat completions API using an internal
 // curated model list. It stops on provider-level 429 and falls back to OpenRouter via
 // higher-level logic when Groq is blocked.
-func (c *Client) callGroqChat(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
-	if strings.TrimSpace(c.cfg.GroqAPIKey) == "" {
-		slog.Error("Groq API key missing", slog.String("provider", "groq"))
+func (c *Client) callGroqChat(ctx domain.Context, apiKey, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	lg := intobs.LoggerFromContext(ctx)
+
+	trimmedKey := strings.TrimSpace(apiKey)
+	if trimmedKey == "" {
+		lg.Error("Groq API key missing", slog.String("provider", "groq"))
 		return "", fmt.Errorf("%w: GROQ_API_KEY missing", domain.ErrInvalidArgument)
 	}
 
-	// Build ordered list of Groq models using an internal curated set. This keeps
-	// Groq model selection automatic and independent of env configuration.
-	models := []string{
-		"llama-3.1-8b-instant",
-		"llama-3.3-70b-versatile",
+	var models []string
+	if c.cfg.IsTest() {
+		// In unit tests, preserve the original deterministic behaviour and avoid
+		// hitting the Groq /models endpoint, since test servers only stub
+		// /chat/completions. This keeps the expectation that we try exactly these
+		// two models in order.
+		models = []string{
+			"llama-3.1-8b-instant",
+			"llama-3.3-70b-versatile",
+		}
+	} else {
+		models = c.getGroqModels(ctx, trimmedKey)
+		if len(models) == 0 {
+			models = []string{
+				"llama-3.1-8b-instant",
+				"llama-3.3-70b-versatile",
+			}
+		}
 	}
 
 	var lastErr error
 	for _, model := range models {
-		if c.isGroqBlocked() {
-			slog.Info("skipping Groq models due to active rate limit block",
-				slog.String("provider", "groq"))
-			break
-		}
-
-		res, err := c.callGroqChatWithModel(ctx, model, systemPrompt, userPrompt, maxTokens)
+		res, err := c.callGroqChatWithModel(ctx, trimmedKey, model, systemPrompt, userPrompt, maxTokens)
 		if err == nil {
 			return res, nil
 		}
@@ -1017,14 +1372,14 @@ func (c *Client) callGroqChat(ctx domain.Context, systemPrompt, userPrompt strin
 		// If we hit a provider-level rate limit, stop trying further models and
 		// let higher-level logic fall back to OpenRouter.
 		if strings.Contains(err.Error(), "rate limited:") {
-			slog.Warn("Groq provider rate limited; not attempting further Groq models",
+			lg.Warn("Groq provider rate limited; not attempting further Groq models",
 				slog.String("provider", "groq"),
 				slog.String("model", model),
 				slog.Any("error", err))
 			break
 		}
 
-		slog.Warn("Groq model attempt failed, trying next model if available",
+		lg.Warn("Groq model attempt failed, trying next model if available",
 			slog.String("provider", "groq"),
 			slog.String("model", model),
 			slog.Any("error", err))
@@ -1038,7 +1393,9 @@ func (c *Client) callGroqChat(ctx domain.Context, systemPrompt, userPrompt strin
 
 // callGroqChatWithModel performs the actual Groq API call for a specific model with
 // existing backoff and rate-limit handling.
-func (c *Client) callGroqChatWithModel(ctx domain.Context, model, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	lg := intobs.LoggerFromContext(ctx)
+
 	// Enforce minimum interval between Groq calls to avoid rate limiting
 	c.waitGroqMinInterval()
 
@@ -1058,7 +1415,7 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, model, systemPrompt, 
 	}
 
 	b, _ := json.Marshal(body)
-	slog.Debug("Groq API request body", slog.String("body", string(b)))
+	lg.Debug("Groq API request body", slog.String("body", string(b)))
 
 	var out struct {
 		Choices []struct {
@@ -1068,87 +1425,136 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, model, systemPrompt, 
 		} `json:"choices"`
 	}
 
-	op := func() error {
-		start := time.Now()
-		endpoint := strings.TrimRight(baseURL, "/") + "/chat/completions"
-		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(b))
-		r.Header.Set("Authorization", "Bearer "+c.cfg.GroqAPIKey)
-		r.Header.Set("Content-Type", "application/json")
+	var result string
+	err := c.obsGroqChat.ExecuteWithMetrics(ctx, "chat", func(callCtx context.Context) error {
+		expo := c.getBackoffConfig()
+		if !c.cfg.IsTest() {
+			var cancel context.CancelFunc
+			callCtx, cancel = context.WithTimeout(callCtx, 20*time.Second)
+			defer cancel()
+		}
+		bo := backoff.WithContext(expo, callCtx)
 
-		connectionStart := time.Now()
-		resp, err := c.chatHC.Do(r)
-		c.markGroqCall() // Mark the call timestamp for rate limiting
-		connectionDuration := time.Since(connectionStart)
-		if err != nil {
-			slog.Info("Groq API connection attempt failed",
+		op := func() error {
+			endpoint := strings.TrimRight(baseURL, "/") + "/chat/completions"
+			// Global limiter gate for Groq account across workers
+			if c.limiter != nil {
+				allowed, retryAfter, err := c.limiter.Allow(callCtx, groqBucketKey(apiKey), 1)
+				if err != nil {
+					lg.Error("global rate limiter error for Groq", slog.Any("error", err))
+				} else if !allowed {
+					lg.Warn("global rate limiter denied Groq call",
+						slog.String("provider", "groq"),
+						slog.Duration("retry_after", retryAfter))
+					c.blockGroqAccount(apiKey, retryAfter)
+					return backoff.Permanent(fmt.Errorf("rate limited: global limiter"))
+				}
+			}
+			r, _ := http.NewRequestWithContext(callCtx, http.MethodPost, endpoint, bytes.NewReader(b))
+			r.Header.Set("Authorization", "Bearer "+apiKey)
+			r.Header.Set("Content-Type", "application/json")
+
+			connectionStart := time.Now()
+			resp, err := c.chatHC.Do(r)
+			c.markGroqCall() // Mark the call timestamp for rate limiting
+			connectionDuration := time.Since(connectionStart)
+			if err != nil {
+				lg.Info("Groq API connection attempt failed",
+					slog.String("provider", "groq"),
+					slog.Duration("connection_duration", connectionDuration))
+				return err
+			}
+
+			lg.Info("Groq API connection completed",
 				slog.String("provider", "groq"),
-				slog.Duration("connection_duration", connectionDuration))
-			observability.AIRequestsTotal.WithLabelValues("groq", "chat").Inc()
-			observability.AIRequestDuration.WithLabelValues("groq", "chat").Observe(time.Since(start).Seconds())
-			return err
-		}
+				slog.Duration("connection_duration", connectionDuration),
+				slog.Int("status_code", resp.StatusCode))
 
-		slog.Info("Groq API connection completed",
-			slog.String("provider", "groq"),
-			slog.Duration("connection_duration", connectionDuration),
-			slog.Int("status_code", resp.StatusCode))
+			defer func() { _ = resp.Body.Close() }()
+			// Update global limiter configuration from Groq rate-limit headers when present
+			c.updateGroqLimiterFromHeaders(apiKey, resp.Header)
 
-		observability.AIRequestsTotal.WithLabelValues("groq", "chat").Inc()
-		observability.AIRequestDuration.WithLabelValues("groq", "chat").Observe(time.Since(start).Seconds())
-		defer func() { _ = resp.Body.Close() }()
-
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			slog.Error("failed to read response body", slog.String("provider", "groq"), slog.Any("error", err))
-			return err
-		}
-
-		if resp.StatusCode == http.StatusTooManyRequests {
-			slog.Warn("ai provider rate limited", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode))
-			// Block Groq for 60 seconds (or Retry-After if provided) and fail fast
-			retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
-			c.blockGroq(retryAfter)
-			// Return permanent error to stop retrying - let the caller fall back to OpenRouter
-			return backoff.Permanent(fmt.Errorf("rate limited: %d", resp.StatusCode))
-		}
-		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			bodySnippet := string(bodyBytes)
-			if len(bodySnippet) > 512 {
-				bodySnippet = bodySnippet[:512]
+			if resp.StatusCode == http.StatusTooManyRequests {
+				lg.Warn("ai provider rate limited", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode))
+				// Block Groq for 60 seconds (or Retry-After if provided) and fail fast
+				retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
+				c.blockGroqAccount(apiKey, retryAfter)
+				// Return permanent error to stop retrying - let the caller fall back to OpenRouter
+				return backoff.Permanent(fmt.Errorf("rate limited: %d", resp.StatusCode))
 			}
-			slog.Warn("ai provider 4xx", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", endpoint), slog.String("body", bodySnippet))
-			return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
-		}
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			bodySnippet := string(bodyBytes)
-			if len(bodySnippet) > 512 {
-				bodySnippet = bodySnippet[:512]
+			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				bodySnippet := string(bodyBytes)
+				if len(bodySnippet) > 512 {
+					bodySnippet = bodySnippet[:512]
+				}
+				lg.Warn("ai provider 4xx", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", endpoint), slog.String("body", bodySnippet))
+				return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
 			}
-			slog.Error("ai provider non-2xx", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", endpoint), slog.String("body", bodySnippet))
-			return fmt.Errorf("chat status %d", resp.StatusCode)
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				bodyBytes, _ := io.ReadAll(resp.Body)
+				bodySnippet := string(bodyBytes)
+				if len(bodySnippet) > 512 {
+					bodySnippet = bodySnippet[:512]
+				}
+				lg.Error("ai provider non-2xx", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", endpoint), slog.String("body", bodySnippet))
+				return fmt.Errorf("chat status %d", resp.StatusCode)
+			}
+			contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+			isStream := strings.Contains(contentType, "text/event-stream") && !c.cfg.IsTest()
+			if isStream {
+				content, err := readSSEChatStream(resp.Body, "groq", model, 20*time.Second)
+				if err != nil {
+					lg.Error("failed to read Groq streaming response", slog.String("provider", "groq"), slog.String("model", model), slog.Any("error", err))
+					return err
+				}
+				if content == "" {
+					lg.Error("Groq streaming response produced empty content", slog.String("provider", "groq"), slog.String("model", model))
+					return errors.New("empty content from Groq streaming response")
+				}
+				out.Choices = []struct {
+					Message struct {
+						Content string `json:"content"`
+					} `json:"message"`
+				}{
+					{Message: struct {
+						Content string `json:"content"`
+					}{Content: content}},
+				}
+				return nil
+			}
+
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				lg.Error("failed to read response body", slog.String("provider", "groq"), slog.Any("error", err))
+				return err
+			}
+			if err := json.Unmarshal(bodyBytes, &out); err != nil {
+				lg.Error("ai provider decode error", slog.String("provider", "groq"), slog.String("op", "chat"), slog.String("model", model), slog.String("endpoint", endpoint), slog.Any("error", err))
+				return err
+			}
+			return nil
 		}
-		if err := json.Unmarshal(bodyBytes, &out); err != nil {
-			slog.Error("ai provider decode error", slog.String("provider", "groq"), slog.String("op", "chat"), slog.String("model", model), slog.String("endpoint", endpoint), slog.Any("error", err))
-			return err
+
+		lg.Info("starting Groq API retry logic", slog.String("provider", "groq"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
+		if err := backoff.Retry(op, bo); err != nil {
+			lg.Error("Groq API failed after retries", slog.String("provider", "groq"), slog.Any("error", err))
+			return fmt.Errorf("groq api failed: %w", err)
 		}
+
+		if len(out.Choices) == 0 {
+			lg.Error("Groq API returned empty choices", slog.String("provider", "groq"))
+			return errors.New("empty choices from Groq API")
+		}
+
+		result = out.Choices[0].Message.Content
 		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 
-	expo := c.getBackoffConfig()
-	bo := backoff.WithContext(expo, ctx)
-
-	slog.Info("starting Groq API retry logic", slog.String("provider", "groq"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
-	if err := backoff.Retry(op, bo); err != nil {
-		slog.Error("Groq API failed after retries", slog.String("provider", "groq"), slog.Any("error", err))
-		return "", fmt.Errorf("groq api failed: %w", err)
-	}
-
-	if len(out.Choices) == 0 {
-		slog.Error("Groq API returned empty choices", slog.String("provider", "groq"))
-		return "", errors.New("empty choices from Groq API")
-	}
-
-	return out.Choices[0].Message.Content, nil
+	return result, nil
 }
 
 // waitOpenRouterMinInterval enforces a minimal spacing between OpenRouter calls across this client instance.
@@ -1295,23 +1701,45 @@ func (c *Client) markGroqCall() {
 	c.lastGroqCall.Store(time.Now().UnixNano())
 }
 
-// isGroqBlocked checks if Groq is currently blocked due to a recent 429 response.
-func (c *Client) isGroqBlocked() bool {
-	blockedUntil := c.groqBlocked.Load()
-	if blockedUntil == 0 {
+// isGroqAccountBlocked checks if a specific Groq API key is currently blocked due to a recent 429 response.
+func (c *Client) isGroqAccountBlocked(apiKey string) bool {
+	key := strings.TrimSpace(apiKey)
+	if key == "" {
 		return false
 	}
-	return time.Now().UnixNano() < blockedUntil
+	if key == strings.TrimSpace(c.cfg.GroqAPIKey) {
+		blockedUntil := c.groq1Blocked.Load()
+		return blockedUntil != 0 && time.Now().UnixNano() < blockedUntil
+	}
+	if key == strings.TrimSpace(c.cfg.GroqAPIKey2) {
+		blockedUntil := c.groq2Blocked.Load()
+		return blockedUntil != 0 && time.Now().UnixNano() < blockedUntil
+	}
+	return false
 }
 
-// blockGroq blocks Groq for the specified duration after a 429 response.
-func (c *Client) blockGroq(d time.Duration) {
+// blockGroqAccount blocks a specific Groq API key for the given duration after a 429 response.
+func (c *Client) blockGroqAccount(apiKey string, d time.Duration) {
+	key := strings.TrimSpace(apiKey)
+	if key == "" {
+		return
+	}
 	if d <= 0 {
 		d = 60 * time.Second // Default 60 second cooldown
 	}
-	c.groqBlocked.Store(time.Now().Add(d).UnixNano())
-	slog.Warn("blocking Groq due to rate limit",
-		slog.Duration("block_duration", d))
+	blockedUntil := time.Now().Add(d).UnixNano()
+	if key == strings.TrimSpace(c.cfg.GroqAPIKey) {
+		c.groq1Blocked.Store(blockedUntil)
+		slog.Warn("blocking Groq primary account due to rate limit",
+			slog.Duration("block_duration", d))
+		return
+	}
+	if key == strings.TrimSpace(c.cfg.GroqAPIKey2) {
+		c.groq2Blocked.Store(blockedUntil)
+		slog.Warn("blocking Groq secondary account due to rate limit",
+			slog.Duration("block_duration", d))
+		return
+	}
 }
 
 // parseRetryAfterHeader parses Retry-After header into duration (delta-seconds or HTTP-date).
@@ -1332,6 +1760,192 @@ func parseRetryAfterHeader(v string) time.Duration {
 	return 0
 }
 
+func accountBucketKey(provider, apiKey string) string {
+	key := strings.TrimSpace(apiKey)
+	if key == "" {
+		return provider + ":default"
+	}
+	sum := sha256.Sum256([]byte(key))
+	// Use first 8 bytes for a short stable suffix
+	short := hex.EncodeToString(sum[:8])
+	return provider + ":" + short
+}
+
+func groqBucketKey(apiKey string) string {
+	return accountBucketKey("groq", apiKey)
+}
+
+func openRouterBucketKey(apiKey string) string {
+	return accountBucketKey("openrouter", apiKey)
+}
+
+func (c *Client) updateGroqLimiterFromHeaders(apiKey string, h http.Header) {
+	if c == nil || c.limiter == nil {
+		return
+	}
+	lua, ok := c.limiter.(*ratelimiter.RedisLuaLimiter)
+	if !ok {
+		return
+	}
+	limitStr := h.Get("x-ratelimit-limit-requests")
+	if limitStr == "" {
+		return
+	}
+	limitVal, err := strconv.ParseInt(limitStr, 10, 64)
+	if err != nil || limitVal <= 0 {
+		return
+	}
+	const daySeconds = 24 * 60 * 60
+	cfg := ratelimiter.BucketConfig{
+		Capacity:   limitVal,
+		RefillRate: float64(limitVal) / daySeconds,
+	}
+	lua.SetBucketConfig(groqBucketKey(apiKey), cfg)
+}
+
+func (c *Client) updateOpenRouterLimiterFromRetryAfter(apiKey string, d time.Duration) {
+	if c == nil || c.limiter == nil || d <= 0 {
+		return
+	}
+	lua, ok := c.limiter.(*ratelimiter.RedisLuaLimiter)
+	if !ok {
+		return
+	}
+	seconds := d.Seconds()
+	if seconds <= 0 {
+		return
+	}
+	cfg := ratelimiter.BucketConfig{
+		Capacity:   1,
+		RefillRate: 1.0 / seconds,
+	}
+	lua.SetBucketConfig(openRouterBucketKey(apiKey), cfg)
+}
+
+type groqModelLimit struct {
+	RPM int
+	TPM int
+}
+
+var groqModelLimits = map[string]groqModelLimit{
+	"llama-3.1-8b-instant":                          {RPM: 30, TPM: 6000},
+	"llama-3.3-70b-versatile":                       {RPM: 30, TPM: 12000},
+	"openai/gpt-oss-20b":                            {RPM: 30, TPM: 8000},
+	"openai/gpt-oss-120b":                           {RPM: 30, TPM: 8000},
+	"qwen/qwen3-32b":                                {RPM: 60, TPM: 6000},
+	"meta-llama/llama-4-maverick-17b-128e-instruct": {RPM: 30, TPM: 6000},
+	"meta-llama/llama-4-scout-17b-16e-instruct":     {RPM: 30, TPM: 30000},
+}
+
+func (c *Client) getGroqModels(ctx domain.Context, apiKey string) []string {
+	c.groqModelsMu.RLock()
+	if len(c.groqModels) > 0 && !c.groqModelsLastFetch.IsZero() && time.Since(c.groqModelsLastFetch) < c.cfg.FreeModelsRefresh {
+		models := make([]string, len(c.groqModels))
+		copy(models, c.groqModels)
+		c.groqModelsMu.RUnlock()
+		return models
+	}
+	c.groqModelsMu.RUnlock()
+
+	c.groqModelsMu.Lock()
+	defer c.groqModelsMu.Unlock()
+	if len(c.groqModels) > 0 && !c.groqModelsLastFetch.IsZero() && time.Since(c.groqModelsLastFetch) < c.cfg.FreeModelsRefresh {
+		models := make([]string, len(c.groqModels))
+		copy(models, c.groqModels)
+		return models
+	}
+
+	models, err := c.fetchGroqModelsFromAPI(ctx, apiKey)
+	if err != nil || len(models) == 0 {
+		fallback := make([]string, 0, len(groqModelLimits))
+		for id := range groqModelLimits {
+			fallback = append(fallback, id)
+		}
+		if len(fallback) > 1 {
+			sort.SliceStable(fallback, func(i, j int) bool {
+				li := groqModelLimits[fallback[i]]
+				lj := groqModelLimits[fallback[j]]
+				if li.TPM != lj.TPM {
+					return li.TPM > lj.TPM
+				}
+				return li.RPM > lj.RPM
+			})
+		}
+		c.groqModels = fallback
+		c.groqModelsLastFetch = time.Now()
+		models = make([]string, len(fallback))
+		copy(models, fallback)
+		return models
+	}
+
+	c.groqModels = models
+	c.groqModelsLastFetch = time.Now()
+	out := make([]string, len(models))
+	copy(out, models)
+	return out
+}
+
+func (c *Client) fetchGroqModelsFromAPI(ctx domain.Context, apiKey string) ([]string, error) {
+	trimmedKey := strings.TrimSpace(apiKey)
+	baseURL := strings.TrimSpace(c.cfg.GroqBaseURL)
+	if baseURL == "" {
+		baseURL = "https://api.groq.com/openai/v1"
+	}
+	url := strings.TrimRight(baseURL, "/") + "/models"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create groq models request: %w", err)
+	}
+	if trimmedKey != "" {
+		req.Header.Set("Authorization", "Bearer "+trimmedKey)
+	}
+
+	resp, err := c.chatHC.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("groq models request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("groq models status %d: %s", resp.StatusCode, string(b))
+	}
+
+	var out struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode groq models response: %w", err)
+	}
+
+	models := make([]string, 0, len(out.Data))
+	for _, m := range out.Data {
+		id := strings.TrimSpace(m.ID)
+		if id == "" {
+			continue
+		}
+		if _, ok := groqModelLimits[id]; ok {
+			models = append(models, id)
+		}
+	}
+
+	if len(models) > 1 {
+		sort.SliceStable(models, func(i, j int) bool {
+			li := groqModelLimits[models[i]]
+			lj := groqModelLimits[models[j]]
+			if li.TPM != lj.TPM {
+				return li.TPM > lj.TPM
+			}
+			return li.RPM > lj.RPM
+		})
+	}
+
+	return models, nil
+}
+
 // Embed calls OpenAI embeddings endpoint and returns vectors.
 func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) {
 	if c.cfg.OpenAIAPIKey == "" || c.cfg.EmbeddingsModel == "" {
@@ -1350,11 +1964,10 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 			Embedding []float64 `json:"embedding"`
 		} `json:"data"`
 	}
-	op := func() error {
-		start := time.Now()
+	op := func(callCtx context.Context) error {
 		connectionStart := time.Now()
 		// Recreate request each attempt to avoid reusing consumed bodies
-		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenAIBaseURL+"/embeddings", bytes.NewReader(b))
+		r, _ := http.NewRequestWithContext(callCtx, http.MethodPost, c.cfg.OpenAIBaseURL+"/embeddings", bytes.NewReader(b))
 		r.Header.Set("Authorization", "Bearer "+c.cfg.OpenAIAPIKey)
 		r.Header.Set("Content-Type", "application/json")
 
@@ -1372,8 +1985,6 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 			slog.Info("OpenAI API connection attempt failed (embeddings)",
 				slog.String("model", c.cfg.EmbeddingsModel),
 				slog.Duration("connection_duration", connectionDuration))
-			observability.AIRequestsTotal.WithLabelValues("openai", "embed").Inc()
-			observability.AIRequestDuration.WithLabelValues("openai", "embed").Observe(time.Since(start).Seconds())
 			return err
 		}
 
@@ -1384,8 +1995,6 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 			slog.Int("status_code", resp.StatusCode),
 			slog.String("x_request_id", resp.Header.Get("X-Request-Id")))
 
-		observability.AIRequestsTotal.WithLabelValues("openai", "embed").Inc()
-		observability.AIRequestDuration.WithLabelValues("openai", "embed").Observe(time.Since(start).Seconds())
 		defer func() { _ = resp.Body.Close() }()
 		if resp.StatusCode == 429 {
 			// Retryable: let backoff handle retries
@@ -1410,13 +2019,20 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 		}
 		return nil
 	}
-	expo := c.getBackoffConfig()
-	bo := backoff.WithContext(expo, ctx)
 
-	slog.Info("starting OpenAI API retry logic", slog.String("provider", "openai"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
-	if err := backoff.Retry(op, bo); err != nil {
-		slog.Error("OpenAI API failed after retries", slog.String("provider", "openai"), slog.Any("error", err))
-		return nil, fmt.Errorf("openai api failed: %w", err)
+	err := c.obsOpenAIEmbed.ExecuteWithMetrics(ctx, "embed", func(callCtx context.Context) error {
+		expo := c.getBackoffConfig()
+		bo := backoff.WithContext(expo, callCtx)
+
+		slog.Info("starting OpenAI API retry logic", slog.String("provider", "openai"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
+		if err := backoff.Retry(func() error { return op(callCtx) }, bo); err != nil {
+			slog.Error("OpenAI API failed after retries", slog.String("provider", "openai"), slog.Any("error", err))
+			return fmt.Errorf("openai api failed: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	if len(out.Data) == 0 {
@@ -1509,17 +2125,14 @@ Original response to clean:
 	}
 	openRouterKey := c.getOpenRouterAPIKey()
 
-	op := func() error {
-		start := time.Now()
+	op := func(callCtx context.Context) error {
 		// Respect global OpenRouter client-level throttling to avoid 429s during cleaning
 		c.waitOpenRouterMinInterval()
-		r, _ := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
+		r, _ := http.NewRequestWithContext(callCtx, http.MethodPost, c.cfg.OpenRouterBaseURL+"/chat/completions", bytes.NewReader(b))
 		r.Header.Set("Authorization", "Bearer "+openRouterKey)
 		r.Header.Set("Content-Type", "application/json")
 		resp, err := c.chatHC.Do(r)
 		c.markOpenRouterCall()
-		observability.AIRequestsTotal.WithLabelValues("openrouter", "cot_cleaning").Inc()
-		observability.AIRequestDuration.WithLabelValues("openrouter", "cot_cleaning").Observe(time.Since(start).Seconds())
 		if err != nil {
 			return err
 		}
@@ -1533,6 +2146,7 @@ Original response to clean:
 				c.rlc.RecordRateLimit(cleaningModel.ID, retryAfter)
 			}
 			c.blockOpenRouter(retryAfter)
+			c.updateOpenRouterLimiterFromRetryAfter(openRouterKey, retryAfter)
 			return fmt.Errorf("rate limited: 429")
 		}
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
@@ -1552,13 +2166,19 @@ Original response to clean:
 		return nil
 	}
 
-	expo := c.getBackoffConfig()
-	bo := backoff.WithContext(expo, ctx)
+	err = c.obsCotClean.ExecuteWithMetrics(ctx, "cot_cleaning", func(callCtx context.Context) error {
+		expo := c.getBackoffConfig()
+		bo := backoff.WithContext(expo, callCtx)
 
-	slog.Info("starting CoT cleaning retry logic", slog.String("provider", "openrouter"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
-	if err := backoff.Retry(op, bo); err != nil {
-		slog.Error("CoT cleaning failed after retries", slog.String("provider", "openrouter"), slog.Any("error", err))
-		return "", fmt.Errorf("cot cleaning failed: %w", err)
+		slog.Info("starting CoT cleaning retry logic", slog.String("provider", "openrouter"), slog.Duration("max_elapsed", expo.MaxElapsedTime))
+		if err := backoff.Retry(func() error { return op(callCtx) }, bo); err != nil {
+			slog.Error("CoT cleaning failed after retries", slog.String("provider", "openrouter"), slog.Any("error", err))
+			return fmt.Errorf("cot cleaning failed: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 
 	if len(out.Choices) == 0 {

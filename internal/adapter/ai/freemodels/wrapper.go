@@ -9,6 +9,7 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/freemodels"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/ratelimiter"
 )
 
 // FreeModelWrapper wraps the real AI client to use free models automatically.
@@ -20,8 +21,12 @@ type FreeModelWrapper struct {
 
 // NewFreeModelWrapper creates a new wrapper that automatically uses free models.
 func NewFreeModelWrapper(cfg config.Config) *FreeModelWrapper {
+	return NewFreeModelWrapperWithLimiter(cfg, nil)
+}
+
+func NewFreeModelWrapperWithLimiter(cfg config.Config, lim ratelimiter.Limiter) *FreeModelWrapper {
 	// Create the underlying real client
-	realClient := real.New(cfg)
+	realClient := real.NewWithLimiter(cfg, lim)
 
 	// Create free models service with configurable refresh interval.
 	// Prefer primary OpenRouter key but fall back to OPENROUTER_API_KEY_2 when

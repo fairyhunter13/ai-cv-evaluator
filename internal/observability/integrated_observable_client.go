@@ -106,7 +106,7 @@ func (c *IntegratedObservableClient) ExecuteWithMetrics(
 	}
 
 	// Record Prometheus metrics based on connection type
-	c.recordPrometheusMetrics(operation, duration, err)
+	c.recordPrometheusMetrics(timeoutCtx, operation, duration, err)
 
 	// Set span attributes for duration and result
 	span.SetAttributes(
@@ -118,7 +118,7 @@ func (c *IntegratedObservableClient) ExecuteWithMetrics(
 }
 
 // recordPrometheusMetrics records metrics using the existing Prometheus infrastructure
-func (c *IntegratedObservableClient) recordPrometheusMetrics(operation string, duration time.Duration, err error) {
+func (c *IntegratedObservableClient) recordPrometheusMetrics(ctx context.Context, operation string, duration time.Duration, err error) {
 	// Determine status label
 	status := "success"
 	if err != nil {
@@ -132,11 +132,10 @@ func (c *IntegratedObservableClient) recordPrometheusMetrics(operation string, d
 	// Record metrics based on connection type
 	switch c.ConnectionType {
 	case ConnectionTypeAI:
-		// Use existing AI metrics
+		// Use existing AI metrics (provider, operation)
 		observability.AIRequestsTotal.WithLabelValues(
 			c.Endpoint,
 			operation,
-			status,
 		).Inc()
 		observability.AIRequestDuration.WithLabelValues(
 			c.Endpoint,
@@ -190,8 +189,10 @@ func (c *IntegratedObservableClient) recordPrometheusMetrics(operation string, d
 		).Observe(duration.Seconds())
 	}
 
+	lg := LoggerFromContext(ctx)
+
 	// Log the operation
-	slog.Info("external connection executed",
+	lg.Info("external connection executed",
 		slog.String("connection_type", string(c.ConnectionType)),
 		slog.String("operation_type", string(c.OperationType)),
 		slog.String("endpoint", c.Endpoint),

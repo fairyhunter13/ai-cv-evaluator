@@ -1,0 +1,12 @@
+groups:
+  - name: ai-cv-evaluator-http-errors
+    rules:
+      - alert: HighHttpErrorRate
+        expr: sum(rate(http_requests_total{status!="OK"}[5m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: ai-cv-evaluator
+        annotations:
+          summary: "HTTP errors detected in ai-cv-evaluator"
+          description: "One or more HTTP requests with non-OK status (4xx/5xx) have been observed in the last 5 minutes."

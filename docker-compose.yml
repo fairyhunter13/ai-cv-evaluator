@@ -23,6 +23,8 @@ services:
         condition: service_completed_successfully
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       qdrant:
         condition: service_started
       tika:
@@ -37,15 +39,18 @@ services:
       # Keep container port fixed at 8080; host port is configured in the ports mapping
       - PORT=8080
       - DB_URL=postgres://postgres:postgres@db:5432/app?sslmode=disable
+      - REDIS_ADDR=redis:6379
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - TIKA_URL=http://tika:9998
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
       - RATE_LIMIT_PER_MIN=60
-      - OPENROUTER_MIN_INTERVAL=5s
+      - OPENROUTER_MIN_INTERVAL=1s
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET:-dev-admin-session-secret-change-me}
+    ports:
+      - "8080:8080"
     restart: unless-stopped
 
   frontend:
@@ -71,6 +76,8 @@ services:
         condition: service_completed_successfully
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       redpanda:
         condition: service_healthy
       qdrant:
@@ -80,14 +87,19 @@ services:
     environment:
       - APP_ENV=dev
       - DB_URL=postgres://postgres:postgres@db:5432/app?sslmode=disable
+      - REDIS_ADDR=redis:6379
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
       # Single worker with increased concurrency for optimal throughput
       # Replaces previous multi-worker setup (4 workers × 4 concurrency = 16 total)
       # Now: 1 worker × 24 concurrency = 24 total (50% increase)
-      - CONSUMER_MAX_CONCURRENCY=1
-      - OPENROUTER_MIN_INTERVAL=5s
+      - CONSUMER_MAX_CONCURRENCY=4
+      - OPENROUTER_MIN_INTERVAL=1s
+      # Per-job evaluation timeout for E2E and local runs. This is consumed by the
+      # worker's evaluation handler via the E2E_AI_TIMEOUT environment variable.
+      # Default is 4m to stay under the 5-minute SLA unless explicitly overridden.
+      - E2E_AI_TIMEOUT=${E2E_AI_TIMEOUT:-4m}
     deploy:
       resources:
         limits:
@@ -96,6 +108,18 @@ services:
         reservations:
           memory: 1G
           cpus: '1.0'
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
 
   db:
@@ -153,6 +177,8 @@ services:
     environment:
       CONFIG_FILEPATH: /tmp/config.yml
       CONSOLE_CONFIG_FILE: |
+        server:
+          basePath: /redpanda
         kafka:
           brokers: ["redpanda:9092"]
           schemaRegistry:
@@ -205,6 +231,7 @@ services:
     image: prom/prometheus:v2.53.0
     volumes:
       - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus-rules.yml:/etc/prometheus/prometheus-rules.yml:ro
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -213,15 +240,42 @@ services:
       - "--web.external-url=/prometheus/"
       - "--web.route-prefix=/prometheus"
 
+  loki:
+    image: grafana/loki:3.0.0
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./deploy/loki-config.yml:/etc/loki/config.yml:ro
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    command: ["-config.file=/etc/promtail/config.yml"]
+    volumes:
+      - ./deploy/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    command: ["--smtp", "0.0.0.0:1025", "--listen", "0.0.0.0:8025", "--webroot", "/mailpit/"]
+    # Web UI is proxied behind SSO at /mailpit/ by dev-nginx; local port is
+    # still exposed for manual debugging if needed.
+    ports:
+      - "8025:8025"
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:11.1.0
     volumes:
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./deploy/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
       - ./deploy/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
     environment:
-      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s/grafana/
+      - GF_SERVER_ROOT_URL=http://localhost:8088/grafana/
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_AUTH_DISABLE_LOGIN_FORM=true
       - GF_AUTH_PROXY_ENABLED=true
@@ -229,8 +283,20 @@ services:
       - GF_AUTH_PROXY_AUTO_SIGN_UP=true
       - GF_USERS_AUTO_ASSIGN_ORG=true
       - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+      - GF_SMTP_ENABLED=true
+      # Default to Mailpit for local & CI/e2e. To toggle to Gmail SMTP in a
+      # different environment, override GF_SMTP_HOST / GF_SMTP_USER /
+      # GF_SMTP_PASSWORD via environment or a compose override file.
+      - GF_SMTP_HOST=mailpit:1025
+      - GF_SMTP_USER=${GMAIL_SMTP_USERNAME}
+      - GF_SMTP_PASSWORD=${GMAIL_SMTP_CREDENTIALS}
+      - GF_SMTP_FROM_ADDRESS=${GMAIL_SMTP_USERNAME}
+      - GF_SMTP_FROM_NAME=AI CV Evaluator Alerts
+      - GF_SMTP_SKIP_VERIFY=true
+      - GF_SMTP_STARTTLS_POLICY=NoStartTLS
     depends_on:
       - prometheus
+      - loki
 
   # Keycloak (dev)
   keycloak:
@@ -250,7 +316,11 @@ services:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
-      OAUTH2_PROXY_OIDC_ISSUER_URL: http://keycloak:8080/realms/aicv
+      # Use public issuer on localhost:8089 for tokens & discovery metadata
+      OAUTH2_PROXY_OIDC_ISSUER_URL: http://localhost:8089/realms/aicv
+      OAUTH2_PROXY_LOGIN_URL: http://localhost:8089/realms/aicv/protocol/openid-connect/auth
+      # Use internal keycloak hostname for backchannel token exchange only
+      OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:-oauth2-proxy-secret}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:-MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
@@ -258,10 +328,17 @@ services:
       OAUTH2_PROXY_COOKIE_SAMESITE: lax
       OAUTH2_PROXY_EMAIL_DOMAINS: "*"
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
-      OAUTH2_PROXY_WHITELIST_DOMAINS: .localhost
+      OAUTH2_PROXY_WHITELIST_DOMAINS: .localhost,localhost:8088
       OAUTH2_PROXY_REDIRECT_URL: http://localhost:8088/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      # Skip OIDC discovery (container cannot reach localhost:8089); provide
+      # JWKS URL explicitly for signature verification.
+      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: "email"
+      OAUTH2_PROXY_SKIP_CLAIMS_FROM_PROFILE_URL: "true"
+      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
     depends_on:
       - keycloak
     restart: unless-stopped
@@ -280,9 +357,14 @@ services:
       - frontend
       - oauth2-proxy
       - keycloak
+      - grafana
+      - prometheus
+      - jaeger
+      - redpanda-console
     restart: unless-stopped
 
 volumes:
   db_data:
+  redis_data:
   redpanda_data:
   qdrant_data: {}

@@ -179,7 +179,7 @@
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-sm font-medium text-gray-600">Total Uploads</p>
-                  <p class="text-3xl font-bold text-gray-900">{{ stats.uploads }}</p>
+                  <p class="text-3xl font-bold text-gray-900" data-testid="stats-uploads">{{ stats.uploads }}</p>
                 </div>
                 <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,11 +187,11 @@
                   </svg>
                 </div>
               </div>
-              <div class="mt-4 flex items-center text-sm text-green-600">
+              <div class="mt-4 flex items-center text-sm text-gray-500">
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
                 </svg>
-                +12% from last month
+                Live total based on all stored uploads
               </div>
             </div>
 
@@ -199,7 +199,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm font-medium text-gray-600">Evaluations</p>
-                <p class="text-3xl font-bold text-gray-900">{{ stats.evaluations }}</p>
+                <p class="text-3xl font-bold text-gray-900" data-testid="stats-evaluations">{{ stats.evaluations }}</p>
               </div>
               <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -207,11 +207,11 @@
                 </svg>
               </div>
             </div>
-            <div class="mt-4 flex items-center text-sm text-green-600">
+            <div class="mt-4 flex items-center text-sm text-gray-500">
               <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
               </svg>
-              +8% from last month
+              Live count of evaluation jobs in the system
             </div>
           </div>
 
@@ -219,7 +219,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm font-medium text-gray-600">Completed</p>
-                <p class="text-3xl font-bold text-gray-900">{{ stats.completed }}</p>
+                <p class="text-3xl font-bold text-gray-900" data-testid="stats-completed">{{ stats.completed }}</p>
               </div>
               <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                 <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,11 +227,11 @@
                 </svg>
               </div>
             </div>
-            <div class="mt-4 flex items-center text-sm text-green-600">
+            <div class="mt-4 flex items-center text-sm text-gray-500">
               <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
               </svg>
-              +15% from last month
+              Number of jobs that have finished processing
             </div>
           </div>
 
@@ -239,7 +239,7 @@
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm font-medium text-gray-600">Avg Time</p>
-                <p class="text-3xl font-bold text-gray-900">{{ stats.avgTime }}</p>
+                <p class="text-3xl font-bold text-gray-900" data-testid="stats-avg-time">{{ stats.avgTime }}</p>
                 <p class="text-sm text-gray-500">seconds</p>
               </div>
               <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -248,11 +248,11 @@
                 </svg>
               </div>
             </div>
-            <div class="mt-4 flex items-center text-sm text-red-600">
+            <div class="mt-4 flex items-center text-sm text-gray-500">
               <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
               </svg>
-              -5% from last month
+              Average processing time for completed jobs
             </div>
           </div>
           </template>
@@ -367,7 +367,7 @@
                     View Metrics
                   </a>
                   <a 
-                    href="http://localhost:3000" 
+                    href="/grafana/" 
                     target="_blank" 
                     class="flex-1 bg-gray-600 text-white text-center py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors"
                   >

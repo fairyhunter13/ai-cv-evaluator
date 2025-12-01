@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
+	"go.opentelemetry.io/otel"
 )
 
 // UploadService ingests sanitized texts and persists them via the repository.
@@ -24,6 +25,10 @@ func NewUploadService(r domain.UploadRepository) UploadService { return UploadSe
 // Ingest sanitizes input texts, validates non-empty content, and stores both
 // the CV and project uploads, returning their generated ids.
 func (s UploadService) Ingest(ctx domain.Context, cvText, projText, cvName, projName string) (string, string, error) {
+	tr := otel.Tracer("usecase.upload")
+	ctx, span := tr.Start(ctx, "UploadService.Ingest")
+	defer span.End()
+
 	cvText = sanitize(cvText)
 	projText = sanitize(projText)
 	if cvText == "" || projText == "" {
