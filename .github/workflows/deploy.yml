@@ -282,9 +282,104 @@ jobs:
       - name: Unit tests + coverage enforcement (>=80%)
         run: make ci-test
 
+  playwright-predeploy:
+    runs-on: ubuntu-latest
+    needs: pre-deploy-checks
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SOPS and AGE
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y age
+          SOPS_VERSION="3.8.1"
+          curl -L "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" -o sops
+          sudo install -m 0755 sops /usr/local/bin/sops
+          sops --version
+
+      - name: Prepare SOPS age key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          if [ -z "$SOPS_AGE_KEY" ]; then
+            echo "SOPS_AGE_KEY not set; skipping SOPS age key setup"
+            exit 0
+          fi
+          mkdir -p ~/.config/sops/age
+          printf %s "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+
+      - name: Decrypt env for Playwright (.env from secrets/env.sops.yaml)
+        run: |
+          if [ ! -f secrets/env.sops.yaml ]; then
+            echo "secrets/env.sops.yaml not found; skipping decrypt-env"
+            exit 0
+          fi
+          make decrypt-env
+
+      - name: Export .env to job environment
+        run: |
+          if [ ! -f .env ]; then
+            echo ".env not found; skipping export to GITHUB_ENV"
+            exit 0
+          fi
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            case "$line" in \#*) continue;; esac
+            key="${line%%=*}"; val="${line#*=}"; echo "$key=$val" >> $GITHUB_ENV
+          done < .env
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright and frontend dependencies
+        run: |
+          cd admin-frontend
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Start observability stack (docker-compose)
+        run: |
+          docker compose up -d
+
+      - name: Wait for backend readiness
+        run: |
+          set -e
+          ATTEMPTS=60
+          for i in $(seq 1 $ATTEMPTS); do
+            if curl -fsS http://localhost:8080/readyz >/dev/null 2>&1; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "Waiting for backend readyz... ($i/$ATTEMPTS)"
+            sleep 2
+          done
+          echo "Backend failed to become ready in time"
+          docker compose ps
+          exit 1
+
+      - name: Run Playwright SSO + Grafana E2E spec (pre-deploy gate)
+        run: |
+          cd admin-frontend
+          npm run test:e2e -- tests/sso-gate.spec.ts
+
+      - name: Dump docker logs on failure
+        if: failure()
+        run: |
+          docker compose logs
+
+      - name: Teardown observability stack
+        if: always()
+        run: |
+          docker compose down -v
+
   deploy:
     runs-on: ubuntu-latest
-    needs: [pre-deploy-checks, build-and-scan, e2e-verify, quality-gates]
+    needs: [pre-deploy-checks, build-and-scan, e2e-verify, quality-gates, playwright-predeploy]
     environment: production
     steps:
       - name: Checkout

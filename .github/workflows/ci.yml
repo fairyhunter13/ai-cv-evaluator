@@ -84,12 +84,13 @@ jobs:
         run: make vuln
 
       - name: Security - Gosec (SARIF)
+        id: gosec-sarif
         run: make gosec-sarif
         continue-on-error: true
 
       - name: Upload Gosec results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && steps.gosec-sarif.conclusion == 'success'
         with:
           sarif_file: gosec-results.sarif
 
