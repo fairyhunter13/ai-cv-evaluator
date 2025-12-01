@@ -123,8 +123,8 @@ jobs:
       - name: Build and push frontend Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./admin-frontend
-          file: admin-frontend/Dockerfile.prod
+          context: .
+          file: ./admin-frontend/Dockerfile.prod
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
