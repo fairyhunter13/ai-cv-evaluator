@@ -494,3 +494,60 @@ func TestService_GetCheapestPaidModels(t *testing.T) {
 		assert.Equal(t, "paid-cheap", cheapestOnly[0].ID)
 	})
 }
+
+func TestParsePrice_EmptyAndInvalid(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, 0.0, parsePrice(""))
+	require.Equal(t, 0.0, parsePrice("not-a-number"))
+}
+
+func TestParsePrice_CurrencyAndSuffix(t *testing.T) {
+	t.Parallel()
+
+	// Should handle currency prefix and suffix like "/1k tokens".
+	got := parsePrice("$0.0123/1k tokens")
+	require.InDelta(t, 0.0123, got, 1e-6)
+}
+
+func TestEffectivePrice_RequestPreferred(t *testing.T) {
+	t.Parallel()
+
+	p := Pricing{
+		Request:    "0.002",
+		Prompt:     "0.01",
+		Completion: "0.02",
+	}
+
+	require.InDelta(t, 0.002, effectivePrice(p), 1e-9)
+}
+
+func TestEffectivePrice_FallbackPromptAndCompletion(t *testing.T) {
+	t.Parallel()
+
+	p := Pricing{
+		Request:    "",
+		Prompt:     "0.01",
+		Completion: "0.02",
+	}
+
+	require.InDelta(t, 0.03, effectivePrice(p), 1e-9)
+}
+
+func TestCapacityScore_PerRequestAndContext(t *testing.T) {
+	t.Parallel()
+
+	// With explicit per-request limits
+	m := Model{
+		PerRequestLimits: &PerRequestLimits{PromptTokens: 1000, CompletionTokens: 2000},
+		ContextLength:    4096,
+	}
+	require.InDelta(t, 3000.0, capacityScore(m), 1e-6)
+
+	// With no per-request limits falls back to context length
+	m2 := Model{
+		PerRequestLimits: nil,
+		ContextLength:    8192,
+	}
+	require.InDelta(t, 8192.0, capacityScore(m2), 1e-6)
+}
