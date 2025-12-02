@@ -370,6 +370,11 @@ jobs:
                 exit 1
               fi
             fi
+            # Ensure current user can access the Docker daemon via the docker group
+            if command -v sudo >/dev/null 2>&1; then
+              sudo groupadd docker >/dev/null 2>&1 || true
+              sudo usermod -aG docker "$USER" || true
+            fi
           '
 
       - name: Login to GHCR on server
