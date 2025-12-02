@@ -135,6 +135,7 @@ jobs:
       # E2E tests on tags are handled in the deploy workflow's e2e-verify job
 
   playwright-e2e:
+    if: github.event_name == 'pull_request'
     needs: build-test
     runs-on: ubuntu-latest
     timeout-minutes: 40
