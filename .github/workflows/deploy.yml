@@ -399,7 +399,17 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
             # Load production env for docker compose variable interpolation (Keycloak, OAuth, etc.)
-            set -a; [ -f .env.production ] && . ./.env.production || true; set +a
+            if [ -f .env.production ]; then
+              set -a
+              while IFS= read -r line; do
+                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
+                case "$line" in
+                  ''|\#*) continue ;;
+                  *=*) eval "$line" ;;
+                esac
+              done < .env.production
+              set +a
+            fi
 
             # Check if services are running
             if docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | grep -q .; then
@@ -428,7 +438,17 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
             # Load production env for DB_URL (if present)
-            set -a; [ -f .env.production ] && . ./.env.production || true; set +a
+            if [ -f .env.production ]; then
+              set -a
+              while IFS= read -r line; do
+                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
+                case "$line" in
+                  ''|\#*) continue ;;
+                  *=*) eval "$line" ;;
+                esac
+              done < .env.production
+              set +a
+            fi
 
             # Ensure DB service is up for backup/migrations
             docker compose -f docker-compose.prod.yml up -d db
@@ -449,7 +469,17 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
             # Load production env so docker compose can interpolate required variables
-            set -a; [ -f .env.production ] && . ./.env.production || true; set +a
+            if [ -f .env.production ]; then
+              set -a
+              while IFS= read -r line; do
+                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
+                case "$line" in
+                  ''|\#*) continue ;;
+                  *=*) eval "$line" ;;
+                esac
+              done < .env.production
+              set +a
+            fi
             # Update image tags in prod compose file
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-server:.*|image: ghcr.io/${{ github.repository }}-server:${{ github.sha }}|g" docker-compose.prod.yml || true
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-worker:.*|image: ghcr.io/${{ github.repository }}-worker:${{ github.sha }}|g" docker-compose.prod.yml || true
@@ -493,7 +523,17 @@ jobs:
             set -e
             cd ~/ai-cv-evaluator
             # Load production env for docker compose (Keycloak, OAuth, etc.)
-            set -a; [ -f .env.production ] && . ./.env.production || true; set +a
+            if [ -f .env.production ]; then
+              set -a
+              while IFS= read -r line; do
+                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
+                case "$line" in
+                  ''|\#*) continue ;;
+                  *=*) eval "$line" ;;
+                esac
+              done < .env.production
+              set +a
+            fi
             if [ -z "'$LETSENCRYPT_EMAIL'" ]; then
               echo "LETSENCRYPT_EMAIL not set; skipping cert issuance";
             else
@@ -527,7 +567,17 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
             # Load production env for docker compose logs/ps
-            set -a; [ -f .env.production ] && . ./.env.production || true; set +a
+            if [ -f .env.production ]; then
+              set -a
+              while IFS= read -r line; do
+                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
+                case "$line" in
+                  ''|\#*) continue ;;
+                  *=*) eval "$line" ;;
+                esac
+              done < .env.production
+              set +a
+            fi
             
             # Check all services are running
             echo "=== Service Status ==="
