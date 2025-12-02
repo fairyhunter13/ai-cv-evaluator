@@ -5,7 +5,10 @@
   >
     <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
       <div class="text-center">
-        <LoadingSpinner :size="size" :text="text" />
+        <LoadingSpinner
+          :size="size"
+          :text="text"
+        />
       </div>
     </div>
   </div>

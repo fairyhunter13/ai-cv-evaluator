@@ -76,8 +76,8 @@ jobs:
         run: |
           test -d admin-frontend/dist || {
             echo "Frontend build missing" >&2; exit 1; }
-      - name: Lint
-        run: make lint
+      - name: Lint (backend/frontend/infra/docs)
+        run: make lint-all
       - name: Vet
         run: make vet
       - name: Security - Vulnerabilities

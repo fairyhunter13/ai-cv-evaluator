@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook: run unified lint-all before allowing commit.
+# To enable, run: git config core.hooksPath .githooks
+
+if [ "${SKIP_PRE_COMMIT_LINT:-}" = "1" ]; then
+  echo "SKIP_PRE_COMMIT_LINT=1 set, skipping pre-commit lint-all"
+  exit 0
+fi
+
+if ! command -v make >/dev/null 2>&1; then
+  echo "make not found; skipping lint-all in pre-commit hook"
+  exit 0
+fi
+
+echo "Running make lint-all (backend/frontend/infra/docs) before commit..."
+make lint-all

@@ -6,7 +6,9 @@
       :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
     >
       <div class="flex items-center justify-center h-16 bg-gradient-to-r from-primary-600 to-primary-700">
-        <h1 class="text-xl font-bold text-white">AI CV Evaluator</h1>
+        <h1 class="text-xl font-bold text-white">
+          AI CV Evaluator
+        </h1>
       </div>
       
       <nav class="mt-8">
@@ -15,9 +17,24 @@
             to="/dashboard" 
             class="flex items-center px-4 py-3 text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
           >
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
+            <svg
+              class="w-5 h-5 mr-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"
+              />
             </svg>
             Dashboard
           </router-link>
@@ -25,8 +42,18 @@
             to="/upload" 
             class="flex items-center px-4 py-3 text-sm font-medium text-primary-600 bg-primary-50 rounded-lg"
           >
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            <svg
+              class="w-5 h-5 mr-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+              />
             </svg>
             Upload Files
           </router-link>
@@ -34,8 +61,18 @@
             to="/evaluate" 
             class="flex items-center px-4 py-3 text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
           >
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            <svg
+              class="w-5 h-5 mr-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
             Start Evaluation
           </router-link>
@@ -43,8 +80,18 @@
             to="/result" 
             class="flex items-center px-4 py-3 text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
           >
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            <svg
+              class="w-5 h-5 mr-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
             </svg>
             View Results
           </router-link>
@@ -52,8 +99,18 @@
             to="/jobs" 
             class="flex items-center px-4 py-3 text-sm font-medium text-gray-600 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
           >
-            <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            <svg
+              class="w-5 h-5 mr-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+              />
             </svg>
             Job Management
           </router-link>
@@ -68,26 +125,42 @@
         <div class="flex items-center justify-between px-6 py-4">
           <div class="flex items-center">
             <button 
-              @click="toggleSidebar" 
-              class="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100"
+              class="lg:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100" 
+              @click="toggleSidebar"
             >
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              <svg
+                class="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
               </svg>
             </button>
-            <h1 class="text-2xl font-semibold text-gray-900 ml-4 lg:ml-0">Upload Files</h1>
+            <h1 class="text-2xl font-semibold text-gray-900 ml-4 lg:ml-0">
+              Upload Files
+            </h1>
           </div>
           
           <div class="flex items-center space-x-4">
             <div class="flex items-center space-x-3">
               <div class="text-right">
-                <p class="text-sm font-medium text-gray-900">{{ authStore.user?.username }}</p>
-                <p class="text-xs text-gray-500">Administrator</p>
+                <p class="text-sm font-medium text-gray-900">
+                  {{ authStore.user?.username }}
+                </p>
+                <p class="text-xs text-gray-500">
+                  Administrator
+                </p>
               </div>
               <div class="relative">
                 <button 
-                  @click="toggleUserMenu" 
-                  class="flex items-center space-x-2 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  class="flex items-center space-x-2 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500" 
+                  @click="toggleUserMenu"
                 >
                   <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
                     <span class="text-primary-600 font-medium text-sm">
@@ -101,11 +174,21 @@
                   class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50"
                 >
                   <button 
-                    @click="handleLogout"
                     class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    @click="handleLogout"
                   >
-                    <svg class="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                    <svg
+                      class="w-4 h-4 mr-3"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                      />
                     </svg>
                     Sign out
                   </button>
@@ -121,56 +204,97 @@
         <div class="max-w-4xl mx-auto">
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
             <div class="text-center mb-8">
-              <h2 class="text-2xl font-bold text-gray-900 mb-2">Upload Documents</h2>
-              <p class="text-gray-600">Upload your CV and project files for AI evaluation</p>
+              <h2 class="text-2xl font-bold text-gray-900 mb-2">
+                Upload Documents
+              </h2>
+              <p class="text-gray-600">
+                Upload your CV and project files for AI evaluation
+              </p>
             </div>
 
-            <form @submit.prevent="handleUpload" class="space-y-8">
+            <form
+              class="space-y-8"
+              @submit.prevent="handleUpload"
+            >
               <!-- CV Upload -->
               <div>
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   CV File (PDF, DOC, DOCX)
                 </label>
                 <div 
+                  class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-400 transition-colors"
+                  :class="{ 'border-primary-400 bg-primary-50': dragOver.cv }"
                   @drop="handleDrop($event, 'cv')"
                   @dragover.prevent
                   @dragenter.prevent
-                  class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-400 transition-colors"
-                  :class="{ 'border-primary-400 bg-primary-50': dragOver.cv }"
                 >
                   <input
                     ref="cvInput"
                     type="file"
                     accept=".pdf,.doc,.docx"
-                    @change="handleFileSelect($event, 'cv')"
                     class="hidden"
-                  />
-                  <div v-if="!files.cv" class="space-y-4">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    @change="handleFileSelect($event, 'cv')"
+                  >
+                  <div
+                    v-if="!files.cv"
+                    class="space-y-4"
+                  >
+                    <svg
+                      class="mx-auto h-12 w-12 text-gray-400"
+                      stroke="currentColor"
+                      fill="none"
+                      viewBox="0 0 48 48"
+                    >
+                      <path
+                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
                     </svg>
                     <div>
                       <button
                         type="button"
-                        @click="cvInput?.click()"
                         class="text-primary-600 hover:text-primary-500 font-medium"
+                        @click="cvInput?.click()"
                       >
                         Click to upload
                       </button>
-                      <p class="text-gray-500">or drag and drop</p>
+                      <p class="text-gray-500">
+                        or drag and drop
+                      </p>
                     </div>
-                    <p class="text-sm text-gray-500">PDF, DOC, DOCX up to 10MB</p>
+                    <p class="text-sm text-gray-500">
+                      PDF, DOC, DOCX up to 10MB
+                    </p>
                   </div>
-                  <div v-else class="space-y-2">
-                    <svg class="mx-auto h-8 w-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  <div
+                    v-else
+                    class="space-y-2"
+                  >
+                    <svg
+                      class="mx-auto h-8 w-8 text-green-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
-                    <p class="text-sm font-medium text-gray-900">{{ files.cv.name }}</p>
-                    <p class="text-sm text-gray-500">{{ formatFileSize(files.cv.size) }}</p>
+                    <p class="text-sm font-medium text-gray-900">
+                      {{ files.cv.name }}
+                    </p>
+                    <p class="text-sm text-gray-500">
+                      {{ formatFileSize(files.cv.size) }}
+                    </p>
                     <button
                       type="button"
-                      @click="removeFile('cv')"
                       class="text-red-600 hover:text-red-500 text-sm"
+                      @click="removeFile('cv')"
                     >
                       Remove
                     </button>
@@ -184,45 +308,79 @@
                   Project File (PDF, DOC, DOCX)
                 </label>
                 <div 
+                  class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-400 transition-colors"
+                  :class="{ 'border-primary-400 bg-primary-50': dragOver.project }"
                   @drop="handleDrop($event, 'project')"
                   @dragover.prevent
                   @dragenter.prevent
-                  class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-400 transition-colors"
-                  :class="{ 'border-primary-400 bg-primary-50': dragOver.project }"
                 >
                   <input
                     ref="projectInput"
                     type="file"
                     accept=".pdf,.doc,.docx"
-                    @change="handleFileSelect($event, 'project')"
                     class="hidden"
-                  />
-                  <div v-if="!files.project" class="space-y-4">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    @change="handleFileSelect($event, 'project')"
+                  >
+                  <div
+                    v-if="!files.project"
+                    class="space-y-4"
+                  >
+                    <svg
+                      class="mx-auto h-12 w-12 text-gray-400"
+                      stroke="currentColor"
+                      fill="none"
+                      viewBox="0 0 48 48"
+                    >
+                      <path
+                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
                     </svg>
                     <div>
                       <button
                         type="button"
-                        @click="projectInput?.click()"
                         class="text-primary-600 hover:text-primary-500 font-medium"
+                        @click="projectInput?.click()"
                       >
                         Click to upload
                       </button>
-                      <p class="text-gray-500">or drag and drop</p>
+                      <p class="text-gray-500">
+                        or drag and drop
+                      </p>
                     </div>
-                    <p class="text-sm text-gray-500">PDF, DOC, DOCX up to 10MB</p>
+                    <p class="text-sm text-gray-500">
+                      PDF, DOC, DOCX up to 10MB
+                    </p>
                   </div>
-                  <div v-else class="space-y-2">
-                    <svg class="mx-auto h-8 w-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  <div
+                    v-else
+                    class="space-y-2"
+                  >
+                    <svg
+                      class="mx-auto h-8 w-8 text-green-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
-                    <p class="text-sm font-medium text-gray-900">{{ files.project.name }}</p>
-                    <p class="text-sm text-gray-500">{{ formatFileSize(files.project.size) }}</p>
+                    <p class="text-sm font-medium text-gray-900">
+                      {{ files.project.name }}
+                    </p>
+                    <p class="text-sm text-gray-500">
+                      {{ formatFileSize(files.project.size) }}
+                    </p>
                     <button
                       type="button"
-                      @click="removeFile('project')"
                       class="text-red-600 hover:text-red-500 text-sm"
+                      @click="removeFile('project')"
                     >
                       Remove
                     </button>
@@ -231,11 +389,22 @@
               </div>
 
               <!-- Error Message -->
-              <div v-if="error" class="rounded-md bg-red-50 p-4">
+              <div
+                v-if="error"
+                class="rounded-md bg-red-50 p-4"
+              >
                 <div class="flex">
                   <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    <svg
+                      class="h-5 w-5 text-red-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                        clip-rule="evenodd"
+                      />
                     </svg>
                   </div>
                   <div class="ml-3">
@@ -247,11 +416,22 @@
               </div>
 
               <!-- Success Message -->
-              <div v-if="success" class="rounded-md bg-green-50 p-4">
+              <div
+                v-if="success"
+                class="rounded-md bg-green-50 p-4"
+              >
                 <div class="flex">
                   <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    <svg
+                      class="h-5 w-5 text-green-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clip-rule="evenodd"
+                      />
                     </svg>
                   </div>
                   <div class="ml-3">
@@ -283,9 +463,9 @@
     <!-- Mobile Sidebar Overlay -->
     <div 
       v-if="sidebarOpen" 
-      @click="toggleSidebar" 
-      class="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
-    ></div>
+      class="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden" 
+      @click="toggleSidebar"
+    />
   </div>
 </template>
 

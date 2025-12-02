@@ -10,7 +10,10 @@
       :class="spinnerClass"
     />
     <slot v-if="!loading" />
-    <span v-if="loading && loadingText" class="ml-2">{{ loadingText }}</span>
+    <span
+      v-if="loading && loadingText"
+      class="ml-2"
+    >{{ loadingText }}</span>
     <span v-else-if="!loading && text">{{ text }}</span>
   </button>
 </template>

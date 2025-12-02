@@ -1,7 +1,10 @@
 <template>
   <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
     <div class="text-center">
-      <LoadingSpinner size="lg" :text="text" />
+      <LoadingSpinner
+        size="lg"
+        :text="text"
+      />
     </div>
   </div>
 </template>
