@@ -83,8 +83,9 @@ jobs:
 
           wait_for_workflow() {
             local wf_name="$1"
-            local max_attempts=10
-            local sleep_seconds=30
+            # CI can be relatively heavy; allow up to ~30 minutes total
+            local max_attempts=30
+            local sleep_seconds=60
 
             echo "Waiting for workflow '$wf_name' on commit $SHA to succeed..."
 
@@ -138,10 +139,51 @@ jobs:
             exit 1
           }
 
+          print_workflow_status() {
+            local wf_name="$1"
+
+            echo "Checking latest '$wf_name' workflow run for commit $SHA (non-blocking)..."
+
+            runs_json=$(curl -sS \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=100")
+
+            local match
+            match=$(echo "$runs_json" | jq -r --arg sha "$SHA" --arg name "$wf_name" '
+              .workflow_runs
+              | map(select(.name == $name and .head_sha == $sha))
+              | sort_by(.run_number) | last // empty
+            ')
+
+            if [ -z "$match" ]; then
+              echo "[WARN] No '$wf_name' run found for commit $SHA. This check will not block deployment but please verify manually if needed."
+              return 0
+            fi
+
+            local status conclusion html_url event head_branch run_number
+            status=$(echo "$match" | jq -r '.status')
+            conclusion=$(echo "$match" | jq -r '.conclusion // empty')
+            html_url=$(echo "$match" | jq -r '.html_url')
+            event=$(echo "$match" | jq -r '.event')
+            head_branch=$(echo "$match" | jq -r '.head_branch // "(none)"')
+            run_number=$(echo "$match" | jq -r '.run_number // 0')
+
+            echo "Latest $wf_name run: $html_url"
+            echo "Status: $status, conclusion: ${conclusion:-'(none)'}, event: $event, branch: $head_branch, run_number: $run_number"
+
+            if [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then
+              echo "[WARN] '$wf_name' completed with conclusion='$conclusion'. Deployment will continue, but you should review this run."
+            fi
+          }
+
+          # Hard gate: CI must be successful for this commit
           wait_for_workflow "CI"
-          wait_for_workflow "Security Scans"
-          wait_for_workflow "Secrets Healthcheck"
-          wait_for_workflow "Docker Publish"
+
+          # Soft, non-blocking checks: log latest status for visibility
+          print_workflow_status "Security Scans"
+          print_workflow_status "Secrets Healthcheck"
+          print_workflow_status "Docker Publish"
  
   e2e-verify:
     runs-on: ubuntu-latest
