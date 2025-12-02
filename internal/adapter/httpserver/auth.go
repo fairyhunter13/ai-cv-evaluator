@@ -328,7 +328,7 @@ func (sm *SessionManager) AuthRequired(next http.Handler) http.Handler {
 }
 
 // getSSOUsernameFromHeaders extracts a trusted username from reverse-proxy SSO headers.
-// Works with Authentik outpost forward-auth and common auth proxy conventions.
+// Works with oauth2-proxy (X-Auth-Request-User) and common auth proxy conventions.
 func getSSOUsernameFromHeaders(r *http.Request) string {
 	// oauth2-proxy header when set_xauthrequest = true
 	if v := strings.TrimSpace(r.Header.Get("X-Auth-Request-User")); v != "" {
@@ -336,16 +336,6 @@ func getSSOUsernameFromHeaders(r *http.Request) string {
 	}
 	// Generic proxy header and legacy support
 	if v := strings.TrimSpace(r.Header.Get("X-Forwarded-User")); v != "" {
-		return v
-	}
-	// Legacy Authentik headers (backwards compatibility)
-	if v := strings.TrimSpace(r.Header.Get("X-Authentik-Username")); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(r.Header.Get("X-Authentik-Email")); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(r.Header.Get("X-Authentik-Name")); v != "" {
 		return v
 	}
 	return ""

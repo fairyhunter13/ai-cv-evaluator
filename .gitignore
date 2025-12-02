@@ -27,6 +27,10 @@ test/dump
 # artifacts
 artifacts/
 
+# GitHub Actions logs and artifacts (local downloads)
+gh-logs/
+playwright-e2e-logs-artifact/
+
 # Project reports and submissions
 submissions/admin-frontend/test-results/
 submissions/
