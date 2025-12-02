@@ -299,10 +299,15 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
-                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
                 case "$line" in
-                  ''|\#*) continue ;;
-                  *=*) eval "$line" ;;
+                  ''|\#*)
+                    continue
+                    ;;
+                esac
+                case "$line" in
+                  *=*)
+                    eval "$line"
+                    ;;
                 esac
               done < .env.production
               set +a
@@ -338,10 +343,15 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
-                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
                 case "$line" in
-                  ''|\#*) continue ;;
-                  *=*) eval "$line" ;;
+                  ''|\#*)
+                    continue
+                    ;;
+                esac
+                case "$line" in
+                  *=*)
+                    eval "$line"
+                    ;;
                 esac
               done < .env.production
               set +a
@@ -369,10 +379,15 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
-                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
                 case "$line" in
-                  ''|\#*) continue ;;
-                  *=*) eval "$line" ;;
+                  ''|\#*)
+                    continue
+                    ;;
+                esac
+                case "$line" in
+                  *=*)
+                    eval "$line"
+                    ;;
                 esac
               done < .env.production
               set +a
@@ -423,10 +438,15 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
-                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
                 case "$line" in
-                  ''|\#*) continue ;;
-                  *=*) eval "$line" ;;
+                  ''|\#*)
+                    continue
+                    ;;
+                esac
+                case "$line" in
+                  *=*)
+                    eval "$line"
+                    ;;
                 esac
               done < .env.production
               set +a
@@ -467,10 +487,15 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
-                case "$line" in ''|\#*) continue ;; *"="*) : ;; *=*) : ;; esac
                 case "$line" in
-                  ''|\#*) continue ;;
-                  *=*) eval "$line" ;;
+                  ''|\#*)
+                    continue
+                    ;;
+                esac
+                case "$line" in
+                  *=*)
+                    eval "$line"
+                    ;;
                 esac
               done < .env.production
               set +a
