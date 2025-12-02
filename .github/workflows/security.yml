@@ -104,7 +104,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Build Docker image for scanning
-        run: docker build -t ai-cv-evaluator:security-scan .
+        run: docker build -f deploy/docker/Dockerfile.server -t ai-cv-evaluator:security-scan .
       
       # Trivy comprehensive scan
       - name: Trivy Filesystem Scan
