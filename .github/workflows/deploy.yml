@@ -3,6 +3,7 @@ name: Deploy
 permissions:
   contents: read
   packages: write
+  actions: write
 
 on:
   workflow_dispatch:
@@ -83,8 +84,8 @@ jobs:
 
           wait_for_workflow() {
             local wf_name="$1"
-            # CI can be relatively heavy; allow up to ~30 minutes total
-            local max_attempts=30
+            # CI can be relatively heavy; allow up to ~10 minutes per attempt
+            local max_attempts=10
             local sleep_seconds=60
 
             echo "Waiting for workflow '$wf_name' on commit $SHA to succeed..."
@@ -124,7 +125,7 @@ jobs:
                     return 0
                   else
                     echo "$wf_name did not succeed (conclusion=$conclusion); blocking deploy."
-                    exit 1
+                    return 1
                   fi
                 fi
               fi
@@ -136,7 +137,7 @@ jobs:
             done
 
             echo "Timed out waiting for '$wf_name' workflow to complete successfully for commit $SHA."
-            exit 1
+            return 2
           }
 
           print_workflow_status() {
@@ -178,7 +179,38 @@ jobs:
           }
 
           # Hard gate: CI must be successful for this commit
-          wait_for_workflow "CI"
+          ci_result=0
+          if ! wait_for_workflow "CI"; then
+            ci_result=$?
+          fi
+
+          if [ "$ci_result" -eq 1 ]; then
+            echo "CI completed but did not succeed; failing deployment."
+            exit 1
+          elif [ "$ci_result" -eq 2 ]; then
+            echo "CI did not complete successfully within the expected time window."
+            echo "Evaluating whether to auto-rerun this Deploy workflow instead of requiring a new tag..."
+
+            ATTEMPT="${GITHUB_RUN_ATTEMPT:-1}"
+            MAX_ATTEMPTS="${DEPLOY_AUTO_RERUN_MAX_ATTEMPTS:-3}"
+
+            echo "Current Deploy run attempt: $ATTEMPT (max auto-rerun attempts: $MAX_ATTEMPTS)"
+
+            if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Requesting auto-rerun of this Deploy workflow via GitHub Actions API..."
+              curl -sS -X POST \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${OWNER}/${REPO}/actions/runs/${GITHUB_RUN_ID}/rerun" \
+                || echo "Warning: failed to request auto-rerun via GitHub API."
+
+              echo "Exiting with failure so that the next attempt can pick up fresh CI results."
+            else
+              echo "Maximum auto-rerun attempts ($MAX_ATTEMPTS) reached; not scheduling another rerun."
+            fi
+
+            exit 1
+          fi
 
           # Soft, non-blocking checks: log latest status for visibility
           print_workflow_status "Security Scans"
