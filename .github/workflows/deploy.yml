@@ -101,7 +101,15 @@ jobs:
               local match
               match=$(echo "$runs_json" | jq -r --arg sha "$SHA" --arg name "$wf_name" '
                 .workflow_runs
-                | map(select(.name == $name and .head_sha == $sha))
+                | map(
+                    select(
+                      .name == $name and .head_sha == $sha
+                      and (
+                        # For Docker Publish, require the main branch push run so images are fully built
+                        ($name != "Docker Publish") or (.head_branch == "main" and .event == "push")
+                      )
+                    )
+                  )
                 | sort_by(.run_number) | last // empty
               ')
 
@@ -178,7 +186,7 @@ jobs:
             fi
           }
 
-          # Hard gate: CI must be successful for this commit
+          # Hard gates: CI and Docker Publish must be successful for this commit
           ci_result=0
           if ! wait_for_workflow "CI"; then
             ci_result=$?
@@ -212,10 +220,42 @@ jobs:
             exit 1
           fi
 
+          dp_result=0
+          if ! wait_for_workflow "Docker Publish"; then
+            dp_result=$?
+          fi
+
+          if [ "$dp_result" -eq 1 ]; then
+            echo "Docker Publish completed but did not succeed; failing deployment."
+            exit 1
+          elif [ "$dp_result" -eq 2 ]; then
+            echo "Docker Publish did not complete successfully within the expected time window."
+            echo "Evaluating whether to auto-rerun this Deploy workflow instead of requiring a new tag..."
+
+            ATTEMPT="${GITHUB_RUN_ATTEMPT:-1}"
+            MAX_ATTEMPTS="${DEPLOY_AUTO_RERUN_MAX_ATTEMPTS:-3}"
+
+            echo "Current Deploy run attempt: $ATTEMPT (max auto-rerun attempts: $MAX_ATTEMPTS)"
+
+            if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+              echo "Requesting auto-rerun of this Deploy workflow via GitHub Actions API..."
+              curl -sS -X POST \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${OWNER}/${REPO}/actions/runs/${GITHUB_RUN_ID}/rerun" \
+                || echo "Warning: failed to request auto-rerun via GitHub API."
+
+              echo "Exiting with failure so that the next attempt can pick up fresh Docker Publish results."
+            else
+              echo "Maximum auto-rerun attempts ($MAX_ATTEMPTS) reached; not scheduling another rerun."
+            fi
+
+            exit 1
+          fi
+
           # Soft, non-blocking checks: log latest status for visibility
           print_workflow_status "Security Scans"
           print_workflow_status "Secrets Healthcheck"
-          print_workflow_status "Docker Publish"
  
   e2e-verify:
     runs-on: ubuntu-latest
