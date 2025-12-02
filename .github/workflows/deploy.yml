@@ -387,7 +387,7 @@ jobs:
             docker compose -f docker-compose.prod.yml run --rm migrate
           '
       
-      - name: Rolling deployment (production compose)
+      - name: Blue/green deployment (production compose)
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
@@ -409,26 +409,69 @@ jobs:
               done < .env.production
               set +a
             fi
+
+            COLOR_FILE=".active_color"
+            if [ -f "$COLOR_FILE" ]; then
+              CURRENT_COLOR=$(cat "$COLOR_FILE" | tr -d " \t\r\n")
+              case "$CURRENT_COLOR" in
+                blue|green) ;;
+                *) CURRENT_COLOR="blue" ;;
+              esac
+            else
+              CURRENT_COLOR="blue"
+            fi
+
+            if [ "$CURRENT_COLOR" = "blue" ]; then
+              NEXT_COLOR="green"
+            else
+              NEXT_COLOR="blue"
+            fi
+
+            echo "Current backend color: $CURRENT_COLOR"
+            echo "Next backend color: $NEXT_COLOR"
+
             # Update image tags in prod compose file to the release tag
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-server:.*|image: ghcr.io/${{ github.repository }}-server:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-worker:.*|image: ghcr.io/${{ github.repository }}-worker:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-frontend:.*|image: ghcr.io/${{ github.repository }}-frontend:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-migrate:.*|image: ghcr.io/${{ github.repository }}-migrate:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
-            # Bring up with production compose and env
+
             export COMPOSE_FILE=docker-compose.prod.yml
-            docker compose up -d
-            
-            # Wait for health check
-            echo "Waiting for application to be healthy..."
+
+            echo "Bringing up backend_${NEXT_COLOR}, worker and frontend with new images..."
+            docker compose up -d "backend_${NEXT_COLOR}" worker frontend
+
+            echo "Waiting for backend_${NEXT_COLOR} service to be running..."
             for i in {1..30}; do
-              if curl -f http://localhost/healthz > /dev/null 2>&1; then
-                echo "Backend is healthy"
+              if docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | grep -q "backend_${NEXT_COLOR}"; then
+                echo "backend_${NEXT_COLOR} is running"
                 break
               fi
-              echo "Attempt $i: Waiting for backend health check..."
+              echo "Attempt $i: Waiting for backend_${NEXT_COLOR} to start..."
+              sleep 5
+            done
+
+            echo "Switching Nginx upstream to backend_${NEXT_COLOR}..."
+            sed -i "s|upstream app_upstream { server .*:8080; }|upstream app_upstream { server backend_${NEXT_COLOR}:8080; }|" deploy/nginx/nginx.conf
+            echo "$NEXT_COLOR" > "$COLOR_FILE"
+
+            echo "Reloading Nginx to pick up new upstream..."
+            if ! docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload; then
+              echo "Nginx reload failed, restarting container..."
+              docker compose -f docker-compose.prod.yml restart nginx
+            fi
+
+            # Wait for health check through Nginx
+            echo "Waiting for application to be healthy via Nginx..."
+            for i in {1..30}; do
+              if curl -f http://localhost/healthz > /dev/null 2>&1; then
+                echo "Backend is healthy through Nginx"
+                break
+              fi
+              echo "Attempt $i: Waiting for backend health check through Nginx..."
               sleep 10
             done
-            
+
             # Check frontend is accessible
             echo "Checking frontend accessibility..."
             for i in {1..10}; do
@@ -439,8 +482,8 @@ jobs:
               echo "Attempt $i: Waiting for frontend..."
               sleep 5
             done
-            
-            # Final verification
+
+            echo "=== docker compose ps ==="
             docker compose -f docker-compose.prod.yml ps
           '
 
@@ -530,8 +573,19 @@ jobs:
             curl -f http://localhost/readyz && echo "✓ Readiness check passed"
             
             # Check logs for any immediate errors
-            echo "=== Recent Server Logs ==="
-            docker compose -f docker-compose.prod.yml logs --tail=50 backend
+            COLOR_FILE=".active_color"
+            ACTIVE_COLOR="blue"
+            if [ -f "$COLOR_FILE" ]; then
+              ACTIVE_COLOR=$(cat "$COLOR_FILE" | tr -d " \t\r\n")
+              case "$ACTIVE_COLOR" in
+                blue|green) ;;
+                *) ACTIVE_COLOR="blue" ;;
+              esac
+            fi
+            BACKEND_SERVICE="backend_${ACTIVE_COLOR}"
+
+            echo "=== Recent Server Logs (${BACKEND_SERVICE}) ==="
+            docker compose -f docker-compose.prod.yml logs --tail=50 "${BACKEND_SERVICE}"
             echo "=== Recent Worker Logs ==="
             docker compose -f docker-compose.prod.yml logs --tail=50 worker
           '
