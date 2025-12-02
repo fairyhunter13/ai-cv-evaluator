@@ -353,7 +353,25 @@ jobs:
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           fi
-      
+      - name: Ensure Docker is available on server
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "Docker not found on server; attempting installation via convenience script..."
+              if command -v curl >/dev/null 2>&1; then
+                if command -v sudo >/dev/null 2>&1; then
+                  curl -fsSL https://get.docker.com | sudo sh
+                else
+                  curl -fsSL https://get.docker.com | sh
+                fi
+              else
+                echo "curl is not available on the server; please install Docker manually and rerun deploy." >&2
+                exit 1
+              fi
+            fi
+          '
+
       - name: Login to GHCR on server
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin"
