@@ -257,6 +257,19 @@ services:
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt
       - /var/www/certbot:/var/www/certbot
+    restart: unless-stopped
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        set -e
+        echo "[certbot] Starting automatic TLS renewal loop..."
+        # Run renew in a loop so certificates are kept up to date.
+        while :; do
+          certbot renew --webroot -w /var/www/certbot --keep-until-expiring || true
+          echo "[certbot] Renewal check completed; sleeping for 12h..."
+          sleep 12h
+        done
 
   # Centralized logging with Loki
   loki:

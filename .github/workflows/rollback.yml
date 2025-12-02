@@ -1,0 +1,110 @@
+name: Rollback
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback (production only)'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+
+concurrency:
+  group: rollback-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf %s "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Rollback to previous backend color
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd ~/ai-cv-evaluator
+
+            if [ ! -f docker-compose.prod.yml ]; then
+              echo "docker-compose.prod.yml not found; cannot rollback" >&2
+              exit 1
+            fi
+
+            COLOR_FILE=".active_color"
+            if [ -f "$COLOR_FILE" ]; then
+              CURRENT_COLOR=$(cat "$COLOR_FILE" | tr -d " \t\r\n")
+            else
+              if grep -q "backend_green:8080" deploy/nginx/nginx.conf 2>/dev/null; then
+                CURRENT_COLOR="green"
+              elif grep -q "backend_blue:8080" deploy/nginx/nginx.conf 2>/dev/null; then
+                CURRENT_COLOR="blue"
+              else
+                echo "Could not determine current backend color; aborting rollback" >&2
+                exit 1
+              fi
+            fi
+
+            case "$CURRENT_COLOR" in
+              blue) PREV_COLOR="green" ;;
+              green) PREV_COLOR="blue" ;;
+              *)
+                echo "Unknown current color: $CURRENT_COLOR" >&2
+                exit 1 ;;
+            esac
+
+            echo "Current backend color: $CURRENT_COLOR"
+            echo "Target rollback color: $PREV_COLOR"
+
+            PREV_SERVICE="backend_${PREV_COLOR}"
+
+            CID=$(docker compose -f docker-compose.prod.yml ps -q "$PREV_SERVICE" || true)
+            if [ -z "$CID" ]; then
+              echo "No existing container found for $PREV_SERVICE; cannot rollback safely" >&2
+              exit 1
+            fi
+
+            if ! docker inspect -f "{{.State.Running}}" "$CID" 2>/dev/null | grep -q true; then
+              echo "Starting existing container $PREV_SERVICE ($CID) ..."
+              docker start "$CID"
+            fi
+
+            echo "Switching Nginx upstream to $PREV_SERVICE..."
+            sed -i "s|upstream app_upstream { server .*:8080; }|upstream app_upstream { server ${PREV_SERVICE}:8080; }|" deploy/nginx/nginx.conf
+            echo "$PREV_COLOR" > "$COLOR_FILE"
+
+            echo "Reloading Nginx..."
+            if ! docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload; then
+              echo "Nginx reload failed, restarting container..."
+              docker compose -f docker-compose.prod.yml restart nginx
+            fi
+
+            echo "Waiting for health via Nginx..."
+            for i in {1..30}; do
+              if curl -f http://localhost/healthz >/dev/null 2>&1; then
+                echo "Rollback backend is healthy via Nginx"
+                break
+              fi
+              echo "Attempt $i: waiting for /healthz during rollback..."
+              sleep 10
+            done
+
+            echo "=== docker compose ps (after rollback) ==="
+            docker compose -f docker-compose.prod.yml ps
+          '

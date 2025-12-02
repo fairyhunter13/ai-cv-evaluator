@@ -291,7 +291,16 @@ jobs:
       - name: Login to GHCR on server
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin"
-      
+
+      - name: Ensure certbot auto-renew service is running
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd ~/ai-cv-evaluator
+            # Start (or update) the certbot service so its internal renew loop runs on the server
+            docker compose -f docker-compose.prod.yml up -d certbot
+          '
+
       - name: Pre-deployment health check
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -485,42 +494,6 @@ jobs:
 
             echo "=== docker compose ps ==="
             docker compose -f docker-compose.prod.yml ps
-          '
-
-      - name: Setup/renew TLS certificate (Certbot in Docker)
-        env:
-          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
-        run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            set -e
-            cd ~/ai-cv-evaluator
-            # Load production env for docker compose (Keycloak, OAuth, etc.)
-            if [ -f .env.production ]; then
-              set -a
-              while IFS= read -r line; do
-                [ -z "$line" ] && continue
-                case "$line" in
-                  \#*)
-                    continue
-                    ;;
-                esac
-                case "$line" in
-                  *=*)
-                    eval "$line"
-                    ;;
-                esac
-              done < .env.production
-              set +a
-            fi
-            if [ -z "'$LETSENCRYPT_EMAIL'" ]; then
-              echo "LETSENCRYPT_EMAIL not set; skipping cert issuance";
-            else
-              docker compose -f docker-compose.prod.yml run --rm certbot certonly \
-                --webroot -w /var/www/certbot \
-                -d ai-cv-evaluator.web.id \
-                -d dashboard.ai-cv-evaluator.web.id \
-                --email '$LETSENCRYPT_EMAIL' --agree-tos --non-interactive --keep-until-expiring || true
-            fi
           '
 
       - name: Enable HTTPS server block and reload Nginx
