@@ -93,7 +93,7 @@ func (a *AdminServer) AdminStatusHandler() http.HandlerFunc {
 		defer span.End()
 
 		lg := LoggerFrom(r)
-		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		// Prefer SSO header injected by reverse proxy (e.g. oauth2-proxy)
 		username := getSSOUsernameFromHeaders(r)
 		if username == "" {
 			// Fallback to Bearer JWT
@@ -125,7 +125,7 @@ func (a *AdminServer) AdminStatsHandler() http.HandlerFunc {
 		tracer := otel.Tracer("http.admin")
 		ctx, span := tracer.Start(r.Context(), "AdminServer.AdminStatsHandler")
 		defer span.End()
-		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		// Prefer SSO header injected by reverse proxy (e.g. oauth2-proxy)
 		if getSSOUsernameFromHeaders(r) == "" {
 			// Fallback to Bearer JWT
 			authz := strings.TrimSpace(r.Header.Get("Authorization"))
@@ -160,7 +160,7 @@ func (a *AdminServer) AdminJobsHandler() http.HandlerFunc {
 		tracer := otel.Tracer("http.admin")
 		ctx, span := tracer.Start(r.Context(), "AdminServer.AdminJobsHandler")
 		defer span.End()
-		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		// Prefer SSO header injected by reverse proxy (e.g. oauth2-proxy)
 		if getSSOUsernameFromHeaders(r) == "" {
 			// Fallback to Bearer JWT
 			authz := strings.TrimSpace(r.Header.Get("Authorization"))
@@ -249,7 +249,7 @@ func (a *AdminServer) AdminJobDetailsHandler() http.HandlerFunc {
 		tracer := otel.Tracer("http.admin")
 		ctx, span := tracer.Start(r.Context(), "AdminServer.AdminJobDetailsHandler")
 		defer span.End()
-		// Prefer SSO header injected by reverse proxy (Authentik outpost)
+		// Prefer SSO header injected by reverse proxy (e.g. oauth2-proxy)
 		if getSSOUsernameFromHeaders(r) == "" {
 			// Fallback to Bearer JWT
 			authz := strings.TrimSpace(r.Header.Get("Authorization"))

@@ -88,7 +88,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.server
+          file: deploy/docker/Dockerfile.server
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-server.outputs.tags }}
@@ -100,7 +100,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.worker
+          file: deploy/docker/Dockerfile.worker
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-worker.outputs.tags }}
@@ -112,7 +112,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.migrate
+          file: deploy/docker/Dockerfile.migrate
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta-migrate.outputs.tags }}

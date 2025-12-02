@@ -47,7 +47,7 @@ try {
   }
 } catch (e) {}
 
-// Router guard: rely on Authentik forward-auth at Nginx; don't redirect SPA
+// Router guard: rely on SSO forward-auth at Nginx (e.g. oauth2-proxy); don't redirect SPA
 router.beforeEach(async (_to, _from, next) => {
   const authStore = useAuthStore()
   await authStore.checkAuth()
