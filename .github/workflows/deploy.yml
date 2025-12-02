@@ -321,18 +321,33 @@ jobs:
             fi
           '
       
-      - name: Pull new images
+      - name: Pull and retag images to release tag
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-            docker pull ghcr.io/${{ github.repository }}-server:${{ github.sha }}
-            docker pull ghcr.io/${{ github.repository }}-worker:${{ github.sha }}
-            docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+            set -e
+            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
+            SHA=\"${{ github.sha }}\"
+
+            docker pull ghcr.io/${{ github.repository }}-server:${SHA}
+            docker pull ghcr.io/${{ github.repository }}-worker:${SHA}
+            docker pull ghcr.io/${{ github.repository }}-frontend:${SHA}
+
+            for svc in server worker frontend; do
+              docker tag ghcr.io/${{ github.repository }}-\${svc}:${SHA} \
+                         ghcr.io/${{ github.repository }}-\${svc}:\${VERSION}
+            done
           "
       
-      - name: Build and push migration Docker image
+      - name: Pull and retag migration image to release tag
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
-            docker pull ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}
+            set -e
+            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
+            SHA=\"${{ github.sha }}\"
+
+            docker pull ghcr.io/${{ github.repository }}-migrate:${SHA}
+            docker tag ghcr.io/${{ github.repository }}-migrate:${SHA} \
+                       ghcr.io/${{ github.repository }}-migrate:\${VERSION}
           "
       
       - name: Run database migrations
@@ -392,11 +407,11 @@ jobs:
               done < .env.production
               set +a
             fi
-            # Update image tags in prod compose file
-            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-server:.*|image: ghcr.io/${{ github.repository }}-server:${{ github.sha }}|g" docker-compose.prod.yml || true
-            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-worker:.*|image: ghcr.io/${{ github.repository }}-worker:${{ github.sha }}|g" docker-compose.prod.yml || true
-            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-frontend:.*|image: ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}|g" docker-compose.prod.yml || true
-            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-migrate:.*|image: ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}|g" docker-compose.prod.yml || true
+            # Update image tags in prod compose file to the release tag
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-server:.*|image: ghcr.io/${{ github.repository }}-server:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-worker:.*|image: ghcr.io/${{ github.repository }}-worker:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-frontend:.*|image: ghcr.io/${{ github.repository }}-frontend:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
+            sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-migrate:.*|image: ghcr.io/${{ github.repository }}-migrate:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
             # Bring up with production compose and env
             export COMPOSE_FILE=docker-compose.prod.yml
             docker compose up -d

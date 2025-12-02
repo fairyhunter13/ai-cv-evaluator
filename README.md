@@ -2,6 +2,17 @@
 
 Backend service that ingests a candidate CV + project report, evaluates against a job description + study case brief, and returns structured results. Built with Go and Clean Architecture.
 
+## Status
+
+- **CI (unit tests, coverage gate, dev Playwright)**
+  [![CI](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml)
+
+- **Security Scans**
+  [![Security Scans](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml)
+
+- **Production Validation (prod health + Playwright)**
+  [![Production Validation](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/production-validate.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/production-validate.yml)
+
 ## 📚 Documentation
 
 All documentation is organized in the [`docs/`](docs/) directory:
