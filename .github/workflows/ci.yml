@@ -111,8 +111,8 @@ jobs:
         run: make openapi-validate
       - name: Build docker images (smoke)
         run: |
-          docker build -f deploy/docker/prod/Dockerfile.server -t ${{ github.repository }}-server:${{ github.sha }} .
-          docker build -f deploy/docker/prod/Dockerfile.worker -t ${{ github.repository }}-worker:${{ github.sha }} .
+          docker build -f deploy/docker/Dockerfile.server -t ${{ github.repository }}-server:${{ github.sha }} .
+          docker build -f deploy/docker/Dockerfile.worker -t ${{ github.repository }}-worker:${{ github.sha }} .
           docker build -f deploy/docker/prod/Dockerfile.frontend -t ${{ github.repository }}-frontend:${{ github.sha }} .
 
       - name: Production - Multi-arch Build Test
