@@ -198,7 +198,7 @@ sops secrets/env.production.sops.yaml
   ```bash
   make seed-rag  # requires QDRANT_URL (defaults http://localhost:6333); uses configured embeddings (e.g., OPENAI_API_KEY)
   ```
- 
+
 ## Admin UI & Dashboards
 
 ### Frontend Development (Recommended)

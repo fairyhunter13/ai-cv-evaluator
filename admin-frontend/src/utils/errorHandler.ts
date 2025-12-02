@@ -1,5 +1,3 @@
-import axios from 'axios'
-
 export interface ApiError {
   code: string
   message: string

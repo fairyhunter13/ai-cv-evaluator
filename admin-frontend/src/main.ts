@@ -5,7 +5,6 @@ import App from './App.vue'
 import './style.css'
 import { useAuthStore } from './stores/auth'
 import axios from 'axios'
-import config from './config'
 import { initCsrfProtection } from './utils/csrf'
 
 // Import pages

@@ -94,6 +94,7 @@ endef
 	encrypt-rfcs decrypt-rfcs encrypt-cv decrypt-cv encrypt-cv-original backup-rfcs backup-cv verify-cv decrypt-test-cv clean-test-cv \
 	ci-test openapi-validate build-matrix verify-test-placement gosec-sarif license-scan \
 	freemodels-test frontend-dev frontend-install frontend-build frontend-clean frontend-help run-e2e-tests docker-cleanup e2e-help
+.PHONY: lint-backend lint-frontend lint-infra lint-docs lint-all install-git-hooks
 
 all: fmt lint vet test
 
@@ -114,6 +115,57 @@ lint:
 
 vet:
 	$(GO) vet ./...
+
+lint-backend: lint
+
+lint-frontend:
+	@set -euo pipefail; \
+	if [ -d admin-frontend ]; then \
+		cd admin-frontend && npm run lint; \
+	else \
+		echo "admin-frontend directory not found; skipping frontend lint"; \
+	fi
+
+lint-infra:
+	@set -euo pipefail; \
+	echo "Linting infrastructure (docker-compose)..."; \
+	if command -v docker >/dev/null 2>&1; then \
+		if [ -f docker-compose.yml ]; then \
+			docker compose -f docker-compose.yml config -q; \
+		else \
+			echo "docker-compose.yml not found; skipping dev compose lint"; \
+		fi; \
+		if [ -f docker-compose.prod.yml ]; then \
+			KEYCLOAK_ADMIN=dummy-admin \
+			KEYCLOAK_ADMIN_PASSWORD=dummy-password \
+			OAUTH2_PROXY_CLIENT_SECRET=dummy-client-secret \
+			OAUTH2_PROXY_COOKIE_SECRET=dummy-cookie-secret \
+			OAUTH2_PROXY_EMAIL_DOMAINS=example.com \
+			docker compose -f docker-compose.prod.yml config -q; \
+		else \
+			echo "docker-compose.prod.yml not found; skipping prod compose lint"; \
+		fi; \
+	else \
+		echo "docker not found; skipping infrastructure lint that requires docker"; \
+	fi
+
+lint-docs:
+	@set -euo pipefail; \
+	echo "Linting Markdown docs for trailing whitespace and tabs..."; \
+	files=$$(git ls-files 'README.md' 2>/dev/null || true); \
+	if [ -z "$$files" ]; then \
+		echo "No Markdown files found; skipping docs lint"; \
+	else \
+		if grep -nE ' +$$' $$files; then \
+			echo "Docs lint failed: trailing whitespace or tab characters found in Markdown files"; \
+			exit 1; \
+		fi; \
+	fi
+
+lint-all: lint-backend lint-frontend lint-infra lint-docs
+
+install-git-hooks:
+	git config core.hooksPath .githooks
 
 # --- Secrets (SOPS) -----------------------------------------------------------
 

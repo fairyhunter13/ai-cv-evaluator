@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,35 @@ type Pricing struct {
 	Completion string `json:"completion"`
 	Request    string `json:"request"`
 	Image      string `json:"image"`
+}
+
+// effectivePrice computes a single effective numeric price for a model.
+//
+// Preference order:
+//   - If Request is present and > 0, use it directly (covers per-request pricing).
+//   - Otherwise, fall back to the sum of Prompt and Completion prices.
+//
+// Any empty or unparsable fields are treated as 0.
+func effectivePrice(p Pricing) float64 {
+	if v := parsePriceField(p.Request); v > 0 {
+		return v
+	}
+
+	return parsePriceField(p.Prompt) + parsePriceField(p.Completion)
+}
+
+// parsePriceField converts a string price into a float64, returning 0 on error.
+func parsePriceField(raw string) float64 {
+	if raw == "" {
+		return 0
+	}
+
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0
+	}
+
+	return v
 }
 
 // OpenRouterResponse represents the response from OpenRouter API
