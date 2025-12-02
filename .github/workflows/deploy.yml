@@ -99,12 +99,12 @@ jobs:
               local match
               match=$(echo "$runs_json" | jq -r --arg sha "$SHA" --arg name "$wf_name" '
                 .workflow_runs
-                | map(select(.name == $name and .head_sha == $sha and .head_branch == "main" and .event == "push"))
-                | first // empty
+                | map(select(.name == $name and .head_sha == $sha))
+                | sort_by(.run_number) | last // empty
               ')
 
               if [ -z "$match" ]; then
-                echo "No '$wf_name' push run found yet for commit $SHA."
+                echo "No '$wf_name' run found yet for commit $SHA."
               else
                 local status conclusion html_url
                 status=$(echo "$match" | jq -r '.status')
