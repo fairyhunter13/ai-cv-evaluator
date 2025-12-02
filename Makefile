@@ -150,6 +150,8 @@ lint-infra:
 			rm -f .env "$$TEMP_ENV_CREATED"; \
 		fi; \
 		if [ -f docker-compose.prod.yml ]; then \
+			# docker-compose.prod.yml may use env_file: .env.production; create a temporary one if missing \
+			# so that config -q does not fail in CI when real secrets are not present. \
 			if [ ! -f .env.production ]; then \
 				TEMP_ENV_PROD_CREATED=".env.production.lint.$$"; \
 				echo "Creating temporary .env.production for docker-compose.prod lint"; \
@@ -162,11 +164,12 @@ lint-infra:
 			OAUTH2_PROXY_COOKIE_SECRET=dummy-cookie-secret \
 			OAUTH2_PROXY_EMAIL_DOMAINS=example.com \
 			docker compose -f docker-compose.prod.yml config -q; \
+			# Clean up temporary .env.production symlink + file if we created one above. \
+			if [ -n "$$TEMP_ENV_PROD_CREATED" ]; then \
+				rm -f .env.production "$$TEMP_ENV_PROD_CREATED"; \
+			fi; \
 		else \
 			echo "docker-compose.prod.yml not found; skipping prod compose lint"; \
-		fi; \
-		if [ -n "$$TEMP_ENV_PROD_CREATED" ]; then \
-			rm -f .env.production "$$TEMP_ENV_PROD_CREATED"; \
 		fi; \
 	else \
 		echo "docker not found; skipping infrastructure lint that requires docker"; \
