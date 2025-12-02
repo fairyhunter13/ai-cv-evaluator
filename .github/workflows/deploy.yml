@@ -327,14 +327,13 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
             set -e
             VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
-            SHA=\"${{ github.sha }}\"
 
-            docker pull ghcr.io/${{ github.repository }}-server:${SHA}
-            docker pull ghcr.io/${{ github.repository }}-worker:${SHA}
-            docker pull ghcr.io/${{ github.repository }}-frontend:${SHA}
+            docker pull ghcr.io/${{ github.repository }}-server:${{ github.sha }}
+            docker pull ghcr.io/${{ github.repository }}-worker:${{ github.sha }}
+            docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
 
             for svc in server worker frontend; do
-              docker tag ghcr.io/${{ github.repository }}-\${svc}:${SHA} \
+              docker tag ghcr.io/${{ github.repository }}-\${svc}:${{ github.sha }} \
                          ghcr.io/${{ github.repository }}-\${svc}:\${VERSION}
             done
           "
@@ -344,10 +343,9 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
             set -e
             VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
-            SHA=\"${{ github.sha }}\"
 
-            docker pull ghcr.io/${{ github.repository }}-migrate:${SHA}
-            docker tag ghcr.io/${{ github.repository }}-migrate:${SHA} \
+            docker pull ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}
+            docker tag ghcr.io/${{ github.repository }}-migrate:${{ github.sha }} \
                        ghcr.io/${{ github.repository }}-migrate:\${VERSION}
           "
       
