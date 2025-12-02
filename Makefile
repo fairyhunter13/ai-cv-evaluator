@@ -129,11 +129,24 @@ lint-frontend:
 lint-infra:
 	@set -euo pipefail; \
 	echo "Linting infrastructure (docker-compose)..."; \
+	TEMP_ENV_CREATED=""; \
 	if command -v docker >/dev/null 2>&1; then \
+		# Ensure docker-compose.yml env_file (.env) does not break lint in CI when .env is absent; \
+		# create a temporary empty .env only if none exists. \
+		if [ ! -f .env ]; then \
+			TEMP_ENV_CREATED=".env.lint.$$"; \
+			echo "Creating temporary .env for docker-compose lint"; \
+			touch "$$TEMP_ENV_CREATED"; \
+			ln -s "$$TEMP_ENV_CREATED" .env; \
+		fi; \
 		if [ -f docker-compose.yml ]; then \
 			docker compose -f docker-compose.yml config -q; \
 		else \
 			echo "docker-compose.yml not found; skipping dev compose lint"; \
+		fi; \
+		# Clean up temporary .env symlink + file if we created one above. \
+		if [ -n "$$TEMP_ENV_CREATED" ]; then \
+			rm -f .env "$$TEMP_ENV_CREATED"; \
 		fi; \
 		if [ -f docker-compose.prod.yml ]; then \
 			KEYCLOAK_ADMIN=dummy-admin \
