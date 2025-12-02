@@ -7,6 +7,9 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 - **CI (unit tests, coverage gate, dev Playwright)**
   [![CI](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml)
 
+- **Coverage (Codecov)**
+  [![codecov](https://codecov.io/gh/fairyhunter13/ai-cv-evaluator/branch/main/graph/badge.svg)](https://codecov.io/gh/fairyhunter13/ai-cv-evaluator)
+
 - **Security Scans**
   [![Security Scans](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml)
 
