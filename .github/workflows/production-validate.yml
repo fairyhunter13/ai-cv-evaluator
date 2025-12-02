@@ -13,6 +13,10 @@ on:
     types:
       - completed
 
+concurrency:
+  group: production-validate-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
 env:
   PRODUCTION_URL: https://ai-cv-evaluator.web.id
   DASHBOARD_URL: https://dashboard.ai-cv-evaluator.web.id
