@@ -372,10 +372,13 @@ jobs:
       - name: Ensure certbot auto-renew service is running
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            set -e
             cd ~/ai-cv-evaluator
             # Start (or update) the certbot service so its internal renew loop runs on the server
-            docker compose -f docker-compose.prod.yml up -d certbot
+            if docker compose -f docker-compose.prod.yml up -d certbot; then
+              echo "certbot service is running (or started)"
+            else
+              echo "Warning: failed to start certbot service; continuing without blocking deploy" >&2
+            fi
           '
 
       - name: Pre-deployment health check
