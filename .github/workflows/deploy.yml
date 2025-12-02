@@ -83,8 +83,8 @@ jobs:
 
           wait_for_workflow() {
             local wf_name="$1"
-            local max_attempts=30
-            local sleep_seconds=60
+            local max_attempts=10
+            local sleep_seconds=30
 
             echo "Waiting for workflow '$wf_name' on commit $SHA to succeed..."
 
@@ -106,13 +106,16 @@ jobs:
               if [ -z "$match" ]; then
                 echo "No '$wf_name' run found yet for commit $SHA."
               else
-                local status conclusion html_url
+                local status conclusion html_url event head_branch run_number
                 status=$(echo "$match" | jq -r '.status')
                 conclusion=$(echo "$match" | jq -r '.conclusion // empty')
                 html_url=$(echo "$match" | jq -r '.html_url')
+                event=$(echo "$match" | jq -r '.event')
+                head_branch=$(echo "$match" | jq -r '.head_branch // "(none)"')
+                run_number=$(echo "$match" | jq -r '.run_number // 0')
 
                 echo "Found $wf_name run: $html_url"
-                echo "Status: $status, conclusion: ${conclusion:-'(none)'}"
+                echo "Status: $status, conclusion: ${conclusion:-'(none)'}, event: $event, branch: $head_branch, run_number: $run_number"
 
                 if [ "$status" = "completed" ]; then
                   if [ "$conclusion" = "success" ]; then
