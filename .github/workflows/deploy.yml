@@ -83,7 +83,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: deploy/docker/Dockerfile.server
+          file: deploy/docker/prod/Dockerfile.server
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -101,7 +101,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: deploy/docker/Dockerfile.worker
+          file: deploy/docker/prod/Dockerfile.worker
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -119,7 +119,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./admin-frontend/Dockerfile.prod
+          file: deploy/docker/prod/Dockerfile.frontend
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -137,7 +137,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: deploy/docker/Dockerfile.migrate
+          file: deploy/docker/prod/Dockerfile.migrate
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |

@@ -2,7 +2,7 @@ services:
   migrate:
     build:
       context: .
-      dockerfile: deploy/docker/Dockerfile.migrate
+      dockerfile: deploy/docker/dev/Dockerfile.migrate
     image: ghcr.io/fairyhunter13/ai-cv-evaluator:dev-migrate
     depends_on:
       db:
@@ -16,7 +16,7 @@ services:
   app:
     build: 
       context: .
-      dockerfile: deploy/docker/Dockerfile.server
+      dockerfile: deploy/docker/dev/Dockerfile.server
     image: ghcr.io/fairyhunter13/ai-cv-evaluator:dev-server
     depends_on:
       migrate:
@@ -55,8 +55,8 @@ services:
 
   frontend:
     build:
-      context: ./admin-frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: deploy/docker/dev/Dockerfile.frontend
     image: ghcr.io/fairyhunter13/ai-cv-evaluator:dev-frontend
     environment:
       - NODE_ENV=development
@@ -69,7 +69,7 @@ services:
   worker:
     build: 
       context: .
-      dockerfile: deploy/docker/Dockerfile.worker
+      dockerfile: deploy/docker/dev/Dockerfile.worker
     image: ghcr.io/fairyhunter13/ai-cv-evaluator:dev-worker
     depends_on:
       migrate:

@@ -1,15 +1,15 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY admin-frontend/package*.json ./
 
 # Install dependencies
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN npm ci
 
 # Copy source code
-COPY . .
+COPY admin-frontend/ ./
 
 # Expose port
 EXPOSE 3001
