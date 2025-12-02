@@ -64,7 +64,53 @@ jobs:
             fi
           fi
           echo "should_deploy=true" >> $GITHUB_OUTPUT
-  
+ 
+  security-gate:
+    runs-on: ubuntu-latest
+    needs: pre-deploy-checks
+    if: needs.pre-deploy-checks.outputs.should_deploy == 'true'
+    steps:
+      - name: Check Security Scans workflow for this commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y jq
+
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          SHA="${GITHUB_SHA}"
+
+          echo "Checking Security Scans workflow for commit $SHA..."
+
+          runs_json=$(curl -sS \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=50")
+
+          match=$(echo "$runs_json" | jq -r --arg sha "$SHA" '
+            .workflow_runs
+            | map(select(.name == "Security Scans" and .head_sha == $sha and .event == "push"))
+            | first // empty
+          ')
+
+          if [ -z "$match" ]; then
+            echo "No completed 'Security Scans' push run found for commit $SHA."
+            echo "Make sure Security Scans on main has finished successfully before deploying."
+            exit 1
+          fi
+
+          conclusion=$(echo "$match" | jq -r '.conclusion')
+          html_url=$(echo "$match" | jq -r '.html_url')
+
+          echo "Found Security Scans run: $html_url"
+          echo "Conclusion: $conclusion"
+
+          if [ "$conclusion" != "success" ]; then
+            echo "Security Scans did not succeed; blocking deploy."
+            exit 1
+          fi
+ 
   build-and-scan:
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
@@ -155,67 +201,6 @@ jobs:
             org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      
-      - name: Security scan of server image
-        if: env.FORCE_DEPLOY != 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/${{ github.repository }}-server:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
-      
-      - name: Security scan of worker image
-        if: env.FORCE_DEPLOY != 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/${{ github.repository }}-worker:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
-      
-      - name: Security scan of frontend image
-        if: env.FORCE_DEPLOY != 'true'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: 'ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}'
-          format: 'table'
-          exit-code: '1'
-          severity: 'CRITICAL,HIGH'
-      
-      - name: Generate SBOM for server image
-        if: env.FORCE_DEPLOY != 'true'
-        uses: anchore/sbom-action@v0
-        with:
-          image: 'ghcr.io/${{ github.repository }}-server:${{ github.sha }}'
-          format: spdx-json
-          output-file: sbom-server.spdx.json
-      
-      - name: Generate SBOM for worker image
-        if: env.FORCE_DEPLOY != 'true'
-        uses: anchore/sbom-action@v0
-        with:
-          image: 'ghcr.io/${{ github.repository }}-worker:${{ github.sha }}'
-          format: spdx-json
-          output-file: sbom-worker.spdx.json
-      
-      - name: Generate SBOM for frontend image
-        if: env.FORCE_DEPLOY != 'true'
-        uses: anchore/sbom-action@v0
-        with:
-          image: 'ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}'
-          format: spdx-json
-          output-file: sbom-frontend.spdx.json
-      
-      - name: Upload SBOMs
-        if: env.FORCE_DEPLOY != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-${{ github.sha }}
-          path: |
-            sbom-server.spdx.json
-            sbom-worker.spdx.json
-            sbom-frontend.spdx.json
   
   e2e-verify:
     runs-on: ubuntu-latest
@@ -308,7 +293,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [pre-deploy-checks, build-and-scan, e2e-verify, quality-gates]
+    needs: [pre-deploy-checks, build-and-scan, e2e-verify, quality-gates, security-gate]
     environment:
       name: production
     steps:
