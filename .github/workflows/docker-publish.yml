@@ -165,7 +165,14 @@ jobs:
             DEST_IMAGE="${REGISTRY}/${IMAGE_NAME}-${svc}:${VERSION}"
 
             echo "Retagging ${SRC_IMAGE} -> ${DEST_IMAGE}"
-            docker pull "${SRC_IMAGE}"
+
+            # If the SHA-tagged image is not yet available (e.g. Docker Publish on main is still running),
+            # do not fail the workflow. Log and skip this service instead.
+            if ! docker pull "${SRC_IMAGE}"; then
+              echo "Source image ${SRC_IMAGE} not found in registry yet; skipping retag for this service."
+              continue
+            fi
+
             docker tag "${SRC_IMAGE}" "${DEST_IMAGE}"
             docker push "${DEST_IMAGE}"
           done
