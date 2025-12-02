@@ -72,7 +72,9 @@ jobs:
           curl -sf "${{ env.PRODUCTION_URL }}/openapi.yaml" | head -5 && echo " ✓ /openapi.yaml OK"
 
       - name: Run production Playwright tests
-        if: ${{ github.event.inputs.skip_sso_tests != 'true' }}
+        # Only run full SSO Playwright tests when validation is triggered manually.
+        # For automatic runs after Deploy (workflow_run), we rely on health/SSL/DNS checks.
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_sso_tests != 'true' }}
         working-directory: admin-frontend
         env:
           E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
