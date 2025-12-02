@@ -299,8 +299,9 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
+                [ -z "$line" ] && continue
                 case "$line" in
-                  ''|\#*)
+                  \#*)
                     continue
                     ;;
                 esac
@@ -358,8 +359,9 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
+                [ -z "$line" ] && continue
                 case "$line" in
-                  ''|\#*)
+                  \#*)
                     continue
                     ;;
                 esac
@@ -394,8 +396,9 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
+                [ -z "$line" ] && continue
                 case "$line" in
-                  ''|\#*)
+                  \#*)
                     continue
                     ;;
                 esac
@@ -453,8 +456,9 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
+                [ -z "$line" ] && continue
                 case "$line" in
-                  ''|\#*)
+                  \#*)
                     continue
                     ;;
                 esac
@@ -502,8 +506,9 @@ jobs:
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
+                [ -z "$line" ] && continue
                 case "$line" in
-                  ''|\#*)
+                  \#*)
                     continue
                     ;;
                 esac
