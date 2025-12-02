@@ -99,7 +99,7 @@ jobs:
               local match
               match=$(echo "$runs_json" | jq -r --arg sha "$SHA" --arg name "$wf_name" '
                 .workflow_runs
-                | map(select(.name == $name and .head_sha == $sha and .event == "push"))
+                | map(select(.name == $name and .head_sha == $sha and .head_branch == "main" and .event == "push"))
                 | first // empty
               ')
 
@@ -138,6 +138,7 @@ jobs:
           wait_for_workflow "CI"
           wait_for_workflow "Security Scans"
           wait_for_workflow "Secrets Healthcheck"
+          wait_for_workflow "Docker Publish"
  
   e2e-verify:
     runs-on: ubuntu-latest
