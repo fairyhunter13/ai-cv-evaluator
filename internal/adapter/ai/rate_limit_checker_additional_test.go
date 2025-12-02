@@ -67,7 +67,7 @@ func TestRateLimitChecker_GetQuotaInfo_LimitedAndUnlimited(t *testing.T) {
 	}
 
 	call := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if call == 0 {
 			require.NoError(t, json.NewEncoder(w).Encode(limitedResp))

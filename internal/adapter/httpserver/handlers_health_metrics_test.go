@@ -25,9 +25,9 @@ func newHealthTestServer() *httpserver.Server {
 
 func TestHealthzHandler_AllHealthy(t *testing.T) {
 	s := newHealthTestServer()
-	s.DBCheck = func(ctx context.Context) error { return nil }
-	s.QdrantCheck = func(ctx context.Context) error { return nil }
-	s.TikaCheck = func(ctx context.Context) error { return nil }
+	s.DBCheck = func(_ context.Context) error { return nil }
+	s.QdrantCheck = func(_ context.Context) error { return nil }
+	s.TikaCheck = func(_ context.Context) error { return nil }
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -49,9 +49,9 @@ func TestHealthzHandler_AllHealthy(t *testing.T) {
 
 func TestHealthzHandler_WithDBFailure_Unhealthy(t *testing.T) {
 	s := newHealthTestServer()
-	s.DBCheck = func(ctx context.Context) error { return errors.New("db down") }
-	s.QdrantCheck = func(ctx context.Context) error { return nil }
-	s.TikaCheck = func(ctx context.Context) error { return nil }
+	s.DBCheck = func(_ context.Context) error { return errors.New("db down") }
+	s.QdrantCheck = func(_ context.Context) error { return nil }
+	s.TikaCheck = func(_ context.Context) error { return nil }
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)

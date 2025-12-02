@@ -129,7 +129,7 @@ func TestAdminAuthRequired_DelegatesToSessionManager(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/protected", nil)
 
 	called := false
-	h := admin.AdminAuthRequired(func(w http.ResponseWriter, r *http.Request) {
+	h := admin.AdminAuthRequired(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})

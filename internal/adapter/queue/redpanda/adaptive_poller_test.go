@@ -110,7 +110,7 @@ func TestAdaptivePollingManager_CleanupOldPollers(t *testing.T) {
 	}
 }
 
-func TestAdaptivePollingManager_Stop(t *testing.T) {
+func TestAdaptivePollingManager_Stop(_ *testing.T) {
 	m := NewAdaptivePollingManager(50 * time.Millisecond)
 	// Ensure Stop does not panic and closes cleanup channel
 	m.Stop()
