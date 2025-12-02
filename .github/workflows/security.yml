@@ -8,6 +8,10 @@ on:
     # Run security scans daily at 2 AM UTC
     - cron: '0 2 * * *'
 
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security:
     runs-on: ubuntu-latest

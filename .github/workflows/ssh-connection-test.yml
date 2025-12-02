@@ -3,6 +3,10 @@ name: SSH Connection Test
 on:
   workflow_dispatch: {}
 
+concurrency:
+  group: ssh-connection-test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ssh-test:
     runs-on: ubuntu-latest

@@ -13,6 +13,10 @@ on:
     types:
       - completed
 
+concurrency:
+  group: cloudflare-dns-sync-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sync-dns:
     runs-on: ubuntu-latest
