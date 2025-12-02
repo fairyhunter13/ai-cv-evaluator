@@ -96,6 +96,33 @@ func TestSanitizeJobID(t *testing.T) {
 	}
 }
 
+func TestValidatePagination_Valid(t *testing.T) {
+	res := ValidatePagination("1", "10")
+	if !res.Valid {
+		t.Fatalf("expected valid pagination, got %+v", res)
+	}
+}
+
+func TestValidatePagination_InvalidPage(t *testing.T) {
+	res := ValidatePagination("0", "10")
+	if res.Valid {
+		t.Fatalf("expected invalid page, got %+v", res)
+	}
+	if len(res.Errors) == 0 || res.Errors[0].Field != "page" || res.Errors[0].Code != "INVALID_FORMAT" {
+		t.Fatalf("unexpected errors: %+v", res.Errors)
+	}
+}
+
+func TestValidatePagination_InvalidLimit(t *testing.T) {
+	res := ValidatePagination("1", "0")
+	if res.Valid {
+		t.Fatalf("expected invalid limit, got %+v", res)
+	}
+	if len(res.Errors) == 0 || res.Errors[0].Field != "limit" || res.Errors[0].Code != "INVALID_FORMAT" {
+		t.Fatalf("unexpected errors: %+v", res.Errors)
+	}
+}
+
 func makeString(n int, ch rune) string {
 	b := make([]rune, n)
 	for i := range b {
