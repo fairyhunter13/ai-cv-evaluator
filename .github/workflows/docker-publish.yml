@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+    branches: [ main ]
   workflow_dispatch:
 
 concurrency:
@@ -48,6 +49,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha
+            type=raw,value=${{ github.sha }}
 
       - name: Extract metadata for worker
         id: meta-worker
@@ -61,6 +63,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha
+            type=raw,value=${{ github.sha }}
 
       - name: Extract metadata for migrate
         id: meta-migrate
@@ -74,6 +77,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha
+            type=raw,value=${{ github.sha }}
 
       - name: Extract metadata for frontend
         id: meta-frontend
@@ -87,6 +91,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha
+            type=raw,value=${{ github.sha }}
 
       - name: Build and push server Docker image
         uses: docker/build-push-action@v5
