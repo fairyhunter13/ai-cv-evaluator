@@ -18,8 +18,8 @@ server {
   }
 
   # Health passthrough (no SSO)
-  location /healthz { auth_request off; proxy_pass http://backend:8080/healthz; }
-  location /readyz  { auth_request off; proxy_pass http://backend:8080/readyz; }
+  location /healthz { auth_request off; proxy_pass http://app_upstream/healthz; }
+  location /readyz  { auth_request off; proxy_pass http://app_upstream/readyz; }
 
   # Forward-auth via oauth2-proxy for all routes except health
   auth_request /oauth2/auth;
@@ -82,7 +82,7 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass http://backend:8080;
+    proxy_pass http://app_upstream;
   }
   # Central logout endpoint - invalidate SSO and redirect to portal
   location = /logout { return 302 /oauth2/sign_out?rd=/; }
