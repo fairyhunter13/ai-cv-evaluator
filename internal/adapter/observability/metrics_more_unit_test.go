@@ -10,7 +10,7 @@ func TestSetAppEnv_SetsDevEnvironment(t *testing.T) {
 	}
 }
 
-func TestRecordJobFailureByCode_DefaultsUnknownAndCustom(t *testing.T) {
+func TestRecordJobFailureByCode_DefaultsUnknownAndCustom(_ *testing.T) {
 	// These calls should be safe regardless of metric registration state and
 	// exercise the UNKNOWN default path as well as a concrete code.
 	RecordJobFailureByCode("evaluate", "")

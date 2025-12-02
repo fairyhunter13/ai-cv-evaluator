@@ -76,7 +76,7 @@ func TestCSRFGuard_NoOpMiddleware(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/admin/api/test", nil)
 
 	called := false
-	h := guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -98,7 +98,7 @@ func TestAdminBearerRequired_AllowsSSOHeader(t *testing.T) {
 	req.Header.Set("X-Auth-Request-User", "alice")
 
 	called := false
-	h := admin.AdminBearerRequired(func(w http.ResponseWriter, r *http.Request) {
+	h := admin.AdminBearerRequired(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -123,7 +123,7 @@ func TestAdminBearerRequired_AllowsValidJWT(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+tok)
 
 	called := false
-	h := admin.AdminBearerRequired(func(w http.ResponseWriter, r *http.Request) {
+	h := admin.AdminBearerRequired(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -143,7 +143,7 @@ func TestAdminBearerRequired_UnauthorizedWithoutAuth(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/protected", nil)
 
-	h := admin.AdminBearerRequired(func(w http.ResponseWriter, r *http.Request) {
+	h := admin.AdminBearerRequired(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -173,7 +173,7 @@ func TestSessionManager_AuthRequired_PassesThrough(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/admin/api/protected", nil)
 
 	called := false
-	h := sm.AuthRequired(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := sm.AuthRequired(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
