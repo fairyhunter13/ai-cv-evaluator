@@ -130,6 +130,7 @@ lint-infra:
 	@set -euo pipefail; \
 	echo "Linting infrastructure (docker-compose)..."; \
 	TEMP_ENV_CREATED=""; \
+	TEMP_ENV_PROD_CREATED=""; \
 	if command -v docker >/dev/null 2>&1; then \
 		# Ensure docker-compose.yml env_file (.env) does not break lint in CI when .env is absent; \
 		# create a temporary empty .env only if none exists. \
@@ -149,6 +150,12 @@ lint-infra:
 			rm -f .env "$$TEMP_ENV_CREATED"; \
 		fi; \
 		if [ -f docker-compose.prod.yml ]; then \
+			if [ ! -f .env.production ]; then \
+				TEMP_ENV_PROD_CREATED=".env.production.lint.$$"; \
+				echo "Creating temporary .env.production for docker-compose.prod lint"; \
+				touch "$$TEMP_ENV_PROD_CREATED"; \
+				ln -s "$$TEMP_ENV_PROD_CREATED" .env.production; \
+			fi; \
 			KEYCLOAK_ADMIN=dummy-admin \
 			KEYCLOAK_ADMIN_PASSWORD=dummy-password \
 			OAUTH2_PROXY_CLIENT_SECRET=dummy-client-secret \
@@ -157,6 +164,9 @@ lint-infra:
 			docker compose -f docker-compose.prod.yml config -q; \
 		else \
 			echo "docker-compose.prod.yml not found; skipping prod compose lint"; \
+		fi; \
+		if [ -n "$$TEMP_ENV_PROD_CREATED" ]; then \
+			rm -f .env.production "$$TEMP_ENV_PROD_CREATED"; \
 		fi; \
 	else \
 		echo "docker not found; skipping infrastructure lint that requires docker"; \
