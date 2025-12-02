@@ -29,11 +29,3 @@ jobs:
           set -e
           echo "Testing SSH connectivity to $SSH_USER@$SSH_HOST ..."
           ssh "$SSH_USER@$SSH_HOST" "hostname; uptime"
-
-      - name: Verify application directory
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-        run: |
-          set -e
-          ssh "$SSH_USER@$SSH_HOST" "cd ~/ai-cv-evaluator && pwd && ls"
