@@ -2,8 +2,22 @@ import { test, expect, Page } from '@playwright/test';
 
 const PORTAL_PATH = '/';
 const PROTECTED_PATHS = ['/app/', '/grafana/', '/prometheus/', '/jaeger/', '/redpanda/', '/admin/'];
+
+// Environment detection
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:8088';
+const IS_PRODUCTION = BASE_URL.includes('ai-cv-evaluator.web.id');
+const IS_DEV = !IS_PRODUCTION;
+
+// Credentials: Use env vars, with sensible defaults for dev
+// In production CI, set SSO_USERNAME and SSO_PASSWORD secrets
 const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
-const SSO_PASSWORD = process.env.SSO_PASSWORD || 'admin123';
+const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123');
+
+// Services that may not be available in all environments
+const DEV_ONLY_SERVICES = ['/mailpit/'];
+
+// Helper to check if SSO login tests should be skipped
+const requiresSSOCredentials = (): boolean => !SSO_PASSWORD;
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
@@ -229,6 +243,7 @@ for (const path of PROTECTED_PATHS) {
 // without seeing the login page again.
 test('single sign-on via portal allows access to dashboards', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required for login tests');
 
   // Start at portal; unauthenticated users should be redirected to SSO login
   await gotoWithRetry(page, PORTAL_PATH);
@@ -271,6 +286,7 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
 
 test('dashboards reachable via portal after SSO login', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required for login tests');
   test.setTimeout(120000); // This test navigates to many dashboards and may take time.
 
   // Drive user through SSO login starting from the portal root.
@@ -722,8 +738,8 @@ test('portal Backend API links work after SSO login', async ({ page, baseURL }) 
   const passwordInput = page.locator('input#password');
 
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
     await submitButton.first().click();
   }
@@ -918,8 +934,8 @@ test('backend API and health reachable via portal after SSO login', async ({ pag
   const passwordInput = page.locator('input#password');
 
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
     await submitButton.first().click();
   }
@@ -995,8 +1011,8 @@ test('grafana email contact point for ai-cv-evaluator exists', async ({ page, ba
   const passwordInput = page.locator('input#password');
 
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
     await submitButton.first().click();
   }
@@ -1054,8 +1070,8 @@ test('mailpit dashboard reachable and receives alerts via Mailpit API', async ({
   const passwordInput = page.locator('input#password');
 
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
     await submitButton.first().click();
   }
