@@ -470,67 +470,65 @@ jobs:
           '
       
       - name: Pull and retag images to release tag
+        env:
+          IMAGE_TAG: ${{ needs.pre-deploy-checks.outputs.image_tag }}
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             set -e
-            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
-
+            VERSION='"$IMAGE_TAG"'
+            REPO="ghcr.io/${{ github.repository }}"
             max_attempts=20
             sleep_seconds=15
 
-            ensure_image() {
-              local svc=\"$1\"
-              local image_tag=\"ghcr.io/${{ github.repository }}-\${svc}:\${VERSION}\"
-
-              echo \"Pulling image \${image_tag} (service=\${svc})...\"
-              for attempt in $(seq 1 \"\\$max_attempts\"); do
-                if docker pull \"\${image_tag}\"; then
-                  echo \"Successfully pulled \${image_tag} on attempt \${attempt}\"
+            pull_image() {
+              local svc="$1"
+              local image_tag="${REPO}-${svc}:${VERSION}"
+              echo "Pulling image ${image_tag} (service=${svc})..."
+              for attempt in $(seq 1 $max_attempts); do
+                if docker pull "${image_tag}"; then
+                  echo "Successfully pulled ${image_tag} on attempt ${attempt}"
                   return 0
                 fi
-
-                if [ \"\\$attempt\" -eq \"\\$max_attempts\" ]; then
-                  echo \"Failed to pull \${image_tag} after \${max_attempts} attempts; giving up.\"
+                if [ "$attempt" -eq "$max_attempts" ]; then
+                  echo "Failed to pull ${image_tag} after ${max_attempts} attempts; giving up."
                   return 1
                 fi
-
-                echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_tag}; sleeping \${sleep_seconds}s before retry...\"
-                sleep \"\\$sleep_seconds\"
+                echo "Attempt ${attempt}/${max_attempts} failed for ${image_tag}; sleeping ${sleep_seconds}s..."
+                sleep "$sleep_seconds"
               done
             }
 
             for svc in server worker frontend; do
-              ensure_image \"\${svc}\"
+              pull_image "${svc}"
             done
-          "
+          '
       
       - name: Pull and retag migration image to release tag
+        env:
+          IMAGE_TAG: ${{ needs.pre-deploy-checks.outputs.image_tag }}
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             set -e
-            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
-
+            VERSION='"$IMAGE_TAG"'
+            REPO="ghcr.io/${{ github.repository }}"
             max_attempts=20
             sleep_seconds=15
 
-            image_tag=\"ghcr.io/${{ github.repository }}-migrate:\${VERSION}\"
-
-            echo \"Pulling image \${image_tag} (migrate)...\"
-            for attempt in $(seq 1 \"\\$max_attempts\"); do
-              if docker pull \"\${image_tag}\"; then
-                echo \"Successfully pulled \${image_tag} on attempt \${attempt}\"
+            image_tag="${REPO}-migrate:${VERSION}"
+            echo "Pulling image ${image_tag} (migrate)..."
+            for attempt in $(seq 1 $max_attempts); do
+              if docker pull "${image_tag}"; then
+                echo "Successfully pulled ${image_tag} on attempt ${attempt}"
                 break
               fi
-
-              if [ \"\\$attempt\" -eq \"\\$max_attempts\" ]; then
-                echo \"Failed to pull \${image_tag} after \${max_attempts} attempts; giving up.\"
+              if [ "$attempt" -eq "$max_attempts" ]; then
+                echo "Failed to pull ${image_tag} after ${max_attempts} attempts; giving up."
                 exit 1
               fi
-
-              echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_tag}; sleeping \${sleep_seconds}s before retry...\"
-              sleep \"\\$sleep_seconds\"
+              echo "Attempt ${attempt}/${max_attempts} failed for ${image_tag}; sleeping ${sleep_seconds}s..."
+              sleep "$sleep_seconds"
             done
-          "
+          '
       
       - name: Run database migrations
         run: |
