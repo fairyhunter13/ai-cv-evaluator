@@ -122,11 +122,7 @@ jobs:
                 .workflow_runs
                 | map(
                     select(
-                      .name == $name and .head_sha == $sha
-                      and (
-                        # For Docker Publish, require the main branch push run so images are fully built
-                        ($name != "Docker Publish") or (.head_branch == "main" and .event == "push")
-                      )
+                      .name == $name and .head_sha == $sha and .event == "push"
                     )
                   )
                 | sort_by(.run_number) | last // empty
