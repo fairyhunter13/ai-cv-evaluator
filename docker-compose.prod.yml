@@ -224,7 +224,7 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_COOKIE_SAMESITE: none
-      OAUTH2_PROXY_COOKIE_DOMAINS: ".ai-cv-evaluator.web.id"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "ai-cv-evaluator.web.id,.ai-cv-evaluator.web.id"
       OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
       OAUTH2_PROXY_REDIRECT_URL: https://ai-cv-evaluator.web.id/oauth2/callback
@@ -250,7 +250,7 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_COOKIE_SAMESITE: none
-      OAUTH2_PROXY_COOKIE_DOMAINS: ".ai-cv-evaluator.web.id"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "ai-cv-evaluator.web.id,.ai-cv-evaluator.web.id"
       OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
       OAUTH2_PROXY_REDIRECT_URL: https://dashboard.ai-cv-evaluator.web.id/oauth2/callback
