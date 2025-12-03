@@ -32,8 +32,11 @@ server {
   # oauth2-proxy internal auth endpoint
   location = /oauth2/auth {
     proxy_pass http://oauth2-proxy-app:4180/oauth2/auth;
+    proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Scheme $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Auth-Request-Redirect $scheme://$http_host$request_uri;
     proxy_pass_request_body off;
     proxy_set_header Content-Length "";
