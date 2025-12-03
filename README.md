@@ -215,6 +215,13 @@ sops secrets/env.production.sops.yaml
 
 ## Admin UI & Dashboards
 
+### Production Site & Admin Login
+
+- **Production site**: https://ai-cv-evaluator.web.id
+- **Admin API login** (for testing/demo):
+  - Username: `admin`
+  - Password: `admin123`
+
 ### Frontend Development (Recommended)
 - **Frontend**: http://localhost:3001 (Vue 3 + Vite with HMR)
 - **Backend API**: http://localhost:8080
