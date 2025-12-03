@@ -14,7 +14,6 @@ const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
 const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123');
 
 // Helper to check if SSO login tests should be skipped
-const requiresSSOCredentials = (): boolean => !SSO_PASSWORD;
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
@@ -155,7 +154,6 @@ const mockEvaluationBackend = async (page: Page): Promise<void> => {
 
 test('admin UI main flow after SSO login', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
-  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
 
   // From portal, open the admin frontend.
@@ -194,7 +192,6 @@ test('admin UI main flow after SSO login', async ({ page, baseURL }) => {
 
 test('dashboard stats reflect admin API stats', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
-  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
 
   // From portal, open the admin frontend dashboard.
@@ -230,7 +227,6 @@ test('dashboard stats reflect admin API stats', async ({ page, baseURL }) => {
 
 test('admin evaluation flow with mocked backend', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
-  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
   await mockEvaluationBackend(page);
 

@@ -11,7 +11,6 @@ const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
 const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123');
 
 // Helper to check if SSO login tests should be skipped
-const requiresSSOCredentials = (): boolean => !SSO_PASSWORD;
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
@@ -53,7 +52,6 @@ const loginViaSSO = async (page: Page): Promise<void> => {
 test('real evaluation end-to-end produces integrated evaluation spans', async ({ page, context, baseURL }) => {
   test.setTimeout(180000);
   test.skip(!baseURL, 'Base URL must be configured');
-  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
   await loginViaSSO(page);
 
