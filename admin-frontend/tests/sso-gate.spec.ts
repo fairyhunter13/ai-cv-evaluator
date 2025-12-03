@@ -69,7 +69,7 @@ const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
   }
 };
 
-// Retry an API request until it returns a valid JSON 2xx response (handles 502/503 during startup).
+// Retry an API request until it returns a valid 2xx response (handles 502/503 during startup).
 const apiRequestWithRetry = async (
   page: Page,
   method: 'get' | 'post' | 'put' | 'delete',
@@ -84,8 +84,13 @@ const apiRequestWithRetry = async (
     const status = resp.status();
     const contentType = resp.headers()['content-type'] ?? '';
 
-    // Success: 2xx with JSON content
-    if (status >= 200 && status < 300 && contentType.includes('application/json')) {
+    // Success: 2xx with JSON or YAML content
+    const isValidContent =
+      contentType.includes('application/json') ||
+      contentType.includes('application/yaml') ||
+      contentType.includes('text/yaml') ||
+      contentType.includes('text/plain');
+    if (status >= 200 && status < 300 && isValidContent) {
       return resp;
     }
 
@@ -95,7 +100,7 @@ const apiRequestWithRetry = async (
       continue;
     }
 
-    // Retry if we got HTML instead of JSON (SSO redirect or error page).
+    // Retry if we got HTML instead of expected content (SSO redirect or error page).
     if (contentType.includes('text/html') && attempt < maxAttempts) {
       await page.waitForTimeout(retryDelayMs);
       continue;
