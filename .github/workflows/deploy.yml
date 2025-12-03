@@ -308,17 +308,6 @@ jobs:
             exit 0
           fi
           make decrypt-env
-      - name: Export .env to job environment
-        run: |
-          if [ ! -f .env ]; then
-            echo ".env not found; skipping export to GITHUB_ENV"
-            exit 0
-          fi
-          while IFS= read -r line; do
-            [ -z "$line" ] && continue
-            case "$line" in \#*) continue;; esac
-            key="${line%%=*}"; val="${line#*=}"; echo "$key=$val" >> $GITHUB_ENV
-          done < .env
       - name: Run minimal CI E2E tests (pre-deploy gate)
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
