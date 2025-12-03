@@ -2,6 +2,17 @@ import { test, expect, Page } from '@playwright/test';
 
 const PORTAL_PATH = '/';
 
+// Environment detection
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:8088';
+const IS_PRODUCTION = BASE_URL.includes('ai-cv-evaluator.web.id');
+
+// Credentials: Use env vars, with sensible defaults for dev
+const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
+const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123');
+
+// Helper to check if SSO login tests should be skipped
+const requiresSSOCredentials = (): boolean => !SSO_PASSWORD;
+
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
   return url.includes('/oauth2/') || url.includes('/realms/aicv');
@@ -25,8 +36,11 @@ const loginViaSSO = async (page: Page): Promise<void> => {
   const usernameInput = page.locator('input#username');
   const passwordInput = page.locator('input#password');
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    if (!SSO_PASSWORD) {
+      throw new Error('SSO_PASSWORD required for login');
+    }
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
     await submitButton.first().click();
   }
@@ -39,6 +53,7 @@ const loginViaSSO = async (page: Page): Promise<void> => {
 test('real evaluation end-to-end produces integrated evaluation spans', async ({ page, context, baseURL }) => {
   test.setTimeout(180000);
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
   await loginViaSSO(page);
 

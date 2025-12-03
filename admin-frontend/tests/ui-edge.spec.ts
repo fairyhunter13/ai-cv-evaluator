@@ -2,6 +2,17 @@ import { test, expect, Page } from '@playwright/test';
 
 const PORTAL_PATH = '/';
 
+// Environment detection
+const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:8088';
+const IS_PRODUCTION = BASE_URL.includes('ai-cv-evaluator.web.id');
+
+// Credentials: Use env vars, with sensible defaults for dev
+const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
+const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123');
+
+// Helper to check if SSO login tests should be skipped
+const requiresSSOCredentials = (): boolean => !SSO_PASSWORD;
+
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
   return url.includes('/oauth2/') || url.includes('/realms/aicv');
@@ -25,8 +36,11 @@ const loginViaSSO = async (page: Page): Promise<void> => {
   const usernameInput = page.locator('input#username');
   const passwordInput = page.locator('input#password');
   if (await usernameInput.isVisible()) {
-    await usernameInput.fill('admin');
-    await passwordInput.fill('admin123');
+    if (!SSO_PASSWORD) {
+      throw new Error('SSO_PASSWORD required for login');
+    }
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
     const submitButton = page.locator('button[type="submit"], input[type="submit"]');
     await submitButton.first().click();
   }
@@ -36,6 +50,7 @@ const loginViaSSO = async (page: Page): Promise<void> => {
 
 test('backend evaluate validation errors (missing required fields)', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
   const resp = await page.request.post('/v1/evaluate', {
     headers: { 'Accept': 'application/json' },
@@ -54,6 +69,7 @@ test('backend evaluate validation errors (missing required fields)', async ({ pa
 test('invalid file upload extension via frontend returns 415 and error envelope', async ({ page, baseURL }) => {
   test.setTimeout(60000);
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
   await page.getByRole('link', { name: /Open Frontend/i }).click();
   await page.waitForLoadState('domcontentloaded');
@@ -75,6 +91,7 @@ test('invalid file upload extension via frontend returns 415 and error envelope'
 
 test('upload missing files returns 400 with field=cv detail', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
   const resp = await page.request.post('/v1/upload', {
     multipart: {
@@ -93,6 +110,7 @@ test('upload missing files returns 400 with field=cv detail', async ({ page, bas
 
 test('evaluate invalid JSON returns 400 INVALID_ARGUMENT', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
   const resp = await page.request.post('/v1/evaluate', {
     headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
@@ -107,6 +125,7 @@ test('evaluate invalid JSON returns 400 INVALID_ARGUMENT', async ({ page, baseUR
 
 test('upload form disables submit until both CV and project files are selected', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
   await page.getByRole('link', { name: /Open Frontend/i }).click();
   await page.waitForLoadState('domcontentloaded');
@@ -126,6 +145,7 @@ test('upload form disables submit until both CV and project files are selected',
 
 test('evaluate view surfaces backend validation error when fields are empty', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
   await page.getByRole('link', { name: /Open Frontend/i }).click();
   await page.waitForLoadState('domcontentloaded');
@@ -144,6 +164,7 @@ test('evaluate view surfaces backend validation error when fields are empty', as
 
 test('result view shows client-side validation when Job ID is empty', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
   await loginViaSSO(page);
   await page.getByRole('link', { name: /Open Frontend/i }).click();
   await page.waitForLoadState('domcontentloaded');
