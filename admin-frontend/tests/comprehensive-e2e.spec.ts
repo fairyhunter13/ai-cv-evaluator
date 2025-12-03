@@ -14,6 +14,15 @@ const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123
 // Services that may not be available in production
 const DEV_ONLY_PATHS = ['/mailpit/'];
 
+// Helper to get Prometheus datasource UID dynamically
+const getPrometheusDatasourceUid = async (page: Page): Promise<string> => {
+  const resp = await page.request.get('/grafana/api/datasources');
+  if (!resp.ok()) return 'prometheus'; // fallback
+  const datasources = (await resp.json()) as any[];
+  const prometheus = datasources.find((ds: any) => ds.type === 'prometheus');
+  return prometheus?.uid || 'prometheus';
+};
+
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
   return url.includes('/oauth2/') || url.includes('/realms/aicv');
@@ -374,7 +383,8 @@ test.describe('Alerting Flow', () => {
     test.setTimeout(60000);
     await loginViaSSO(page);
 
-    const resp = await apiRequestWithRetry(page, 'get', '/grafana/api/datasources/proxy/7/api/v1/rules');
+    const promUid = await getPrometheusDatasourceUid(page);
+    const resp = await apiRequestWithRetry(page, 'get', `/grafana/api/datasources/proxy/uid/${promUid}/api/v1/rules`);
     expect(resp.status()).toBe(200);
     const rulesBody = (await resp.json()) as any;
     const groups = rulesBody.data?.groups ?? [];
@@ -494,10 +504,11 @@ test.describe('Alerting Flow', () => {
     }
 
     // Step 2: Verify Prometheus is recording non-OK HTTP requests
+    const promUid = await getPrometheusDatasourceUid(page);
     const promResp = await apiRequestWithRetry(
       page,
       'get',
-      '/grafana/api/datasources/proxy/7/api/v1/query?query=sum%20by(status)%20(rate(http_requests_total{status!="OK"}[5m]))',
+      `/grafana/api/datasources/proxy/uid/${promUid}/api/v1/query?query=sum%20by(status)%20(rate(http_requests_total{status!="OK"}[5m]))`,
     );
     expect(promResp.status()).toBe(200);
     const promBody = await promResp.json();
@@ -511,7 +522,7 @@ test.describe('Alerting Flow', () => {
       const alertsResp = await apiRequestWithRetry(
         page,
         'get',
-        '/grafana/api/datasources/proxy/7/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}',
+        `/grafana/api/datasources/proxy/uid/${promUid}/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}`,
       );
       expect(alertsResp.status()).toBe(200);
       const alertsBody = await alertsResp.json();
@@ -892,10 +903,11 @@ test.describe('Observability Dashboards', () => {
   test('Prometheus is accessible and has targets', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
     await loginViaSSO(page);
+    const promUid = await getPrometheusDatasourceUid(page);
     const resp = await apiRequestWithRetry(
       page,
       'get',
-      '/grafana/api/datasources/proxy/7/api/v1/targets',
+      `/grafana/api/datasources/proxy/uid/${promUid}/api/v1/targets`,
     );
     expect(resp.status()).toBe(200);
     const json = (await resp.json()) as any;
