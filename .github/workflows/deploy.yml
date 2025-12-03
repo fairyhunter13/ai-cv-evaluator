@@ -122,7 +122,10 @@ jobs:
                 .workflow_runs
                 | map(
                     select(
-                      .name == $name and .head_sha == $sha and .event == "push"
+                      .name == $name
+                      and .head_sha == $sha
+                      and .event == "push"
+                      and (if $name == "CI" or $name == "Docker Publish" then .head_branch == "main" else true end)
                     )
                   )
                 | sort_by(.run_number) | last // empty
