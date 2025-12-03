@@ -495,6 +495,8 @@ test.describe('Alerting Flow', () => {
 
   test('alerting flow: generate errors and verify alert infrastructure', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
+    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
+    test.skip(IS_PRODUCTION, 'Mailpit not available in production');
     test.setTimeout(180000); // 3 minutes for alerting flow
     await loginViaSSO(page);
 
@@ -701,6 +703,7 @@ test.describe('Alerting Flow', () => {
 test.describe('Responsive Design', () => {
   test('admin frontend works on mobile viewport', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
+    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
@@ -721,6 +724,7 @@ test.describe('Responsive Design', () => {
 
   test('admin frontend works on tablet viewport', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
+    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
     // Set tablet viewport
     await page.setViewportSize({ width: 768, height: 1024 });

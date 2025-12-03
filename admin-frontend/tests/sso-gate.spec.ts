@@ -729,6 +729,7 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
 
 test('portal Backend API links work after SSO login', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required for login tests');
 
   // Drive user through SSO login starting from the portal root.
   await gotoWithRetry(page, PORTAL_PATH);
@@ -926,6 +927,7 @@ test('Grafana Request Drilldown dashboard links work correctly', async ({ page, 
 
 test('backend API and health reachable via portal after SSO login', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required for login tests');
 
   await gotoWithRetry(page, PORTAL_PATH);
   expect(isSSOLoginUrl(page.url())).toBeTruthy();
@@ -1003,6 +1005,7 @@ test('backend API and health reachable via portal after SSO login', async ({ pag
 
 test('grafana email contact point for ai-cv-evaluator exists', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required for login tests');
 
   await gotoWithRetry(page, PORTAL_PATH);
   expect(isSSOLoginUrl(page.url())).toBeTruthy();
@@ -1062,6 +1065,8 @@ test('grafana email contact point for ai-cv-evaluator exists', async ({ page, ba
 
 test('mailpit dashboard reachable and receives alerts via Mailpit API', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required for login tests');
+  test.skip(IS_PRODUCTION, 'Mailpit not available in production');
 
   await gotoWithRetry(page, PORTAL_PATH);
   expect(isSSOLoginUrl(page.url())).toBeTruthy();
