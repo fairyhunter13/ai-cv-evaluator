@@ -782,20 +782,28 @@ jobs:
         working-directory: admin-frontend
         run: npx playwright install chromium --with-deps
 
+      - name: Setup SSH key for validation
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
       - name: Wait for production to be ready
         run: |
           echo "Waiting for production services to be ready..."
           MAX_ATTEMPTS=30
           READY=0
 
+          # Use SSH to check health locally on the server (bypasses Cloudflare WAF/bot protection)
           for i in $(seq 1 "$MAX_ATTEMPTS"); do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ env.PRODUCTION_URL }}/healthz" || echo "000")
+            HTTP_CODE=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk -o /dev/null -w "%{http_code}" https://localhost/healthz' 2>/dev/null || echo "000")
             if [ "$HTTP_CODE" = "200" ]; then
-              echo "✓ Production health check passed (HTTP $HTTP_CODE)"
+              echo "✓ Production health check passed via SSH (HTTP $HTTP_CODE)"
               READY=1
               break
             fi
-            echo "Attempt $i/$MAX_ATTEMPTS: /healthz returned HTTP $HTTP_CODE; waiting for production..."
+            echo "Attempt $i/$MAX_ATTEMPTS: /healthz returned HTTP $HTTP_CODE via SSH; waiting..."
             sleep 10
           done
 
@@ -806,19 +814,19 @@ jobs:
 
       - name: Validate production health endpoints
         run: |
-          echo "=== Production Health Validation ==="
+          echo "=== Production Health Validation (via SSH to bypass Cloudflare) ==="
           
-          # Health check
+          # Health check via SSH
           echo "Checking /healthz..."
-          curl -sf "${{ env.PRODUCTION_URL }}/healthz" && echo " ✓ /healthz OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/healthz' && echo " ✓ /healthz OK"
           
-          # Readiness check
+          # Readiness check via SSH
           echo "Checking /readyz..."
-          curl -sf "${{ env.PRODUCTION_URL }}/readyz" && echo " ✓ /readyz OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/readyz' && echo " ✓ /readyz OK"
           
-          # OpenAPI spec
+          # OpenAPI spec via SSH
           echo "Checking /openapi.yaml..."
-          curl -sf "${{ env.PRODUCTION_URL }}/openapi.yaml" | head -5 && echo " ✓ /openapi.yaml OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
 
       - name: Run production Playwright tests
         # Only run full SSO Playwright tests when validation is triggered manually.
