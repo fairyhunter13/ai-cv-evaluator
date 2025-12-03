@@ -691,6 +691,10 @@ jobs:
               if [ -f deploy/nginx/prod-conf.d/dashboard.conf.template ]; then
                 cp -f deploy/nginx/prod-conf.d/dashboard.conf.template deploy/nginx/prod-conf.d/dashboard.conf
               fi
+              # Enable keycloak HTTPS config if present
+              if [ -f deploy/nginx/prod-conf.d/keycloak.conf.template ]; then
+                cp -f deploy/nginx/prod-conf.d/keycloak.conf.template deploy/nginx/prod-conf.d/keycloak.conf
+              fi
               docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || true
             fi
           '
