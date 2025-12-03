@@ -618,8 +618,8 @@ jobs:
 
             export COMPOSE_FILE=docker-compose.prod.yml
 
-            echo "Bringing up backend_${NEXT_COLOR}, worker, frontend and nginx with new images..."
-            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx
+            echo "Bringing up backend_${NEXT_COLOR}, worker, frontend, nginx, and oauth2-proxy services..."
+            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard keycloak
 
             echo "Waiting for backend_${NEXT_COLOR} service to be running..."
             for i in {1..30}; do
@@ -629,6 +629,20 @@ jobs:
               fi
               echo "Attempt $i: Waiting for backend_${NEXT_COLOR} to start..."
               sleep 5
+            done
+
+            echo "Force restarting oauth2-proxy services to ensure new configuration is applied..."
+            docker compose -f docker-compose.prod.yml restart oauth2-proxy-app oauth2-proxy-dashboard || echo "Warning: oauth2-proxy restart failed"
+            
+            echo "Waiting for oauth2-proxy services to be ready..."
+            sleep 10
+            for i in {1..10}; do
+              if docker compose -f docker-compose.prod.yml ps oauth2-proxy-app | grep -q "running"; then
+                echo "oauth2-proxy-app is running"
+                break
+              fi
+              echo "Attempt $i: Waiting for oauth2-proxy-app..."
+              sleep 3
             done
 
             echo "Switching Nginx upstream to backend_${NEXT_COLOR}..."
@@ -751,6 +765,14 @@ jobs:
             docker compose -f docker-compose.prod.yml logs --tail=50 frontend || echo "No frontend logs"
             echo "=== Recent Nginx Logs ==="
             docker compose -f docker-compose.prod.yml logs --tail=50 nginx || echo "No nginx logs"
+            echo "=== Recent OAuth2-Proxy App Logs ==="
+            docker compose -f docker-compose.prod.yml logs --tail=50 oauth2-proxy-app || echo "No oauth2-proxy-app logs"
+            echo "=== Recent Keycloak Logs ==="
+            docker compose -f docker-compose.prod.yml logs --tail=30 keycloak || echo "No keycloak logs"
+            
+            # Check oauth2 endpoint is responding
+            echo "=== OAuth2 Proxy Health Check ==="
+            curl -sI http://localhost/oauth2/start 2>&1 | head -5 || echo "Warning: oauth2 start endpoint check failed"
           '
       - name: Cleanup old images
         run: |
