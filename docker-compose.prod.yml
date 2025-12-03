@@ -205,7 +205,7 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?Set KEYCLOAK_ADMIN in .env.production}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env.production}
       KC_PROXY: edge
-      KC_HOSTNAME: ${KC_HOSTNAME:-keycloak.ai-cv-evaluator.web.id}
+      KC_HOSTNAME: ${KC_HOSTNAME:-keycloak}
     volumes:
       - ./deploy/keycloak/realm-aicv.json:/opt/keycloak/data/import/realm-aicv.json:ro
     ports:
