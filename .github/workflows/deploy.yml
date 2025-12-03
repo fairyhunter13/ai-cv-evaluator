@@ -461,72 +461,66 @@ jobs:
       
       - name: Pull and retag images to release tag
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             set -e
-            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
+            VERSION="${{ needs.pre-deploy-checks.outputs.image_tag }}"
 
             max_attempts=20
             sleep_seconds=15
 
-            pull_and_tag() {
-              local svc=\"$1\"
-              local image_sha=\"ghcr.io/${{ github.repository }}-\${svc}:${{ github.sha }}\"
-              local image_tag=\"ghcr.io/${{ github.repository }}-\${svc}:\${VERSION}\"
+            ensure_image() {
+              local svc="$1"
+              local image_tag="ghcr.io/${{ github.repository }}-${svc}:${VERSION}"
 
-              echo \"Pulling image \${image_sha} (service=\${svc})...\"
-              for attempt in $(seq 1 \"$max_attempts\"); do
-                if docker pull \"\${image_sha}\"; then
-                  echo \"Successfully pulled \${image_sha} on attempt \${attempt}\"
-                  break
+              echo "Pulling image ${image_tag} (service=${svc})..."
+              for attempt in $(seq 1 "$max_attempts"); do
+                if docker pull "${image_tag}"; then
+                  echo "Successfully pulled ${image_tag} on attempt ${attempt}"
+                  return 0
                 fi
 
-                if [ \"\$attempt\" -eq \"\$max_attempts\" ]; then
-                  echo \"Failed to pull \${image_sha} after \${max_attempts} attempts; giving up.\"
+                if [ "$attempt" -eq "$max_attempts" ]; then
+                  echo "Failed to pull ${image_tag} after ${max_attempts} attempts; giving up."
                   return 1
                 fi
 
-                echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_sha}; sleeping \${sleep_seconds}s before retry...\"
-                sleep \"\$sleep_seconds\"
+                echo "Attempt ${attempt}/${max_attempts} failed for ${image_tag}; sleeping ${sleep_seconds}s before retry..."
+                sleep "$sleep_seconds"
               done
-
-              docker tag \"\${image_sha}\" \"\${image_tag}\"
             }
 
             for svc in server worker frontend; do
-              pull_and_tag \"\${svc}\"
+              ensure_image "${svc}"
             done
-          "
+          '
       
       - name: Pull and retag migration image to release tag
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             set -e
-            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
+            VERSION="${{ needs.pre-deploy-checks.outputs.image_tag }}"
 
             max_attempts=20
             sleep_seconds=15
 
-            image_sha=\"ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}\"
-            image_tag=\"ghcr.io/${{ github.repository }}-migrate:\${VERSION}\"
+            image_tag="ghcr.io/${{ github.repository }}-migrate:${VERSION}"
 
-            echo \"Pulling image \${image_sha} (migrate)...\"
-            for attempt in $(seq 1 \"$max_attempts\"); do
-              if docker pull \"\${image_sha}\"; then
-                echo \"Successfully pulled \${image_sha} on attempt \${attempt}\"
+            echo "Pulling image ${image_tag} (migrate)..."
+            for attempt in $(seq 1 "$max_attempts"); do
+              if docker pull "${image_tag}"; then
+                echo "Successfully pulled ${image_tag} on attempt ${attempt}"
                 break
               fi
 
-              if [ \"\$attempt\" -eq \"\$max_attempts\" ]; then
-                echo \"Failed to pull \${image_sha} after \${max_attempts} attempts; giving up.\"
+              if [ "$attempt" -eq "$max_attempts" ]; then
+                echo "Failed to pull ${image_tag} after ${max_attempts} attempts; giving up."
                 exit 1
               fi
 
-              echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_sha}; sleeping \${sleep_seconds}s before retry...\"
-              sleep \"\$sleep_seconds\"
+              echo "Attempt ${attempt}/${max_attempts} failed for ${image_tag}; sleeping ${sleep_seconds}s before retry..."
+              sleep "$sleep_seconds"
             done
-
-            docker tag \"\${image_sha}\" \"\${image_tag}\"
-          "
+          '
       
       - name: Run database migrations
         run: |
@@ -879,6 +873,7 @@ jobs:
           else
             echo "❌ Production validation FAILED or had issues"
             echo "Please check the workflow logs for details"
+          fi
 
   cloudflare-dns-sync:
     runs-on: ubuntu-latest

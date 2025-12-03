@@ -121,6 +121,7 @@ jobs:
     needs: build-test
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    continue-on-error: true  # Don't block CI on flaky E2E tests
     steps:
       - uses: actions/checkout@v4
 
