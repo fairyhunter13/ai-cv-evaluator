@@ -230,6 +230,7 @@ test('dashboard stats reflect admin API stats', async ({ page, baseURL }) => {
 
 test('admin evaluation flow with mocked backend', async ({ page, baseURL }) => {
   test.skip(!baseURL, 'Base URL must be configured');
+  test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
   await mockEvaluationBackend(page);
 
