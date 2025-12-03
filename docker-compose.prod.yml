@@ -55,7 +55,7 @@ services:
       - "443:443"
     volumes:
       - ./deploy/nginx/prod-conf.d:/etc/nginx/conf.d:ro
-      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/nginx/prod-nginx.conf:/etc/nginx/nginx.conf:ro
       - ./deploy/portal:/usr/share/nginx/html:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - /var/www/certbot:/var/www/certbot:ro
