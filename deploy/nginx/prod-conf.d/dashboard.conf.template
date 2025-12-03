@@ -98,7 +98,7 @@ server {
     # Portal root - static
     location = / {
         root /usr/share/nginx/html;
-        index index.html;
+        try_files /index.html =404;
     }
     location /assets/ {
         root /usr/share/nginx/html;
