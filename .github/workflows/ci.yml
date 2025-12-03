@@ -83,13 +83,6 @@ jobs:
         run: make gosec-sarif
         continue-on-error: true
 
-      - name: Upload Gosec results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always() && steps.gosec-sarif.conclusion == 'success'
-        continue-on-error: true
-        with:
-          sarif_file: gosec-results.sarif
-
       - name: Security - License Check
         run: make license-scan
         env:
@@ -126,7 +119,7 @@ jobs:
       # E2E tests on tags are handled in the deploy workflow's e2e-verify job
 
   playwright-e2e:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     needs: build-test
     runs-on: ubuntu-latest
     timeout-minutes: 40
