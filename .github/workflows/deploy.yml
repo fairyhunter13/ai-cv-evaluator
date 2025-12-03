@@ -102,7 +102,12 @@ jobs:
             local max_attempts=10
             local sleep_seconds=60
 
-            echo "Waiting for workflow '$wf_name' on commit $SHA to succeed..."
+            if [ "$wf_name" = "Docker Publish" ]; then
+              max_attempts=30
+              sleep_seconds=60
+            fi
+
+            echo "Waiting for workflow '$wf_name' on commit $SHA to succeed (max_attempts=$max_attempts, sleep_seconds=$sleep_seconds)..."
 
             for attempt in $(seq 1 "$max_attempts"); do
               echo "Attempt $attempt/$max_attempts for '$wf_name'..."
@@ -461,13 +466,35 @@ jobs:
             set -e
             VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
 
-            docker pull ghcr.io/${{ github.repository }}-server:${{ github.sha }}
-            docker pull ghcr.io/${{ github.repository }}-worker:${{ github.sha }}
-            docker pull ghcr.io/${{ github.repository }}-frontend:${{ github.sha }}
+            max_attempts=20
+            sleep_seconds=15
+
+            pull_and_tag() {
+              local svc=\"$1\"
+              local image_sha=\"ghcr.io/${{ github.repository }}-\${svc}:${{ github.sha }}\"
+              local image_tag=\"ghcr.io/${{ github.repository }}-\${svc}:\${VERSION}\"
+
+              echo \"Pulling image \${image_sha} (service=\${svc})...\"
+              for attempt in $(seq 1 \"$max_attempts\"); do
+                if docker pull \"\${image_sha}\"; then
+                  echo \"Successfully pulled \${image_sha} on attempt \${attempt}\"
+                  break
+                fi
+
+                if [ \"\$attempt\" -eq \"\$max_attempts\" ]; then
+                  echo \"Failed to pull \${image_sha} after \${max_attempts} attempts; giving up.\"
+                  return 1
+                fi
+
+                echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_sha}; sleeping \${sleep_seconds}s before retry...\"
+                sleep \"\$sleep_seconds\"
+              done
+
+              docker tag \"\${image_sha}\" \"\${image_tag}\"
+            }
 
             for svc in server worker frontend; do
-              docker tag ghcr.io/${{ github.repository }}-\${svc}:${{ github.sha }} \
-                         ghcr.io/${{ github.repository }}-\${svc}:\${VERSION}
+              pull_and_tag \"\${svc}\"
             done
           "
       
@@ -477,9 +504,29 @@ jobs:
             set -e
             VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
 
-            docker pull ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}
-            docker tag ghcr.io/${{ github.repository }}-migrate:${{ github.sha }} \
-                       ghcr.io/${{ github.repository }}-migrate:\${VERSION}
+            max_attempts=20
+            sleep_seconds=15
+
+            image_sha=\"ghcr.io/${{ github.repository }}-migrate:${{ github.sha }}\"
+            image_tag=\"ghcr.io/${{ github.repository }}-migrate:\${VERSION}\"
+
+            echo \"Pulling image \${image_sha} (migrate)...\"
+            for attempt in $(seq 1 \"$max_attempts\"); do
+              if docker pull \"\${image_sha}\"; then
+                echo \"Successfully pulled \${image_sha} on attempt \${attempt}\"
+                break
+              fi
+
+              if [ \"\$attempt\" -eq \"\$max_attempts\" ]; then
+                echo \"Failed to pull \${image_sha} after \${max_attempts} attempts; giving up.\"
+                exit 1
+              fi
+
+              echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_sha}; sleeping \${sleep_seconds}s before retry...\"
+              sleep \"\$sleep_seconds\"
+            done
+
+            docker tag \"\${image_sha}\" \"\${image_tag}\"
           "
       
       - name: Run database migrations
