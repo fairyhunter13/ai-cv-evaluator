@@ -125,7 +125,7 @@ jobs:
                       .name == $name
                       and .head_sha == $sha
                       and .event == "push"
-                      and (if $name == "CI" or $name == "Docker Publish" then .head_branch == "main" else true end)
+                      and (if $name == "CI" then .head_branch == "main" else true end)
                     )
                   )
                 | sort_by(.run_number) | last // empty
