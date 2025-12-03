@@ -743,6 +743,10 @@ jobs:
             docker compose -f docker-compose.prod.yml logs --tail=50 "${BACKEND_SERVICE}"
             echo "=== Recent Worker Logs ==="
             docker compose -f docker-compose.prod.yml logs --tail=50 worker
+            echo "=== Recent Frontend Logs ==="
+            docker compose -f docker-compose.prod.yml logs --tail=50 frontend || echo "No frontend logs"
+            echo "=== Recent Nginx Logs ==="
+            docker compose -f docker-compose.prod.yml logs --tail=50 nginx || echo "No nginx logs"
           '
       - name: Cleanup old images
         run: |
