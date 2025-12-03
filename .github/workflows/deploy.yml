@@ -581,8 +581,8 @@ jobs:
 
             export COMPOSE_FILE=docker-compose.prod.yml
 
-            echo "Bringing up backend_${NEXT_COLOR}, worker and frontend with new images..."
-            docker compose up -d "backend_${NEXT_COLOR}" worker frontend
+            echo "Bringing up backend_${NEXT_COLOR}, worker, frontend and nginx with new images..."
+            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx
 
             echo "Waiting for backend_${NEXT_COLOR} service to be running..."
             for i in {1..30}; do
