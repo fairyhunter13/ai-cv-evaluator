@@ -420,6 +420,16 @@ jobs:
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
+            # Load production env for docker compose variable interpolation
+            if [ -f .env.production ]; then
+              set -a
+              while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                case "$line" in \#*) continue ;; esac
+                case "$line" in *=*) eval "$line" ;; esac
+              done < .env.production
+              set +a
+            fi
             # Start (or update) the certbot service so its internal renew loop runs on the server
             if docker compose -f docker-compose.prod.yml up -d certbot; then
               echo "certbot service is running (or started)"
@@ -461,66 +471,66 @@ jobs:
       
       - name: Pull and retag images to release tag
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
             set -e
-            VERSION="${{ needs.pre-deploy-checks.outputs.image_tag }}"
+            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
 
             max_attempts=20
             sleep_seconds=15
 
             ensure_image() {
-              local svc="$1"
-              local image_tag="ghcr.io/${{ github.repository }}-${svc}:${VERSION}"
+              local svc=\"$1\"
+              local image_tag=\"ghcr.io/${{ github.repository }}-\${svc}:\${VERSION}\"
 
-              echo "Pulling image ${image_tag} (service=${svc})..."
-              for attempt in $(seq 1 "$max_attempts"); do
-                if docker pull "${image_tag}"; then
-                  echo "Successfully pulled ${image_tag} on attempt ${attempt}"
+              echo \"Pulling image \${image_tag} (service=\${svc})...\"
+              for attempt in $(seq 1 \"\\$max_attempts\"); do
+                if docker pull \"\${image_tag}\"; then
+                  echo \"Successfully pulled \${image_tag} on attempt \${attempt}\"
                   return 0
                 fi
 
-                if [ "$attempt" -eq "$max_attempts" ]; then
-                  echo "Failed to pull ${image_tag} after ${max_attempts} attempts; giving up."
+                if [ \"\\$attempt\" -eq \"\\$max_attempts\" ]; then
+                  echo \"Failed to pull \${image_tag} after \${max_attempts} attempts; giving up.\"
                   return 1
                 fi
 
-                echo "Attempt ${attempt}/${max_attempts} failed for ${image_tag}; sleeping ${sleep_seconds}s before retry..."
-                sleep "$sleep_seconds"
+                echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_tag}; sleeping \${sleep_seconds}s before retry...\"
+                sleep \"\\$sleep_seconds\"
               done
             }
 
             for svc in server worker frontend; do
-              ensure_image "${svc}"
+              ensure_image \"\${svc}\"
             done
-          '
+          "
       
       - name: Pull and retag migration image to release tag
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
             set -e
-            VERSION="${{ needs.pre-deploy-checks.outputs.image_tag }}"
+            VERSION=\"${{ needs.pre-deploy-checks.outputs.image_tag }}\"
 
             max_attempts=20
             sleep_seconds=15
 
-            image_tag="ghcr.io/${{ github.repository }}-migrate:${VERSION}"
+            image_tag=\"ghcr.io/${{ github.repository }}-migrate:\${VERSION}\"
 
-            echo "Pulling image ${image_tag} (migrate)..."
-            for attempt in $(seq 1 "$max_attempts"); do
-              if docker pull "${image_tag}"; then
-                echo "Successfully pulled ${image_tag} on attempt ${attempt}"
+            echo \"Pulling image \${image_tag} (migrate)...\"
+            for attempt in $(seq 1 \"\\$max_attempts\"); do
+              if docker pull \"\${image_tag}\"; then
+                echo \"Successfully pulled \${image_tag} on attempt \${attempt}\"
                 break
               fi
 
-              if [ "$attempt" -eq "$max_attempts" ]; then
-                echo "Failed to pull ${image_tag} after ${max_attempts} attempts; giving up."
+              if [ \"\\$attempt\" -eq \"\\$max_attempts\" ]; then
+                echo \"Failed to pull \${image_tag} after \${max_attempts} attempts; giving up.\"
                 exit 1
               fi
 
-              echo "Attempt ${attempt}/${max_attempts} failed for ${image_tag}; sleeping ${sleep_seconds}s before retry..."
-              sleep "$sleep_seconds"
+              echo \"Attempt \${attempt}/\${max_attempts} failed for \${image_tag}; sleeping \${sleep_seconds}s before retry...\"
+              sleep \"\\$sleep_seconds\"
             done
-          '
+          "
       
       - name: Run database migrations
         run: |
@@ -663,14 +673,25 @@ jobs:
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
-            if [ -f deploy/nginx/conf.d/app-https.conf.template ]; then
-              cp -f deploy/nginx/conf.d/app-https.conf.template deploy/nginx/conf.d/app-https.conf
-              if [ -f deploy/nginx/conf.d/app-http-redirect.conf.template ]; then
-                cp -f deploy/nginx/conf.d/app-http-redirect.conf.template deploy/nginx/conf.d/app-http.conf
+            # Load production env for docker compose
+            if [ -f .env.production ]; then
+              set -a
+              while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                case "$line" in \#*) continue ;; esac
+                case "$line" in *=*) eval "$line" ;; esac
+              done < .env.production
+              set +a
+            fi
+            # Use prod-conf.d which is mounted by docker-compose.prod.yml
+            if [ -f deploy/nginx/prod-conf.d/app-https.conf.template ]; then
+              cp -f deploy/nginx/prod-conf.d/app-https.conf.template deploy/nginx/prod-conf.d/app-https.conf
+              if [ -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template ]; then
+                cp -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template deploy/nginx/prod-conf.d/app-http.conf
               fi
               # Enable dashboard HTTPS config if present
-              if [ -f deploy/nginx/conf.d/dashboard.conf.template ]; then
-                cp -f deploy/nginx/conf.d/dashboard.conf.template deploy/nginx/conf.d/dashboard.conf
+              if [ -f deploy/nginx/prod-conf.d/dashboard.conf.template ]; then
+                cp -f deploy/nginx/prod-conf.d/dashboard.conf.template deploy/nginx/prod-conf.d/dashboard.conf
               fi
               docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || true
             fi
