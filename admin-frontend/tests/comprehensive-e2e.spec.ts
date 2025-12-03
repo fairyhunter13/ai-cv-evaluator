@@ -68,11 +68,6 @@ const loginViaSSO = async (page: Page): Promise<void> => {
   await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
 };
 
-// Helper to check if SSO login tests should be skipped
-const requiresSSOCredentials = (): boolean => {
-  return !SSO_PASSWORD;
-};
-
 // Retry an API request until it returns a valid response (handles 502/503 during startup).
 const apiRequestWithRetry = async (
   page: Page,
@@ -123,7 +118,6 @@ const clearMailpitMessages = async (page: Page): Promise<void> => {
 test.describe('Portal Page', () => {
   test('portal page displays all navigation links after SSO login', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     // Portal should show navigation links to all surfaced services
@@ -141,7 +135,6 @@ test.describe('Portal Page', () => {
 
   test('portal page has proper title and branding', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     // Check the page has a title
@@ -181,7 +174,6 @@ test.describe('Logout Flow', () => {
 test.describe('Job Management', () => {
   test('job list displays with pagination controls', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -202,7 +194,6 @@ test.describe('Job Management', () => {
 
   test('job search functionality works', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -225,7 +216,6 @@ test.describe('Job Management', () => {
 
   test('job status filter works', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -277,7 +267,6 @@ test.describe('Health Endpoints', () => {
 test.describe('Admin API', () => {
   test('admin stats API returns valid structure', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     const resp = await apiRequestWithRetry(page, 'get', '/admin/api/stats');
@@ -292,7 +281,6 @@ test.describe('Admin API', () => {
 
   test('admin jobs API supports pagination', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     const resp = await page.request.get('/admin/api/jobs?page=1&limit=5');
@@ -307,7 +295,6 @@ test.describe('Admin API', () => {
 
   test('admin jobs API supports status filter', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     // Filter by 'completed' status
@@ -326,7 +313,6 @@ test.describe('Admin API', () => {
 test.describe('Alerting Flow', () => {
   test('Grafana alerting configuration is valid', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -357,7 +343,6 @@ test.describe('Alerting Flow', () => {
 
   test('Grafana contact points are configured', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -372,7 +357,6 @@ test.describe('Alerting Flow', () => {
 
   test('Prometheus has HTTP error alert rule configured', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -387,7 +371,6 @@ test.describe('Alerting Flow', () => {
 
   test('Prometheus has core alert rules configured', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -479,7 +462,6 @@ test.describe('Alerting Flow', () => {
 
   test('Mailpit is accessible for receiving alert emails', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await clearMailpitMessages(page);
@@ -495,7 +477,6 @@ test.describe('Alerting Flow', () => {
 
   test('alerting flow: generate errors and verify alert infrastructure', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.skip(IS_PRODUCTION, 'Mailpit not available in production');
     test.setTimeout(180000); // 3 minutes for alerting flow
     await loginViaSSO(page);
@@ -564,7 +545,6 @@ test.describe('Alerting Flow', () => {
 
   test('Grafana alert list shows core metrics alerts with summaries', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.setTimeout(90000);
     await loginViaSSO(page);
 
@@ -605,7 +585,6 @@ test.describe('Alerting Flow', () => {
     baseURL,
   }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -653,7 +632,6 @@ test.describe('Alerting Flow', () => {
     baseURL,
   }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -703,7 +681,6 @@ test.describe('Alerting Flow', () => {
 test.describe('Responsive Design', () => {
   test('admin frontend works on mobile viewport', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
@@ -724,7 +701,6 @@ test.describe('Responsive Design', () => {
 
   test('admin frontend works on tablet viewport', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
 
     // Set tablet viewport
     await page.setViewportSize({ width: 768, height: 1024 });
@@ -745,7 +721,6 @@ test.describe('Responsive Design', () => {
 test.describe('Error Handling', () => {
   test('frontend handles API timeout gracefully', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -768,7 +743,6 @@ test.describe('Error Handling', () => {
 
   test('frontend handles invalid file types with clear error', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -798,7 +772,6 @@ test.describe('Error Handling', () => {
 test.describe('Navigation', () => {
   test('sidebar navigation is functional', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -822,7 +795,6 @@ test.describe('Navigation', () => {
 
   test('browser back/forward navigation works', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -857,7 +829,6 @@ test.describe('Navigation', () => {
 test.describe('Form Interactions', () => {
   test('upload form shows file names after selection', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -876,7 +847,6 @@ test.describe('Form Interactions', () => {
 
   test('evaluate form validates input before submission', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -899,7 +869,6 @@ test.describe('Form Interactions', () => {
 
   test('result form allows entering job ID', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -922,7 +891,6 @@ test.describe('Form Interactions', () => {
 test.describe('Observability Dashboards', () => {
   test('Prometheus is accessible and has targets', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
     const resp = await apiRequestWithRetry(
       page,
@@ -938,7 +906,6 @@ test.describe('Observability Dashboards', () => {
 
   test('Jaeger is accessible and has services', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await gotoWithRetry(page, '/jaeger/');
@@ -951,7 +918,6 @@ test.describe('Observability Dashboards', () => {
 
   test('Redpanda Console is accessible', async ({ page, baseURL }) => {
     test.skip(!baseURL, 'Base URL must be configured');
-    test.skip(requiresSSOCredentials(), 'SSO_PASSWORD required');
     await loginViaSSO(page);
 
     await gotoWithRetry(page, '/redpanda/');
