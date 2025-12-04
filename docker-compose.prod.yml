@@ -217,17 +217,14 @@ services:
   oauth2-proxy-app:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     environment:
-      OAUTH2_PROXY_PROVIDER: oidc
-      # Skip OIDC discovery to manually configure internal vs external URLs
-      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
-      # Issuer URL must match what Keycloak puts in tokens (KC_HOSTNAME)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
+      # Use legacy keycloak provider which allows separate internal/external URLs
+      OAUTH2_PROXY_PROVIDER: keycloak
       # External URL for browser redirects (login page)
       OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
       # Internal URLs for server-to-server communication (avoid Cloudflare roundtrip)
-      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
       OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
       OAUTH2_PROXY_PROFILE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
+      OAUTH2_PROXY_VALIDATE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
@@ -239,8 +236,6 @@ services:
       OAUTH2_PROXY_REDIRECT_URL: https://ai-cv-evaluator.web.id/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
-      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
-      OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       # Skip the intermediate "Sign in with..." page and go directly to Keycloak
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
@@ -252,17 +247,14 @@ services:
   oauth2-proxy-dashboard:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     environment:
-      OAUTH2_PROXY_PROVIDER: oidc
-      # Skip OIDC discovery to manually configure internal vs external URLs
-      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
-      # Issuer URL must match what Keycloak puts in tokens (KC_HOSTNAME)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
+      # Use legacy keycloak provider which allows separate internal/external URLs
+      OAUTH2_PROXY_PROVIDER: keycloak
       # External URL for browser redirects (login page)
       OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
       # Internal URLs for server-to-server communication (avoid Cloudflare roundtrip)
-      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
       OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
       OAUTH2_PROXY_PROFILE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
+      OAUTH2_PROXY_VALIDATE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
@@ -274,8 +266,6 @@ services:
       OAUTH2_PROXY_REDIRECT_URL: https://dashboard.ai-cv-evaluator.web.id/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
-      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
-      OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       # Skip the intermediate "Sign in with..." page and go directly to Keycloak
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
