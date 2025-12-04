@@ -445,24 +445,24 @@ test.describe('Production Compatible - Error Handling', () => {
 
 // =============================================================================
 // EMAIL NOTIFICATION INFRASTRUCTURE TESTS
-// In dev: tests Mailpit directly
-// In prod: tests Grafana contact points configuration
+// In both dev and prod: test Mailpit directly
+// In prod: additionally tests Grafana contact points configuration
 // =============================================================================
 
 test.describe('Email Notification Infrastructure', () => {
   test('email testing infrastructure is accessible', async ({ page, baseURL }) => {
     await loginViaSSO(page);
 
-    if (IS_DEV) {
-      // In dev, check Mailpit dashboard
-      await gotoWithRetry(page, '/mailpit/');
-      await page.waitForLoadState('domcontentloaded');
+    // In both environments, Mailpit dashboard should be reachable after SSO
+    await gotoWithRetry(page, '/mailpit/');
+    await page.waitForLoadState('domcontentloaded');
 
-      expect(isSSOLoginUrl(page.url())).toBeFalsy();
-      const title = (await page.title()).toLowerCase();
-      expect(title).toContain('mailpit');
-    } else {
-      // In prod, verify Grafana alerting notifications page
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+    const title = (await page.title()).toLowerCase();
+    expect(title).toContain('mailpit');
+
+    // In prod, also verify Grafana alerting notifications page
+    if (IS_PRODUCTION) {
       await gotoWithRetry(page, '/grafana/alerting/notifications');
       await page.waitForLoadState('networkidle');
       await expect(page).toHaveTitle(/Grafana/i, { timeout: 15000 });
@@ -472,18 +472,17 @@ test.describe('Email Notification Infrastructure', () => {
   test('email notification API is accessible', async ({ page, baseURL }) => {
     await loginViaSSO(page);
 
-    if (IS_DEV) {
-      // In dev, check Mailpit API
-      const resp = await apiRequestWithRetry(page, 'get', '/mailpit/api/v1/messages');
-      expect(resp.status()).toBe(200);
+    // In both environments, Mailpit API should be reachable via /mailpit/api/v1/messages
+    const mailpitResp = await apiRequestWithRetry(page, 'get', '/mailpit/api/v1/messages');
+    expect(mailpitResp.status()).toBe(200);
 
-      const body = await resp.json();
-      expect(body).toHaveProperty('total');
-      expect(body).toHaveProperty('messages');
-    } else {
-      // In prod, verify Grafana contact points API
+    const mailpitBody = await mailpitResp.json();
+    expect(mailpitBody).toHaveProperty('total');
+    expect(mailpitBody).toHaveProperty('messages');
+
+    if (IS_PRODUCTION) {
+      // In prod, also verify Grafana contact points API
       const resp = await apiRequestWithRetry(page, 'get', '/grafana/api/v1/provisioning/contact-points');
-      // If JSON response is available, verify structure
       const contentType = resp.headers()['content-type'] ?? '';
       if (contentType.includes('application/json') && resp.status() === 200) {
         const body = await resp.json();

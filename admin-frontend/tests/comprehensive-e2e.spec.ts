@@ -341,10 +341,17 @@ test.describe('Alerting Flow', () => {
     // The exact UI varies by Grafana version and environment
     const pageContent = await page.locator('body').textContent();
     expect(pageContent).toBeTruthy();
+
+    const lowerContent = (pageContent ?? '').toLowerCase();
+
+    // Explicitly fail if Grafana shows an error banner about loading rules.
+    expect(lowerContent.includes('errors loading rules')).toBeFalsy();
+    expect(lowerContent.includes('unable to fetch alert rules')).toBeFalsy();
+
     // Should have some alert rules or groups displayed
-    const hasAlertContent = pageContent?.includes('ai-cv-evaluator') ||
-      pageContent?.includes('alert') ||
-      pageContent?.includes('Alert');
+    const hasAlertContent = lowerContent.includes('ai-cv-evaluator') ||
+      lowerContent.includes('alert') ||
+      lowerContent.includes('rule');
     expect(hasAlertContent).toBeTruthy();
   });
 
@@ -458,13 +465,18 @@ test.describe('Alerting Flow', () => {
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveTitle(/Grafana/i, { timeout: 15000 });
 
-    // Verify the page has alert-related content
+    // Verify the page has alert-related content and no error banner
     const pageContent = await page.locator('body').textContent();
     expect(pageContent).toBeTruthy();
-    const hasAlertContent = pageContent?.includes('alert') ||
-      pageContent?.includes('Alert') ||
-      pageContent?.includes('rule') ||
-      pageContent?.includes('Rule');
+
+    const lowerContent = (pageContent ?? '').toLowerCase();
+
+    // Fail fast if Grafana shows the error banner about alert rules.
+    expect(lowerContent.includes('errors loading rules')).toBeFalsy();
+    expect(lowerContent.includes('unable to fetch alert rules')).toBeFalsy();
+
+    const hasAlertContent = lowerContent.includes('alert') ||
+      lowerContent.includes('rule');
     expect(hasAlertContent).toBeTruthy();
   });
 
