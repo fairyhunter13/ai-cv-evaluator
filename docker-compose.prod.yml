@@ -241,6 +241,8 @@ services:
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       # Skip TLS verification for external Keycloak URL (behind Cloudflare)
       OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY: "true"
+      # Skip audience verification - Keycloak tokens may have different audiences
+      OAUTH2_PROXY_OIDC_EXTRA_AUDIENCES: "realm-management,account"
       # Skip the intermediate "Sign in with..." page
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
@@ -270,6 +272,8 @@ services:
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       # Skip TLS verification for external Keycloak URL (behind Cloudflare)
       OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY: "true"
+      # Skip audience verification - Keycloak tokens may have different audiences
+      OAUTH2_PROXY_OIDC_EXTRA_AUDIENCES: "realm-management,account"
       # Skip the intermediate "Sign in with..." page
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
