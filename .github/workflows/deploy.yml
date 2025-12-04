@@ -25,11 +25,6 @@ on:
         required: false
         default: false
         type: boolean
-      skip_gates:
-        description: 'Skip e2e-verify and security-gate jobs (for faster debugging iterations)'
-        required: false
-        default: false
-        type: boolean
       target_ip:
         description: 'Override A record target IP for Cloudflare DNS sync (defaults to SSH_HOST secret)'
         required: false
@@ -88,8 +83,7 @@ jobs:
   security-gate:
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
-    # Skip when skip_gates is true for faster debugging
-    if: needs.pre-deploy-checks.outputs.should_deploy == 'true' && github.event.inputs.skip_gates != 'true'
+    if: needs.pre-deploy-checks.outputs.should_deploy == 'true'
     steps:
       - name: Check CI, Security Scans and Secrets Healthcheck for this commit
         env:
@@ -284,8 +278,6 @@ jobs:
   e2e-verify:
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
-    # Skip this job when skip_gates is true for faster debugging
-    if: github.event.inputs.skip_gates != 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
@@ -339,14 +331,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: [pre-deploy-checks, e2e-verify, security-gate]
-    # Run if gates pass OR if skip_gates is true (for faster debugging)
     if: |
       always() && 
       needs.pre-deploy-checks.outputs.should_deploy == 'true' &&
-      (
-        (needs.e2e-verify.result == 'success' && needs.security-gate.result == 'success') ||
-        github.event.inputs.skip_gates == 'true'
-      )
+      needs.e2e-verify.result == 'success' && 
+      needs.security-gate.result == 'success'
     environment:
       name: production
     steps:

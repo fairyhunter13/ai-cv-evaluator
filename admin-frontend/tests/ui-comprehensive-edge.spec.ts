@@ -45,21 +45,35 @@ const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
 };
 
 const loginViaSSO = async (page: Page): Promise<void> => {
-  await gotoWithRetry(page, PORTAL_PATH);
-  if (!isSSOLoginUrl(page.url())) return;
-  const usernameInput = page.locator('input#username');
-  const passwordInput = page.locator('input#password');
-  if (await usernameInput.isVisible()) {
-    if (!SSO_PASSWORD) {
-      throw new Error('SSO_PASSWORD required for login');
-    }
-    await usernameInput.fill(SSO_USERNAME);
-    await passwordInput.fill(SSO_PASSWORD);
-    const submitButton = page.locator('button[type="submit"], input[type="submit"]');
-    await submitButton.first().click();
+  if (!SSO_PASSWORD) {
+    throw new Error('SSO_PASSWORD required for login');
   }
-  await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+
+  // Retry login up to 3 times to handle transient SSO issues
+  const maxLoginAttempts = 3;
+  for (let attempt = 1; attempt <= maxLoginAttempts; attempt += 1) {
+    try {
+      await gotoWithRetry(page, PORTAL_PATH);
+      if (!isSSOLoginUrl(page.url())) return;
+      
+      const usernameInput = page.locator('input#username');
+      const passwordInput = page.locator('input#password');
+      
+      await usernameInput.waitFor({ state: 'visible', timeout: 10000 });
+      await usernameInput.fill(SSO_USERNAME);
+      await passwordInput.fill(SSO_PASSWORD);
+      
+      const submitButton = page.locator('button[type="submit"], input[type="submit"]');
+      await submitButton.first().click();
+      
+      await completeKeycloakProfileUpdate(page);
+      await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
+      return;
+    } catch (err) {
+      if (attempt === maxLoginAttempts) throw err;
+      await page.waitForTimeout(2000);
+    }
+  }
 };
 
 // =============================================================================

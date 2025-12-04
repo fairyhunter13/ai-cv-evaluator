@@ -63,18 +63,31 @@ const loginViaSSO = async (page: Page): Promise<void> => {
     throw new Error('SSO_PASSWORD environment variable is required for SSO login tests');
   }
 
-  await gotoWithRetry(page, PORTAL_PATH);
-  if (!isSSOLoginUrl(page.url())) return;
-  const usernameInput = page.locator('input#username');
-  const passwordInput = page.locator('input#password');
-  if (await usernameInput.isVisible()) {
-    await usernameInput.fill(SSO_USERNAME);
-    await passwordInput.fill(SSO_PASSWORD);
-    const submitButton = page.locator('button[type="submit"], input[type="submit"]');
-    await submitButton.first().click();
+  // Retry login up to 3 times to handle transient SSO issues
+  const maxLoginAttempts = 3;
+  for (let attempt = 1; attempt <= maxLoginAttempts; attempt += 1) {
+    try {
+      await gotoWithRetry(page, PORTAL_PATH);
+      if (!isSSOLoginUrl(page.url())) return;
+      
+      const usernameInput = page.locator('input#username');
+      const passwordInput = page.locator('input#password');
+      
+      await usernameInput.waitFor({ state: 'visible', timeout: 10000 });
+      await usernameInput.fill(SSO_USERNAME);
+      await passwordInput.fill(SSO_PASSWORD);
+      
+      const submitButton = page.locator('button[type="submit"], input[type="submit"]');
+      await submitButton.first().click();
+      
+      await completeKeycloakProfileUpdate(page);
+      await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
+      return;
+    } catch (err) {
+      if (attempt === maxLoginAttempts) throw err;
+      await page.waitForTimeout(2000);
+    }
   }
-  await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
 };
 
 // Retry an API request until it returns a valid response (handles 502/503 during startup).
