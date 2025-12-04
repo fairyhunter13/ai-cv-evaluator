@@ -169,6 +169,14 @@ services:
       - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
   jaeger:
     image: jaegertracing/all-in-one:1.57
+    environment:
+      - QUERY_BASE_PATH=/jaeger
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.20
+    environment:
+      - MP_WEBROOT=/mailpit/
     restart: unless-stopped
 
   prometheus:
@@ -182,6 +190,7 @@ services:
     volumes:
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./deploy/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deploy/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
       - ./deploy/grafana/dashboards:/etc/grafana/dashboards:ro
     environment:
       - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s/grafana/
