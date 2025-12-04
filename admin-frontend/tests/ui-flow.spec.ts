@@ -153,7 +153,6 @@ const mockEvaluationBackend = async (page: Page): Promise<void> => {
 // Verifies that key headings and form controls render correctly.
 
 test('admin UI main flow after SSO login', async ({ page, baseURL }) => {
-  test.skip(!baseURL, 'Base URL must be configured');
   await loginViaSSO(page);
 
   // From portal, open the admin frontend.
@@ -191,7 +190,6 @@ test('admin UI main flow after SSO login', async ({ page, baseURL }) => {
 });
 
 test('dashboard stats reflect admin API stats', async ({ page, baseURL }) => {
-  test.skip(!baseURL, 'Base URL must be configured');
   await loginViaSSO(page);
 
   // From portal, open the admin frontend dashboard.
@@ -226,7 +224,6 @@ test('dashboard stats reflect admin API stats', async ({ page, baseURL }) => {
 });
 
 test('admin evaluation flow with mocked backend', async ({ page, baseURL }) => {
-  test.skip(!baseURL, 'Base URL must be configured');
 
   await mockEvaluationBackend(page);
 

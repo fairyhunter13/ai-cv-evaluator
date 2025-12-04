@@ -51,7 +51,6 @@ const loginViaSSO = async (page: Page): Promise<void> => {
 // Uses small .txt fixtures to keep ingestion fast and deterministic.
 test('real evaluation end-to-end produces integrated evaluation spans', async ({ page, context, baseURL }) => {
   test.setTimeout(180000);
-  test.skip(!baseURL, 'Base URL must be configured');
 
   await loginViaSSO(page);
 
