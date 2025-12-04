@@ -123,10 +123,18 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
   }
 
+  # Service variables for runtime DNS resolution (allows nginx to start before all services)
+  set $frontend_upstream frontend:80;
+  set $grafana_upstream grafana:3000;
+  set $prometheus_upstream prometheus:9090;
+  set $jaeger_upstream jaeger:16686;
+  set $redpanda_upstream redpanda-console:8080;
+  set $mailpit_upstream mailpit:8025;
+
   # Frontend app under /app/ (linked from portal)
   # No trailing slash: preserve /app/ prefix since frontend is built with base: '/app/'
   location /app/ {
-    proxy_pass http://frontend:80;
+    proxy_pass http://$frontend_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -149,7 +157,7 @@ server {
     proxy_set_header X-Forwarded-User $auth_user;
     proxy_set_header X-Auth-Request-User $auth_user;
     # No trailing slash: preserve /grafana/ prefix since Grafana uses serve_from_sub_path=true
-    proxy_pass http://grafana:3000;
+    proxy_pass http://$grafana_upstream;
   }
 
   # Prometheus
@@ -158,7 +166,7 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass http://prometheus:9090/;
+    proxy_pass http://$prometheus_upstream/;
   }
 
   # Jaeger UI
@@ -167,7 +175,7 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass http://jaeger:16686/;
+    proxy_pass http://$jaeger_upstream/;
   }
 
   # Redpanda Console
@@ -176,7 +184,7 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass http://redpanda-console:8080/;
+    proxy_pass http://$redpanda_upstream/;
   }
 
   # Mailpit (local SMTP inbox + UI) behind SSO at /mailpit/
@@ -184,7 +192,7 @@ server {
     return 302 /mailpit/;
   }
   location /mailpit/ {
-    proxy_pass http://mailpit:8025/;
+    proxy_pass http://$mailpit_upstream/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
