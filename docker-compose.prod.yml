@@ -239,6 +239,8 @@ services:
       OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
+      # Skip the intermediate "Sign in with..." page and go directly to Keycloak
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
       - keycloak
     restart: unless-stopped
@@ -269,6 +271,8 @@ services:
       OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
+      # Skip the intermediate "Sign in with..." page and go directly to Keycloak
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
       - keycloak
     restart: unless-stopped
