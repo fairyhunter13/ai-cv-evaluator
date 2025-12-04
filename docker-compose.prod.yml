@@ -222,10 +222,18 @@ services:
   oauth2-proxy-app:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     environment:
-      # Use keycloak-oidc provider which handles Keycloak specifics
-      OAUTH2_PROXY_PROVIDER: keycloak-oidc
-      # Issuer URL - oauth2-proxy will use OIDC discovery from this
+      OAUTH2_PROXY_PROVIDER: oidc
+      # Skip OIDC discovery to use internal URLs for token exchange
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      # Issuer URL must match what Keycloak puts in tokens
       OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
+      # External URL for browser redirects (login page)
+      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
+      # Internal URLs for server-to-server (Docker network) - avoids hairpin NAT
+      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
+      OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
+      OAUTH2_PROXY_PROFILE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
+      OAUTH2_PROXY_SCOPE: "openid email profile"
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
@@ -239,11 +247,8 @@ services:
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
-      # Skip TLS verification for external Keycloak URL (behind Cloudflare)
-      OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY: "true"
-      # Skip audience verification - Keycloak tokens may have different audiences
+      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
       OAUTH2_PROXY_OIDC_EXTRA_AUDIENCES: "realm-management,account"
-      # Skip the intermediate "Sign in with..." page
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
       - keycloak
@@ -253,10 +258,18 @@ services:
   oauth2-proxy-dashboard:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     environment:
-      # Use keycloak-oidc provider which handles Keycloak specifics
-      OAUTH2_PROXY_PROVIDER: keycloak-oidc
-      # Issuer URL - oauth2-proxy will use OIDC discovery from this
+      OAUTH2_PROXY_PROVIDER: oidc
+      # Skip OIDC discovery to use internal URLs for token exchange
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      # Issuer URL must match what Keycloak puts in tokens
       OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
+      # External URL for browser redirects (login page)
+      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
+      # Internal URLs for server-to-server (Docker network) - avoids hairpin NAT
+      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
+      OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
+      OAUTH2_PROXY_PROFILE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
+      OAUTH2_PROXY_SCOPE: "openid email profile"
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
@@ -270,11 +283,8 @@ services:
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
-      # Skip TLS verification for external Keycloak URL (behind Cloudflare)
-      OAUTH2_PROXY_SSL_INSECURE_SKIP_VERIFY: "true"
-      # Skip audience verification - Keycloak tokens may have different audiences
+      OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
       OAUTH2_PROXY_OIDC_EXTRA_AUDIENCES: "realm-management,account"
-      # Skip the intermediate "Sign in with..." page
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
       - keycloak
