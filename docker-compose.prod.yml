@@ -204,9 +204,14 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?Set KEYCLOAK_ADMIN in .env.production}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env.production}
-      KC_PROXY: edge
-      KC_HOSTNAME: keycloak.ai-cv-evaluator.web.id
+      # Proxy configuration for running behind nginx/cloudflare
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      # Full frontend URL with HTTPS (no port means 443)
+      KC_HOSTNAME_URL: https://keycloak.ai-cv-evaluator.web.id
+      KC_HOSTNAME_ADMIN_URL: https://keycloak.ai-cv-evaluator.web.id
       KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
     volumes:
       - ./deploy/keycloak/realm-aicv.json:/opt/keycloak/data/import/realm-aicv.json:ro
     ports:
