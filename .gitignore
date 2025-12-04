@@ -4,7 +4,7 @@
 docs/project.md
 docs/rfc/
 docs/rfc.backups/
-deploy/keycloak/realm-aicv.json
+# deploy/keycloak/realm-aicv.json - now tracked for consistent deployments
 # Generated files and directories
 coverage/
 logs/
