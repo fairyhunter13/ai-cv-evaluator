@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      skip_gates:
+        description: 'Skip e2e-verify and security-gate jobs (for faster debugging iterations)'
+        required: false
+        default: false
+        type: boolean
       target_ip:
         description: 'Override A record target IP for Cloudflare DNS sync (defaults to SSH_HOST secret)'
         required: false
@@ -331,6 +336,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: [pre-deploy-checks, e2e-verify, security-gate]
+    # Run if gates pass OR if skip_gates is true (for faster debugging)
+    if: |
+      always() && 
+      needs.pre-deploy-checks.outputs.should_deploy == 'true' &&
+      (
+        (needs.e2e-verify.result == 'success' && needs.security-gate.result == 'success') ||
+        github.event.inputs.skip_gates == 'true'
+      )
     environment:
       name: production
     steps:
