@@ -174,15 +174,22 @@ services:
     restart: unless-stopped
 
   mailpit:
-    image: axllent/mailpit:v1.20
-    environment:
-      - MP_WEBROOT=/mailpit/
+    image: axllent/mailpit:latest
+    command: ["--smtp", "0.0.0.0:1025", "--listen", "0.0.0.0:8025", "--webroot", "/mailpit/"]
     restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v2.53.0
     volumes:
       - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus-rules.yml:/etc/prometheus/prometheus-rules.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.external-url=/prometheus/"
+      - "--web.route-prefix=/prometheus"
     restart: unless-stopped
 
   grafana:
@@ -201,6 +208,12 @@ services:
       - GF_AUTH_PROXY_AUTO_SIGN_UP=true
       - GF_USERS_AUTO_ASSIGN_ORG=true
       - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Admin
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=mailpit:1025
+      - GF_SMTP_FROM_ADDRESS=alerts@ai-cv-evaluator.local
+      - GF_SMTP_FROM_NAME=AI CV Evaluator Alerts
+      - GF_SMTP_SKIP_VERIFY=true
+      - GF_SMTP_STARTTLS_POLICY=NoStartTLS
     depends_on:
       - prometheus
       - loki
