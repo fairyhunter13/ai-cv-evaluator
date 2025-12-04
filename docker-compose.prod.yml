@@ -220,11 +220,11 @@ services:
       OAUTH2_PROXY_PROVIDER: oidc
       # Skip OIDC discovery to manually configure internal vs external URLs
       OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
-      # Internal URL for server-to-server (issuer for JWT validation)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: http://keycloak:8080/realms/aicv
+      # Issuer URL must match what Keycloak puts in tokens (KC_HOSTNAME)
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
       # External URL for browser redirects (login page)
       OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
-      # Internal URLs for server-to-server communication
+      # Internal URLs for server-to-server communication (avoid Cloudflare roundtrip)
       OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
       OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
       OAUTH2_PROXY_PROFILE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
@@ -255,11 +255,11 @@ services:
       OAUTH2_PROXY_PROVIDER: oidc
       # Skip OIDC discovery to manually configure internal vs external URLs
       OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
-      # Internal URL for server-to-server (issuer for JWT validation)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: http://keycloak:8080/realms/aicv
+      # Issuer URL must match what Keycloak puts in tokens (KC_HOSTNAME)
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
       # External URL for browser redirects (login page)
       OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
-      # Internal URLs for server-to-server communication
+      # Internal URLs for server-to-server communication (avoid Cloudflare roundtrip)
       OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
       OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
       OAUTH2_PROXY_PROFILE_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/userinfo
