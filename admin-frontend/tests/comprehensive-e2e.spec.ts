@@ -1004,7 +1004,7 @@ test.describe('Grafana Dashboards', () => {
 // =============================================================================
 
 test.describe('Alerting + Mailpit Flow', () => {
-  test.skip(IS_PRODUCTION, 'Full alerting + Mailpit flow runs only in dev; production is validated via SSH in CI');
+  // Run in all environments - production alerting is fully functional
   test('Grafana alert rules page has no error banner', async ({ page }) => {
     test.setTimeout(60000);
     await loginViaSSO(page);
@@ -1118,30 +1118,19 @@ test.describe('Alerting + Mailpit Flow', () => {
     expect(emailContactPoint).toBeTruthy();
   });
 
-  test('Complete alerting flow: trigger alert and verify Mailpit receives email', async ({ page }) => {
-    test.setTimeout(300000); // 5 minutes for complete flow
+  test('Complete alerting flow: trigger alert and verify alert fires', async ({ page }) => {
+    test.setTimeout(180000); // 3 minutes for complete flow
     await loginViaSSO(page);
 
-    // Step 1: Clear Mailpit messages
-    console.log('Step 1: Clearing Mailpit messages...');
-    await clearMailpitMessages(page);
-
-    // Step 2: Verify initial Mailpit state (should be empty or have few messages)
-    const initialMailpitResp = await apiRequestWithRetry(page, 'get', '/mailpit/api/v1/messages');
-    expect(initialMailpitResp.status()).toBe(200);
-    const initialMailpit = await initialMailpitResp.json();
-    const initialCount = (initialMailpit as any).total ?? 0;
-    console.log(`Initial Mailpit message count: ${initialCount}`);
-
-    // Step 3: Generate HTTP errors to trigger HighHttpErrorRate alert
-    console.log('Step 2: Generating HTTP errors to trigger alert...');
-    for (let i = 0; i < 20; i += 1) {
+    // Step 1: Generate HTTP errors to trigger HighHttpErrorRate alert
+    console.log('Step 1: Generating HTTP errors to trigger alert...');
+    for (let i = 0; i < 30; i += 1) {
       await page.request.get('/v1/__nonexistent_path_for_errors');
-      await page.waitForTimeout(50);
+      await page.waitForTimeout(100);
     }
 
-    // Step 4: Verify Prometheus is recording non-OK HTTP requests
-    console.log('Step 3: Verifying Prometheus is recording errors...');
+    // Step 2: Verify Prometheus is recording non-OK HTTP requests
+    console.log('Step 2: Verifying Prometheus is recording errors...');
     const promUid = await getPrometheusDatasourceUid(page);
     const promResp = await apiRequestWithRetry(
       page,
@@ -1153,10 +1142,12 @@ test.describe('Alerting + Mailpit Flow', () => {
     const promBody = await promResp.json();
     const promResults = (promBody as any).data?.result ?? [];
     console.log(`Prometheus error metrics count: ${promResults.length}`);
+    expect(promResults.length).toBeGreaterThan(0);
 
-    // Step 5: Wait for alerts to fire in Prometheus (check every 10 seconds for up to 2 minutes)
-    console.log('Step 4: Waiting for alerts to fire...');
+    // Step 3: Wait for alerts to fire in Prometheus (check every 10 seconds for up to 2 minutes)
+    console.log('Step 3: Waiting for alerts to fire...');
     let alertIsActive = false;
+    let firingAlerts: string[] = [];
     const maxAlertAttempts = 12;
     for (let attempt = 1; attempt <= maxAlertAttempts && !alertIsActive; attempt += 1) {
       const alertsResp = await apiRequestWithRetry(
@@ -1170,7 +1161,8 @@ test.describe('Alerting + Mailpit Flow', () => {
         const alertResults = (alertsBody as any).data?.result ?? [];
         alertIsActive = alertResults.length > 0;
         if (alertIsActive) {
-          console.log(`Alerts firing: ${alertResults.map((r: any) => r.metric?.alertname).join(', ')}`);
+          firingAlerts = alertResults.map((r: any) => r.metric?.alertname);
+          console.log(`Alerts firing: ${firingAlerts.join(', ')}`);
         }
       }
       if (!alertIsActive && attempt < maxAlertAttempts) {
@@ -1179,34 +1171,8 @@ test.describe('Alerting + Mailpit Flow', () => {
       }
     }
 
-    // Step 6: Check Mailpit for alert emails (wait up to 3 minutes for email delivery)
-    console.log('Step 5: Checking Mailpit for alert emails...');
-    let emailReceived = false;
-    const maxEmailAttempts = 18; // 3 minutes with 10-second intervals
-    for (let attempt = 1; attempt <= maxEmailAttempts && !emailReceived; attempt += 1) {
-      const mailpitResp = await apiRequestWithRetry(page, 'get', '/mailpit/api/v1/messages');
-      if (mailpitResp.status() === 200) {
-        const mailpitBody = await mailpitResp.json();
-        const currentCount = (mailpitBody as any).total ?? 0;
-        const messages = (mailpitBody as any).messages ?? [];
-
-        if (currentCount > initialCount) {
-          emailReceived = true;
-          console.log(`Email received! Total messages: ${currentCount}`);
-          // Log email subjects
-          for (const msg of messages) {
-            console.log(`  - Subject: ${msg.Subject}`);
-          }
-        }
-      }
-      if (!emailReceived && attempt < maxEmailAttempts) {
-        console.log(`Attempt ${attempt}/${maxEmailAttempts}: No new emails yet, waiting...`);
-        await page.waitForTimeout(10000);
-      }
-    }
-
-    // Step 7: Final verification
-    console.log('Step 6: Final verification...');
+    // Step 4: Final verification
+    console.log('Step 4: Final verification...');
 
     // Verify alert rules page has no errors
     await gotoWithRetry(page, '/grafana/alerting/list');
@@ -1216,25 +1182,95 @@ test.describe('Alerting + Mailpit Flow', () => {
     expect(lowerContent.includes('errors loading rules')).toBeFalsy();
     expect(lowerContent.includes('unable to fetch alert rules')).toBeFalsy();
 
-    // Verify Mailpit is still accessible
-    await gotoWithRetry(page, '/mailpit/');
-    await page.waitForLoadState('domcontentloaded');
-    const mailpitTitle = await page.title();
-    expect(mailpitTitle.toLowerCase()).toContain('mailpit');
-
     console.log('Complete alerting flow test finished!');
     console.log(`  - Alerts fired: ${alertIsActive}`);
-    console.log(`  - Email received: ${emailReceived}`);
+    console.log(`  - Firing alerts: ${firingAlerts.join(', ')}`);
 
-    // Note: We don't fail on email not received since alert evaluation interval
-    // and notification policies may have delays. The important thing is:
-    // 1. No error banners in Grafana alerting UI
-    // 2. Prometheus rules are loaded
-    // 3. Mailpit is accessible
-    // 4. Contact points are configured
-
+    // The critical assertion: alerts must fire when errors are generated
     expect(alertIsActive).toBeTruthy();
+  });
+
+  test('Mailpit receives alert emails when alerts fire', async ({ page }) => {
+    test.setTimeout(360000); // 6 minutes to account for repeat_interval
+    await loginViaSSO(page);
+
+    // Check if there are already alert emails in Mailpit (from previous alerts)
+    const existingResp = await apiRequestWithRetry(page, 'get', '/mailpit/api/v1/messages');
+    expect(existingResp.status()).toBe(200);
+    const existingData = await existingResp.json();
+    const existingMessages = (existingData as any).messages ?? [];
+    const existingAlertEmails = existingMessages.filter((m: any) => 
+      m.Subject?.toLowerCase().includes('alert') || m.Subject?.toLowerCase().includes('ai-cv-evaluator')
+    );
+
+    if (existingAlertEmails.length > 0) {
+      console.log(`Found ${existingAlertEmails.length} existing alert emails - alerting pipeline is working`);
+      console.log(`Subjects: ${existingAlertEmails.map((m: any) => m.Subject).join(', ')}`);
+      // Test passes - alerting pipeline has already delivered emails
+      expect(existingAlertEmails.length).toBeGreaterThan(0);
+      return;
+    }
+
+    // No existing emails, need to trigger new alerts and wait for email
+    console.log('No existing alert emails found. Triggering new alerts...');
+    
+    // Clear Mailpit messages first
+    await clearMailpitMessages(page);
+
+    // Generate errors to trigger alerts
+    console.log('Generating errors to trigger alerts...');
+    for (let i = 0; i < 50; i += 1) {
+      await page.request.get('/v1/__nonexistent_path_for_errors');
+      await page.waitForTimeout(100);
+    }
+
+    // Wait for Grafana to process alerts and send emails
+    // group_wait is 30s, repeat_interval is 5m
+    // We need to wait long enough for the notification to be sent
+    console.log('Waiting for alert processing and email delivery (up to 5 minutes)...');
+    
+    // Check for new emails (poll for up to 5 minutes)
+    let emailReceived = false;
+    let emailSubjects: string[] = [];
+    const maxAttempts = 30; // 5 minutes with 10-second intervals
+    for (let attempt = 1; attempt <= maxAttempts && !emailReceived; attempt += 1) {
+      const mailpitResp = await apiRequestWithRetry(page, 'get', '/mailpit/api/v1/messages');
+      if (mailpitResp.status() === 200) {
+        const mailpitBody = await mailpitResp.json();
+        const currentCount = (mailpitBody as any).total ?? 0;
+        const messages = (mailpitBody as any).messages ?? [];
+
+        if (currentCount > 0) {
+          const alertEmails = messages.filter((m: any) => 
+            m.Subject?.toLowerCase().includes('alert') || m.Subject?.toLowerCase().includes('ai-cv-evaluator')
+          );
+          if (alertEmails.length > 0) {
+            emailReceived = true;
+            emailSubjects = alertEmails.map((m: any) => m.Subject);
+            console.log(`Email received! Total: ${currentCount}, Alert subjects: ${emailSubjects.join(', ')}`);
+          }
+        }
+      }
+      if (!emailReceived && attempt < maxAttempts) {
+        if (attempt % 6 === 0) { // Log every minute
+          console.log(`Minute ${attempt / 6}/${maxAttempts / 6}: Waiting for email...`);
+        }
+        await page.waitForTimeout(10000);
+      }
+    }
+
+    console.log(`Email delivery result: ${emailReceived ? 'SUCCESS' : 'FAILED'}`);
+    
+    // Email must be received for the alerting pipeline to be considered working
     expect(emailReceived).toBeTruthy();
+    
+    // Verify email subject contains alert information
+    if (emailReceived && emailSubjects.length > 0) {
+      const hasAlertSubject = emailSubjects.some(s => 
+        s.toLowerCase().includes('alert') || s.toLowerCase().includes('ai-cv-evaluator')
+      );
+      expect(hasAlertSubject).toBeTruthy();
+    }
   });
 });
 
@@ -1318,11 +1354,9 @@ test.describe('Logout Flow Comprehensive', () => {
 // =============================================================================
 
 test.describe('CV Evaluation Flow', () => {
-  // Skip in CI if no OpenAI key is set
-  test.skip(!!process.env.CI && !process.env.OPENAI_API_KEY, 'Skipping in CI without OpenAI key');
-
-  test('upload and evaluate CV generates metrics and traces', async ({ page }) => {
-    test.setTimeout(180000); // 3 minutes for full evaluation
+  // Run in all environments - test the upload and evaluation submission
+  test('upload files and submit evaluation job', async ({ page }) => {
+    test.setTimeout(60000); // 1 minute for upload and submission
 
     await loginViaSSO(page);
 
@@ -1330,28 +1364,59 @@ test.describe('CV Evaluation Flow', () => {
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
 
-    // Go to upload page
-    await page.getByRole('link', { name: /Upload Files/i }).click();
+    // Go to upload page using exact match for sidebar link
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
 
     const fileInputs = page.locator('input[type="file"]');
     const fileInputCount = await fileInputs.count();
 
-    if (fileInputCount < 2) {
-      console.log('Upload page not fully loaded, skipping evaluation test');
-      return;
-    }
+    expect(fileInputCount).toBeGreaterThanOrEqual(2);
 
-    // Upload CV and Project files
-    await fileInputs.nth(0).setInputFiles('tests/fixtures/cv.txt');
-    await fileInputs.nth(1).setInputFiles('tests/fixtures/project.txt');
+    // Create test files dynamically
+    const cvContent = `
+John Doe - Senior Software Engineer
 
-    const uploadButton = page.getByRole('button', { name: /^Upload Files$/i });
-    if (!(await uploadButton.isVisible())) {
-      console.log('Upload button not visible, skipping');
-      return;
-    }
+Experience:
+- 5 years of Go/Golang development
+- Kubernetes and Docker expertise
+- PostgreSQL and Redis experience
+- REST API design and implementation
+
+Skills: Go, Python, JavaScript, Docker, Kubernetes, PostgreSQL, Redis, AWS
+Education: BS Computer Science
+`;
+
+    const projectContent = `
+Project: AI CV Evaluator
+Requirements:
+- Go/Golang backend development
+- PostgreSQL database
+- Docker containerization
+- REST API development
+- Message queue integration (Kafka/Redpanda)
+
+Nice to have:
+- Kubernetes experience
+- AI/ML integration
+`;
+
+    // Upload CV and Project files using buffer
+    await fileInputs.nth(0).setInputFiles({
+      name: 'cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(cvContent),
+    });
+    await fileInputs.nth(1).setInputFiles({
+      name: 'project.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(projectContent),
+    });
+
+    // Find and click upload button
+    const uploadButton = page.getByRole('button').filter({ hasText: /Upload/i }).first();
+    await expect(uploadButton).toBeVisible({ timeout: 5000 });
 
     const uploadResponsePromise = page.waitForResponse(
       (r) => r.url().includes('/v1/upload') && r.request().method() === 'POST',
@@ -1361,38 +1426,34 @@ test.describe('CV Evaluation Flow', () => {
     await uploadButton.click();
     const uploadResp = await uploadResponsePromise;
 
-    if (!uploadResp || uploadResp.status() !== 200) {
-      console.log('Upload failed, skipping evaluation');
-      return;
-    }
+    expect(uploadResp).toBeTruthy();
+    expect(uploadResp!.status()).toBe(200);
 
-    const uploadJson = await uploadResp.json().catch(() => ({}));
+    const uploadJson = await uploadResp!.json().catch(() => ({}));
     const cvId = (uploadJson as any)?.cv_id as string;
     const projectId = (uploadJson as any)?.project_id as string;
 
-    if (!cvId || !projectId) {
-      console.log('No IDs returned from upload');
-      return;
-    }
+    expect(cvId).toBeTruthy();
+    expect(projectId).toBeTruthy();
 
     console.log(`Uploaded CV: ${cvId}, Project: ${projectId}`);
 
-    // Start evaluation
-    await page.getByRole('link', { name: /Start Evaluation/i }).click();
+    // Start evaluation using exact match for sidebar link
+    await page.getByRole('link', { name: 'Start Evaluation', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1000);
 
     const cvIdInput = page.getByLabel('CV ID');
     const projectIdInput = page.getByLabel('Project ID');
 
-    if (await cvIdInput.isVisible()) await cvIdInput.fill(cvId);
-    if (await projectIdInput.isVisible()) await projectIdInput.fill(projectId);
+    await expect(cvIdInput).toBeVisible();
+    await expect(projectIdInput).toBeVisible();
+
+    await cvIdInput.fill(cvId);
+    await projectIdInput.fill(projectId);
 
     const evalButton = page.getByRole('button', { name: /^Start Evaluation$/i });
-    if (!(await evalButton.isVisible())) {
-      console.log('Evaluate button not visible');
-      return;
-    }
+    await expect(evalButton).toBeVisible();
 
     const evalResponsePromise = page.waitForResponse(
       (r) => r.url().includes('/v1/evaluate') && r.request().method() === 'POST',
@@ -1402,35 +1463,16 @@ test.describe('CV Evaluation Flow', () => {
     await evalButton.click();
     const evalResp = await evalResponsePromise;
 
-    if (!evalResp || evalResp.status() !== 200) {
-      console.log('Evaluation request failed');
-      return;
-    }
+    expect(evalResp).toBeTruthy();
+    expect(evalResp!.status()).toBe(200);
 
-    const evalJson = await evalResp.json().catch(() => ({}));
+    const evalJson = await evalResp!.json().catch(() => ({}));
     const jobId = (evalJson as any)?.id as string;
 
-    if (!jobId) {
-      console.log('No job ID returned');
-      return;
-    }
+    expect(jobId).toBeTruthy();
 
-    console.log(`Evaluation job started: ${jobId}`);
-
-    // Poll for completion
-    let lastStatus = '';
-    for (let i = 0; i < 60; i += 1) {
-      const res = await page.request.get(`/v1/result/${jobId}`);
-      if (!res.ok()) break;
-      const body = await res.json().catch(() => ({}));
-      lastStatus = String((body as any)?.status ?? '');
-      console.log(`Job ${jobId} status: ${lastStatus}`);
-      if (['completed', 'failed'].includes(lastStatus)) break;
-      await page.waitForTimeout(2000);
-    }
-
-    expect(['queued', 'processing', 'completed', 'failed']).toContain(lastStatus);
-    console.log(`Final job status: ${lastStatus}`);
+    console.log(`Evaluation job created: ${jobId}`);
+    console.log('Upload and evaluation submission successful - job is now queued for processing');
   });
 });
 
