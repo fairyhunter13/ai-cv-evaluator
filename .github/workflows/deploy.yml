@@ -961,12 +961,13 @@ jobs:
           echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
           ALERT_FIRING=0
           for attempt in $(seq 1 15); do
+            # Use /api/v1/alerts endpoint which shows all active alerts with their state
             ALL_ALERTS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/alerts' 2>/dev/null || echo "")
-            ALERT_RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}' 2>/dev/null || echo "")
-            if echo "$ALERT_RESP" | grep -q "HighHttpErrorRate"; then
+            # Check if HighHttpErrorRate is in firing state
+            if echo "$ALL_ALERTS" | grep -q '"alertname":"HighHttpErrorRate"' && echo "$ALL_ALERTS" | grep -q '"state":"firing"'; then
               ALERT_FIRING=1
-              echo "HighHttpErrorRate is firing/pending (attempt $attempt)."
-              echo "$ALERT_RESP" | head -c 300
+              echo "HighHttpErrorRate is firing (attempt $attempt)."
+              echo "$ALL_ALERTS" | head -c 500
               break
             fi
             echo "Attempt $attempt/15: alert not firing yet, waiting 10s..."
