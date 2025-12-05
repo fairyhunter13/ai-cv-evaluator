@@ -938,11 +938,16 @@ jobs:
           echo "Generating HTTP errors to trigger HighHttpErrorRate..."
           # Hit backend directly via Docker network to bypass oauth2-proxy SSO
           echo "Using Docker network: $NETWORK"
-          for i in $(seq 1 30); do
+          # Generate errors over a longer period to ensure Prometheus captures them across multiple scrapes
+          # Prometheus scrapes every 15s, so we generate errors for ~30s
+          for i in $(seq 1 60); do
             HTTP_CODE=$(docker run --rm --network "$NETWORK" curlimages/curl -s -o /dev/null -w "%{http_code}" "http://backend_blue:8080/v1/__nonexistent_path_for_errors" 2>/dev/null || echo "000")
-            echo "Request $i: HTTP $HTTP_CODE"
-            sleep 0.1
+            [ $((i % 10)) -eq 0 ] && echo "Request $i: HTTP $HTTP_CODE"
+            sleep 0.5
           done
+          
+          echo "Waiting 20s for Prometheus to scrape the new error metrics..."
+          sleep 20
           
           echo "Checking Prometheus metrics via Docker network (bypassing SSO)..."
           # Query Prometheus directly on internal network to bypass oauth2-proxy SSO
