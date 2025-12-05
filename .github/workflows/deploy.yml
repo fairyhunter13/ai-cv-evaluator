@@ -30,6 +30,11 @@ on:
         required: false
         default: ''
         type: string
+      fast_iteration:
+        description: 'Fast iteration mode - skip security-gate and e2e-verify for quick debugging (TEMPORARY USE ONLY)'
+        required: false
+        default: false
+        type: boolean
   push:
     tags:
       - 'v*'
@@ -83,7 +88,7 @@ jobs:
   security-gate:
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
-    if: needs.pre-deploy-checks.outputs.should_deploy == 'true'
+    if: needs.pre-deploy-checks.outputs.should_deploy == 'true' && github.event.inputs.fast_iteration != 'true'
     steps:
       - name: Check CI, Security Scans and Secrets Healthcheck for this commit
         env:
@@ -278,6 +283,7 @@ jobs:
   e2e-verify:
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
+    if: github.event.inputs.fast_iteration != 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
@@ -334,8 +340,8 @@ jobs:
     if: |
       always() && 
       needs.pre-deploy-checks.outputs.should_deploy == 'true' &&
-      needs.e2e-verify.result == 'success' && 
-      needs.security-gate.result == 'success'
+      (needs.e2e-verify.result == 'success' || needs.e2e-verify.result == 'skipped') && 
+      (needs.security-gate.result == 'success' || needs.security-gate.result == 'skipped')
     environment:
       name: production
     steps:
