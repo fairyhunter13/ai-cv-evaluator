@@ -920,94 +920,89 @@ jobs:
       - name: Trigger test alert and verify Mailpit via SSH
         run: |
           echo "=== Triggering test alert and verifying Mailpit via SSH ==="
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            set -e
-            cd ~/ai-cv-evaluator
-            
-            echo "Fetching initial Mailpit message count..."
-            INITIAL_RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
-            INITIAL_TOTAL=$(echo "$INITIAL_RESP" | grep -o "\"total\":[0-9]*" | head -1 | sed "s/[^0-9]//g")
-            [ -z "$INITIAL_TOTAL" ] && INITIAL_TOTAL=0
-            echo "Initial Mailpit total: $INITIAL_TOTAL"
-            
-            echo "Generating HTTP errors to trigger HighHttpErrorRate..."
-            # Hit backend directly via Docker network to bypass oauth2-proxy SSO
-            # This ensures we get actual 404 errors recorded in metrics
-            # Use curlimages/curl container on the compose network (ai-cv-evaluator_default)
-            NETWORK="ai-cv-evaluator_default"
-            echo "Using Docker network: $NETWORK"
-            # Pull the curl image first to avoid delays in the loop
-            docker pull curlimages/curl:latest >/dev/null 2>&1 || true
-            for i in $(seq 1 30); do
-              HTTP_CODE=$(docker run --rm --network "$NETWORK" curlimages/curl -s -o /dev/null -w "%{http_code}" "http://backend_blue:8080/v1/__nonexistent_path_for_errors" 2>/dev/null || echo "000")
-              echo "Request $i: HTTP $HTTP_CODE"
-              sleep 0.1
-            done
-            
-            echo "Checking Prometheus metrics..."
-            # Check if http_requests_total metric exists
-            HTTP_METRICS=$(curl -sfk "https://localhost/prometheus/api/v1/query?query=http_requests_total" || echo "")
-            echo "http_requests_total metric sample: $(echo "$HTTP_METRICS" | head -c 300)"
-            
-            # Check rate of error requests
-            ERROR_RATE=$(curl -sfk "https://localhost/prometheus/api/v1/query?query=sum(rate(http_requests_total{status!=\"OK\"}[5m]))" || echo "")
-            echo "Error rate query result: $(echo "$ERROR_RATE" | head -c 300)"
-            
-            echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
-            ALERT_FIRING=0
-            for attempt in $(seq 1 15); do
-              # Check all alerts to understand the state
-              ALL_ALERTS=$(curl -sfk "https://localhost/prometheus/api/v1/alerts" || echo "")
-              
-              ALERT_RESP=$(curl -sfk "https://localhost/prometheus/api/v1/query?query=ALERTS{alertname=\"HighHttpErrorRate\"}" || echo "")
-              if echo "$ALERT_RESP" | grep -q "HighHttpErrorRate"; then
-                ALERT_FIRING=1
-                echo "HighHttpErrorRate is firing/pending (attempt $attempt)."
-                echo "Alert response: $(echo "$ALERT_RESP" | head -c 300)"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOFSCRIPT'
+          set -e
+          cd ~/ai-cv-evaluator
+          
+          echo "Fetching initial Mailpit message count..."
+          INITIAL_RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
+          INITIAL_TOTAL=$(echo "$INITIAL_RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
+          [ -z "$INITIAL_TOTAL" ] && INITIAL_TOTAL=0
+          echo "Initial Mailpit total: $INITIAL_TOTAL"
+          
+          echo "Generating HTTP errors to trigger HighHttpErrorRate..."
+          # Hit backend directly via Docker network to bypass oauth2-proxy SSO
+          NETWORK="ai-cv-evaluator_default"
+          echo "Using Docker network: $NETWORK"
+          docker pull curlimages/curl:latest >/dev/null 2>&1 || true
+          for i in $(seq 1 30); do
+            HTTP_CODE=$(docker run --rm --network "$NETWORK" curlimages/curl -s -o /dev/null -w "%{http_code}" "http://backend_blue:8080/v1/__nonexistent_path_for_errors" 2>/dev/null || echo "000")
+            echo "Request $i: HTTP $HTTP_CODE"
+            sleep 0.1
+          done
+          
+          echo "Checking Prometheus metrics..."
+          HTTP_METRICS=$(curl -sfk 'https://localhost/prometheus/api/v1/query?query=http_requests_total' || echo "")
+          echo "http_requests_total metric sample:"
+          echo "$HTTP_METRICS" | head -c 300
+          
+          ERROR_RATE=$(curl -sfk 'https://localhost/prometheus/api/v1/query?query=sum(rate(http_requests_total{status!="OK"}[5m]))' || echo "")
+          echo "Error rate query result:"
+          echo "$ERROR_RATE" | head -c 300
+          
+          echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
+          ALERT_FIRING=0
+          for attempt in $(seq 1 15); do
+            ALL_ALERTS=$(curl -sfk "https://localhost/prometheus/api/v1/alerts" || echo "")
+            ALERT_RESP=$(curl -sfk 'https://localhost/prometheus/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}' || echo "")
+            if echo "$ALERT_RESP" | grep -q "HighHttpErrorRate"; then
+              ALERT_FIRING=1
+              echo "HighHttpErrorRate is firing/pending (attempt $attempt)."
+              echo "$ALERT_RESP" | head -c 300
+              break
+            fi
+            echo "Attempt $attempt/15: alert not firing yet, waiting 10s..."
+            sleep 10
+          done
+          
+          if [ "$ALERT_FIRING" -ne 1 ]; then
+            echo "HighHttpErrorRate alert did not fire within expected time."
+            echo "All active alerts:"
+            echo "$ALL_ALERTS" | head -c 500
+            echo "WARNING: Alert didn't fire, but continuing with deployment..."
+          fi
+          
+          if [ "$ALERT_FIRING" -eq 1 ]; then
+            echo "Waiting for alert email to arrive in Mailpit..."
+            EMAIL_RECEIVED=0
+            for attempt in $(seq 1 18); do
+              RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
+              TOTAL=$(echo "$RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
+              [ -z "$TOTAL" ] && TOTAL=0
+              if [ "$TOTAL" -gt "$INITIAL_TOTAL" ]; then
+                EMAIL_RECEIVED=1
+                echo "Mailpit message count increased from $INITIAL_TOTAL to $TOTAL"
+                echo "Sample messages payload:"
+                echo "$RESP" | head -c 500 || true
                 break
               fi
-              echo "Attempt $attempt/15: alert not firing yet, waiting 10s..."
+              echo "Attempt $attempt/18: no new emails yet (total=$TOTAL), waiting 10s..."
               sleep 10
             done
             
-            if [ "$ALERT_FIRING" -ne 1 ]; then
-              echo "HighHttpErrorRate alert did not fire within expected time."
-              echo "All active alerts: $(echo "$ALL_ALERTS" | head -c 500)"
-              # Continue anyway - the alerting infrastructure works but may need tuning
-              echo "WARNING: Alert didn't fire, but continuing with deployment..."
-            fi
-            
-            if [ "$ALERT_FIRING" -eq 1 ]; then
-              echo "Waiting for alert email to arrive in Mailpit..."
-              EMAIL_RECEIVED=0
-              for attempt in $(seq 1 18); do
-                RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
-                TOTAL=$(echo "$RESP" | grep -o "\"total\":[0-9]*" | head -1 | sed "s/[^0-9]//g")
-                [ -z "$TOTAL" ] && TOTAL=0
-                if [ "$TOTAL" -gt "$INITIAL_TOTAL" ]; then
-                  EMAIL_RECEIVED=1
-                  echo "Mailpit message count increased from $INITIAL_TOTAL to $TOTAL"
-                  echo "Sample messages payload:"
-                  echo "$RESP" | head -c 500 || true
-                  break
-                fi
-                echo "Attempt $attempt/18: no new emails yet (total=$TOTAL), waiting 10s..."
-                sleep 10
-              done
-              
-              if [ "$EMAIL_RECEIVED" -ne 1 ]; then
-                echo "WARNING: Alert fired but no email arrived in Mailpit within expected time."
-                echo "This may indicate SMTP configuration issues."
-              else
-                echo "✓ Alert pipeline verified end-to-end (HighHttpErrorRate -> Grafana -> Mailpit)."
-              fi
+            if [ "$EMAIL_RECEIVED" -ne 1 ]; then
+              echo "WARNING: Alert fired but no email arrived in Mailpit within expected time."
+              echo "This may indicate SMTP configuration issues."
             else
-              echo "Skipping Mailpit email check since alert did not fire."
-              echo "Alerting infrastructure validation: PARTIAL (services accessible, alerts need tuning)"
+              echo "SUCCESS: Alert pipeline verified end-to-end (HighHttpErrorRate -> Grafana -> Mailpit)."
             fi
-            
-            echo "=== Production alerting validation completed ==="
-          '
+          else
+            echo "Skipping Mailpit email check since alert did not fire."
+            echo "Alerting infrastructure validation: PARTIAL (services accessible, alerts need tuning)"
+          fi
+          
+          echo "=== Production alerting validation completed ==="
+          EOFSCRIPT
 
       - name: Validate SSL certificates
         run: |
