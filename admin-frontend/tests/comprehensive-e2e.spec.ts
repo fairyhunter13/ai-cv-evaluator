@@ -86,7 +86,9 @@ const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
       return;
     } catch (err) {
       const message = String(err);
-      if (!message.includes('net::ERR_CONNECTION_REFUSED') || attempt === maxAttempts) {
+      const isRetryable = message.includes('net::ERR_CONNECTION_REFUSED') ||
+                          message.includes('net::ERR_TOO_MANY_REDIRECTS');
+      if (!isRetryable || attempt === maxAttempts) {
         throw err;
       }
       await page.waitForTimeout(retryDelayMs);
