@@ -1,0 +1,52 @@
+CURRICULUM VITAE
+
+PERSONAL INFORMATION
+Name: John Doe
+Email: john.doe@example.com
+Phone: +1-555-123-4567
+Location: San Francisco, CA
+
+PROFESSIONAL SUMMARY
+Experienced Software Engineer with 8+ years in full-stack development, specializing in 
+distributed systems, microservices architecture, and cloud-native applications. Strong 
+background in Go, Python, and TypeScript with proven track record of delivering 
+high-performance, scalable solutions.
+
+TECHNICAL SKILLS
+- Languages: Go, Python, TypeScript, JavaScript, SQL
+- Frameworks: Gin, Echo, FastAPI, React, Vue.js
+- Databases: PostgreSQL, Redis, MongoDB, Elasticsearch
+- Cloud: AWS, GCP, Docker, Kubernetes
+- Tools: Git, CI/CD, Terraform, Prometheus, Grafana
+
+WORK EXPERIENCE
+
+Senior Software Engineer | TechCorp Inc. | 2020 - Present
+- Led development of microservices architecture serving 10M+ daily requests
+- Implemented distributed tracing with OpenTelemetry and Jaeger
+- Reduced API latency by 40% through optimization and caching strategies
+- Mentored team of 5 junior developers
+
+Software Engineer | StartupXYZ | 2017 - 2020
+- Built real-time data processing pipeline using Kafka and Go
+- Developed RESTful APIs with comprehensive test coverage (>90%)
+- Implemented CI/CD pipelines reducing deployment time by 60%
+
+Junior Developer | WebAgency | 2015 - 2017
+- Created responsive web applications using React and Node.js
+- Maintained legacy PHP applications and migrated to modern stack
+
+EDUCATION
+Bachelor of Science in Computer Science
+Stanford University | 2015
+GPA: 3.8/4.0
+
+CERTIFICATIONS
+- AWS Certified Solutions Architect
+- Certified Kubernetes Administrator (CKA)
+- Google Cloud Professional Developer
+
+PROJECTS
+1. Open Source Contribution - Contributed to Kubernetes, Prometheus
+2. Personal Blog - Tech blog with 50K monthly visitors
+3. CLI Tools - Published multiple Go-based CLI tools on GitHub
