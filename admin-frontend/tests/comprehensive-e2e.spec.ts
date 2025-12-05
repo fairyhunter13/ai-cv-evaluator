@@ -1,6 +1,35 @@
 import { test, expect, Page, BrowserContext } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const PORTAL_PATH = '/';
+
+// Debug helper: dump HTML content to file for investigation
+const dumpHtml = async (page: Page, filename: string): Promise<void> => {
+  const html = await page.content();
+  const debugDir = path.join(__dirname, '..', 'test-results', 'html-dumps');
+  if (!fs.existsSync(debugDir)) {
+    fs.mkdirSync(debugDir, { recursive: true });
+  }
+  const filepath = path.join(debugDir, `${filename}-${Date.now()}.html`);
+  fs.writeFileSync(filepath, html);
+  console.log(`HTML dumped to: ${filepath}`);
+};
+
+// Helper: Wait for SPA content to load (not just initial HTML)
+const waitForSpaContent = async (page: Page, contentPatterns: string[], timeoutMs = 15000): Promise<boolean> => {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    const body = await page.locator('body').textContent();
+    const lowerBody = (body ?? '').toLowerCase();
+    const found = contentPatterns.some(p => lowerBody.includes(p.toLowerCase()));
+    if (found && lowerBody.length > 100) {
+      return true;
+    }
+    await page.waitForTimeout(500);
+  }
+  return false;
+};
 
 // Environment detection
 const BASE_URL = process.env.E2E_BASE_URL || 'http://localhost:8088';
@@ -739,6 +768,7 @@ test.describe('Observability Dashboards', () => {
   });
 
   test('Jaeger is accessible and has services', async ({ page, baseURL }) => {
+    test.setTimeout(60000);
     await loginViaSSO(page);
 
     // Jaeger redirects /jaeger/ to /jaeger/search
@@ -748,13 +778,21 @@ test.describe('Observability Dashboards', () => {
     // Verify not stuck on SSO
     expect(isSSOLoginUrl(page.url())).toBeFalsy();
 
+    // Wait for Jaeger SPA to load (React app needs time to hydrate)
+    const jaegerLoaded = await waitForSpaContent(page, ['service', 'search', 'find traces', 'jaeger'], 20000);
+
+    // Dump HTML for debugging if content not found
+    if (!jaegerLoaded) {
+      await dumpHtml(page, 'jaeger-search');
+      await page.screenshot({ path: 'test-results/html-dumps/jaeger-search.png', fullPage: true });
+    }
+
     // Jaeger UI should load - check for Jaeger-specific elements
     const body = await page.locator('body').textContent();
+    console.log('Jaeger page content length:', body?.length ?? 0);
+    console.log('Jaeger page content preview:', body?.substring(0, 500));
     expect(body).toBeTruthy();
-
-    // Jaeger search page should have service dropdown or search form
-    const lowerContent = (body ?? '').toLowerCase();
-    expect(lowerContent.includes('service') || lowerContent.includes('search') || lowerContent.includes('jaeger')).toBeTruthy();
+    expect(jaegerLoaded).toBeTruthy();
   });
 
   test('Jaeger API is accessible', async ({ page }) => {
@@ -762,29 +800,41 @@ test.describe('Observability Dashboards', () => {
 
     // Query Jaeger API for services
     const resp = await page.request.get('/jaeger/api/services');
+    console.log('Jaeger API response status:', resp.status());
+    console.log('Jaeger API response:', await resp.text());
     // Jaeger API should respond (may have no services if no traces yet)
     expect(resp.status()).toBeLessThan(500);
   });
 
   test('Redpanda Console is accessible', async ({ page, baseURL }) => {
+    test.setTimeout(60000);
     await loginViaSSO(page);
 
-    await gotoWithRetry(page, '/redpanda/');
+    await gotoWithRetry(page, '/redpanda/overview');
     await page.waitForLoadState('networkidle');
 
     // Verify not stuck on SSO
     expect(isSSOLoginUrl(page.url())).toBeFalsy();
 
+    // Wait for Redpanda Console SPA to load
+    const redpandaLoaded = await waitForSpaContent(page, ['topic', 'overview', 'cluster', 'broker', 'redpanda'], 20000);
+
+    // Dump HTML for debugging if content not found
+    if (!redpandaLoaded) {
+      await dumpHtml(page, 'redpanda-overview');
+      await page.screenshot({ path: 'test-results/html-dumps/redpanda-overview.png', fullPage: true });
+    }
+
     // Redpanda Console should load
     const body = await page.locator('body').textContent();
+    console.log('Redpanda page content length:', body?.length ?? 0);
+    console.log('Redpanda page content preview:', body?.substring(0, 500));
     expect(body).toBeTruthy();
-
-    // Redpanda Console should have topics or overview content
-    const lowerContent = (body ?? '').toLowerCase();
-    expect(lowerContent.includes('topic') || lowerContent.includes('overview') || lowerContent.includes('redpanda') || lowerContent.includes('cluster')).toBeTruthy();
+    expect(redpandaLoaded).toBeTruthy();
   });
 
   test('Redpanda Console topics page is accessible', async ({ page }) => {
+    test.setTimeout(60000);
     await loginViaSSO(page);
 
     await gotoWithRetry(page, '/redpanda/topics');
@@ -793,8 +843,18 @@ test.describe('Observability Dashboards', () => {
     // Verify not stuck on SSO
     expect(isSSOLoginUrl(page.url())).toBeFalsy();
 
+    // Wait for content to load
+    const loaded = await waitForSpaContent(page, ['topic', 'create', 'name', 'partitions'], 20000);
+
+    if (!loaded) {
+      await dumpHtml(page, 'redpanda-topics');
+      await page.screenshot({ path: 'test-results/html-dumps/redpanda-topics.png', fullPage: true });
+    }
+
     const body = await page.locator('body').textContent();
+    console.log('Redpanda topics page content length:', body?.length ?? 0);
     expect(body).toBeTruthy();
+    expect(loaded).toBeTruthy();
   });
 });
 
