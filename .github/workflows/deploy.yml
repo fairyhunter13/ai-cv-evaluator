@@ -34,9 +34,10 @@ on:
     tags:
       - 'v*'
 
-concurrency:
-  group: deploy-production
-  cancel-in-progress: true
+# Temporarily disabled concurrency for debugging
+# concurrency:
+#   group: deploy-production
+#   cancel-in-progress: true
 
 env:
   PRODUCTION_URL: https://ai-cv-evaluator.web.id
