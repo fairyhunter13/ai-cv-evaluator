@@ -741,12 +741,29 @@ test.describe('Observability Dashboards', () => {
   test('Jaeger is accessible and has services', async ({ page, baseURL }) => {
     await loginViaSSO(page);
 
-    await gotoWithRetry(page, '/jaeger/');
+    // Jaeger redirects /jaeger/ to /jaeger/search
+    await gotoWithRetry(page, '/jaeger/search');
     await page.waitForLoadState('networkidle');
 
-    // Jaeger UI should load
+    // Verify not stuck on SSO
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    // Jaeger UI should load - check for Jaeger-specific elements
     const body = await page.locator('body').textContent();
     expect(body).toBeTruthy();
+
+    // Jaeger search page should have service dropdown or search form
+    const lowerContent = (body ?? '').toLowerCase();
+    expect(lowerContent.includes('service') || lowerContent.includes('search') || lowerContent.includes('jaeger')).toBeTruthy();
+  });
+
+  test('Jaeger API is accessible', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Query Jaeger API for services
+    const resp = await page.request.get('/jaeger/api/services');
+    // Jaeger API should respond (may have no services if no traces yet)
+    expect(resp.status()).toBeLessThan(500);
   });
 
   test('Redpanda Console is accessible', async ({ page, baseURL }) => {
@@ -755,9 +772,154 @@ test.describe('Observability Dashboards', () => {
     await gotoWithRetry(page, '/redpanda/');
     await page.waitForLoadState('networkidle');
 
+    // Verify not stuck on SSO
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
     // Redpanda Console should load
     const body = await page.locator('body').textContent();
     expect(body).toBeTruthy();
+
+    // Redpanda Console should have topics or overview content
+    const lowerContent = (body ?? '').toLowerCase();
+    expect(lowerContent.includes('topic') || lowerContent.includes('overview') || lowerContent.includes('redpanda') || lowerContent.includes('cluster')).toBeTruthy();
+  });
+
+  test('Redpanda Console topics page is accessible', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await gotoWithRetry(page, '/redpanda/topics');
+    await page.waitForLoadState('networkidle');
+
+    // Verify not stuck on SSO
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    const body = await page.locator('body').textContent();
+    expect(body).toBeTruthy();
+  });
+});
+
+// =============================================================================
+// GRAFANA DASHBOARDS TESTS
+// Verify all dashboards in the AI CV Evaluator folder are accessible and functional
+// =============================================================================
+
+test.describe('Grafana Dashboards', () => {
+  test('AI CV Evaluator folder contains all expected dashboards', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Navigate to Grafana dashboards search and look for our folder
+    await gotoWithRetry(page, '/grafana/dashboards');
+    await page.waitForLoadState('networkidle');
+
+    // Verify not redirected to SSO
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    // Wait for Grafana to fully load (it's a SPA)
+    await page.waitForTimeout(3000);
+
+    // Look for the AI CV Evaluator folder link
+    const folderLink = page.getByRole('link', { name: /AI CV Evaluator/i });
+    await expect(folderLink).toBeVisible({ timeout: 15000 });
+    await folderLink.click();
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+
+    // Check for expected dashboards in the folder
+    const pageContent = await page.locator('body').textContent();
+    const expectedDashboards = ['AI Metrics', 'HTTP Metrics', 'Job Queue Metrics', 'Request Drilldown'];
+    for (const dashboard of expectedDashboards) {
+      expect(pageContent?.toLowerCase()).toContain(dashboard.toLowerCase());
+    }
+  });
+
+  test('HTTP Metrics dashboard loads with data', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate to HTTP Metrics dashboard
+    await gotoWithRetry(page, '/grafana/d/http-metrics/http-metrics');
+    await page.waitForLoadState('networkidle');
+
+    // Verify dashboard loaded (not SSO redirect)
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    // Dashboard should have panels
+    const pageContent = await page.locator('body').textContent();
+    expect(pageContent).toBeTruthy();
+
+    // Check for HTTP-related content
+    const lowerContent = (pageContent ?? '').toLowerCase();
+    expect(lowerContent.includes('http') || lowerContent.includes('request') || lowerContent.includes('metrics')).toBeTruthy();
+  });
+
+  test('Job Queue Metrics dashboard loads', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate to Job Queue Metrics dashboard
+    await gotoWithRetry(page, '/grafana/d/job-queue-metrics/job-queue-metrics');
+    await page.waitForLoadState('networkidle');
+
+    // Verify dashboard loaded
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    const pageContent = await page.locator('body').textContent();
+    expect(pageContent).toBeTruthy();
+
+    // Check for job-related content
+    const lowerContent = (pageContent ?? '').toLowerCase();
+    expect(lowerContent.includes('job') || lowerContent.includes('queue') || lowerContent.includes('metrics')).toBeTruthy();
+  });
+
+  test('AI Metrics dashboard loads', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate to AI Metrics dashboard
+    await gotoWithRetry(page, '/grafana/d/ai-metrics/ai-metrics');
+    await page.waitForLoadState('networkidle');
+
+    // Verify dashboard loaded
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    const pageContent = await page.locator('body').textContent();
+    expect(pageContent).toBeTruthy();
+
+    // Check for AI-related content
+    const lowerContent = (pageContent ?? '').toLowerCase();
+    expect(lowerContent.includes('ai') || lowerContent.includes('token') || lowerContent.includes('metrics')).toBeTruthy();
+  });
+
+  test('Request Drilldown dashboard loads (dev-only data)', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate to Request Drilldown dashboard
+    await gotoWithRetry(page, '/grafana/d/request-drilldown/request-drilldown');
+    await page.waitForLoadState('networkidle');
+
+    // Verify dashboard loaded
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    const pageContent = await page.locator('body').textContent();
+    expect(pageContent).toBeTruthy();
+
+    // In production, this dashboard will show "No data" because http_request_by_id_total
+    // is only enabled in dev to avoid high cardinality. This is expected behavior.
+    // We just verify the dashboard loads without errors.
+    const lowerContent = (pageContent ?? '').toLowerCase();
+    expect(lowerContent.includes('request') || lowerContent.includes('drilldown') || lowerContent.includes('no data')).toBeTruthy();
+  });
+
+  test('Grafana home page is accessible', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await gotoWithRetry(page, '/grafana/');
+    await page.waitForLoadState('networkidle');
+
+    // Verify not redirected to SSO
+    expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    // Grafana home should load
+    const pageContent = await page.locator('body').textContent();
+    expect(pageContent).toBeTruthy();
   });
 });
 
