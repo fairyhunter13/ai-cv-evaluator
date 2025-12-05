@@ -865,7 +865,8 @@ jobs:
 
       - name: Run production Playwright tests
         # Run health and alerting tests on all deployments
-        if: ${{ github.event.inputs.skip_sso_tests != 'true' }}
+        # Skip if SSO secrets are not configured or if explicitly skipped
+        if: ${{ github.event.inputs.skip_sso_tests != 'true' && secrets.PROD_SSO_PASSWORD != '' }}
         working-directory: admin-frontend
         env:
           E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
@@ -880,6 +881,12 @@ jobs:
             --reporter=list \
             --retries=3 \
             --timeout=180000
+
+      - name: Skip Playwright tests notification
+        if: ${{ secrets.PROD_SSO_PASSWORD == '' }}
+        run: |
+          echo "⚠️ Skipping Playwright SSO tests - PROD_SSO_PASSWORD secret not configured"
+          echo "To enable SSO tests, add PROD_SSO_USERNAME and PROD_SSO_PASSWORD secrets to GitHub"
 
       - name: Validate SSL certificates
         run: |
