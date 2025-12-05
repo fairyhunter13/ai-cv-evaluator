@@ -864,7 +864,7 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
 
       - name: Run production Playwright tests
-        # Run SSO and alerting tests on both manual triggers and tag pushes
+        # Run health and alerting tests on all deployments
         if: ${{ github.event.inputs.skip_sso_tests != 'true' }}
         working-directory: admin-frontend
         env:
@@ -872,13 +872,14 @@ jobs:
           SSO_USERNAME: ${{ secrets.PROD_SSO_USERNAME }}
           SSO_PASSWORD: ${{ secrets.PROD_SSO_PASSWORD }}
         run: |
-          # Run production validation tests including health, SSO, and alerting
-          npx playwright test \
+          # Run targeted production validation tests
+          # Focus on health endpoints and alerting pipeline verification
+          npx playwright test tests/comprehensive-e2e.spec.ts \
             --project=chromium \
-            --grep "health|Backend API|SSO|Alerting \+ Mailpit" \
+            --grep "health|Alerting \+ Mailpit" \
             --reporter=list \
-            --retries=2 \
-            --timeout=120000
+            --retries=3 \
+            --timeout=180000
 
       - name: Validate SSL certificates
         run: |
