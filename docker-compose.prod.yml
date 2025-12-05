@@ -26,6 +26,10 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}
       - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-https://ai-cv-evaluator.web.id,https://dashboard.ai-cv-evaluator.web.id}
+    networks:
+      default:
+        aliases:
+          - app  # Alias for Prometheus to scrape using the same name as dev environment
     depends_on:
       migrate:
         condition: service_completed_successfully
