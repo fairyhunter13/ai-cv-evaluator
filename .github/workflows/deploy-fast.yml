@@ -1,0 +1,169 @@
+name: Deploy Fast
+
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_validation:
+        description: 'Skip E2E validation'
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+env:
+  PRODUCTION_URL: https://ai-cv-evaluator.web.id
+  DASHBOARD_URL: https://dashboard.ai-cv-evaluator.web.id
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract metadata
+        id: metadata
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "image_tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "image_tag=latest" >> $GITHUB_OUTPUT
+          fi
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+
+      - name: Install SOPS and AGE
+        run: |
+          set -e
+          sudo apt-get update
+          sudo apt-get install -y age
+          SOPS_VERSION="3.8.1"
+          curl -L "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64" -o sops
+          sudo install -m 0755 sops /usr/local/bin/sops
+          sops --version
+
+      - name: Prepare SOPS age key
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          mkdir -p ~/.config/sops/age
+          printf %s "$SOPS_AGE_KEY" > ~/.config/sops/age/keys.txt
+          chmod 600 ~/.config/sops/age/keys.txt
+
+      - name: Set up SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf %s "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} echo "Connection successful"
+
+      - name: Create deployment directory
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/ai-cv-evaluator/deploy"
+      
+      - name: Decrypt and upload configs
+        run: |
+          if [ -f secrets/env.production.sops.yaml ]; then
+            make decrypt-env-production
+          fi
+          if [ -f secrets/deploy/keycloak/realm-aicv.json.sops ]; then
+            make decrypt-keycloak-realm
+          fi
+          scp docker-compose.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
+          scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
+          if [ -f .env.production ]; then
+            scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
+          fi
+
+      - name: Login to GHCR on server
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+
+      - name: Deploy to production
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd ~/ai-cv-evaluator
+            
+            # Source environment if available
+            if [ -f .env.production ]; then
+              set -a && source .env.production && set +a
+            fi
+            
+            # Pull latest images
+            docker compose -f docker-compose.prod.yml pull
+            
+            # Deploy with blue-green strategy
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            
+            # Wait for health
+            echo "Waiting for services to be healthy..."
+            sleep 30
+            
+            # Basic health check
+            curl -sf http://localhost/healthz || echo "Health check warning"
+          '
+
+      - name: Verify deployment
+        run: |
+          echo "=== Production Health Check ==="
+          curl -sf ${{ env.PRODUCTION_URL }}/healthz && echo "✓ /healthz OK"
+          curl -sf ${{ env.PRODUCTION_URL }}/readyz && echo "✓ /readyz OK"
+
+  validate:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ github.event.inputs.skip_validation != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: admin-frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: admin-frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+        working-directory: admin-frontend
+
+      - name: Run E2E validation
+        working-directory: admin-frontend
+        env:
+          E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
+          SSO_USERNAME: ${{ secrets.PROD_SSO_USERNAME }}
+          SSO_PASSWORD: ${{ secrets.PROD_SSO_PASSWORD }}
+        run: |
+          if [ -z "$SSO_PASSWORD" ]; then
+            echo "⚠️ SSO credentials not configured, running health tests only"
+            npx playwright test tests/comprehensive-e2e.spec.ts \
+              --project=chromium \
+              --grep "health" \
+              --reporter=list \
+              --timeout=60000
+          else
+            echo "Running full E2E validation including alerting tests"
+            npx playwright test tests/comprehensive-e2e.spec.ts \
+              --project=chromium \
+              --grep "health|Alerting" \
+              --reporter=list \
+              --retries=2 \
+              --timeout=180000
+          fi
