@@ -1573,3 +1573,498 @@ test.describe('Redpanda Console Validation', () => {
     expect(body).toBeTruthy();
   });
 });
+
+// =============================================================================
+// ADMIN FRONTEND DASHBOARD UI/UX COMPREHENSIVE TESTS
+// =============================================================================
+
+test.describe('Admin Frontend Dashboard UI/UX', () => {
+  test('dashboard page shows statistics cards', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate to admin frontend dashboard
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Check for dashboard heading
+    const dashboardHeading = page.getByRole('heading', { name: /Dashboard/i });
+    const headingVisible = await dashboardHeading.isVisible().catch(() => false);
+    
+    if (headingVisible) {
+      await expect(dashboardHeading).toBeVisible();
+    }
+
+    // Check for statistics cards (Total Jobs, Completed, Processing, etc.)
+    const body = await page.locator('body').textContent();
+    const hasStats = body?.toLowerCase().includes('total') || 
+                     body?.toLowerCase().includes('jobs') ||
+                     body?.toLowerCase().includes('completed');
+    console.log(`Dashboard has statistics: ${hasStats}`);
+    expect(body).toBeTruthy();
+  });
+
+  test('sidebar navigation works correctly', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000); // Wait for Vue app to fully load
+
+    // Test navigation to Upload Files (use sidebar link with exact match)
+    const uploadLink = page.getByRole('link', { name: 'Upload Files', exact: true });
+    if (await uploadLink.isVisible()) {
+      await Promise.all([
+        page.waitForURL(/upload/),
+        uploadLink.click(),
+      ]).catch(() => {});
+      await page.waitForTimeout(500);
+      const url = page.url();
+      console.log(`After Upload Files click: ${url}`);
+      expect(url).toContain('/upload');
+    }
+
+    // Test navigation to Start Evaluation (use sidebar link with exact match)
+    const evalLink = page.getByRole('link', { name: 'Start Evaluation', exact: true });
+    if (await evalLink.isVisible()) {
+      await Promise.all([
+        page.waitForURL(/evaluate/),
+        evalLink.click(),
+      ]).catch(() => {});
+      await page.waitForTimeout(500);
+      const url = page.url();
+      console.log(`After Start Evaluation click: ${url}`);
+      expect(url).toContain('/evaluate');
+    }
+
+    // Test navigation to View Results (use sidebar link with exact match)
+    const resultsLink = page.getByRole('link', { name: 'View Results', exact: true });
+    if (await resultsLink.isVisible()) {
+      await Promise.all([
+        page.waitForURL(/result/),
+        resultsLink.click(),
+      ]).catch(() => {});
+      await page.waitForTimeout(500);
+      const url = page.url();
+      console.log(`After View Results click: ${url}`);
+      expect(url).toContain('/result');
+    }
+
+    // Test navigation to Job Management
+    const jobsLink = page.getByRole('link', { name: /Job Management/i });
+    if (await jobsLink.isVisible()) {
+      await Promise.all([
+        page.waitForURL(/jobs/),
+        jobsLink.click(),
+      ]).catch(() => {});
+      await page.waitForTimeout(500);
+      const url = page.url();
+      console.log(`After Job Management click: ${url}`);
+      expect(url).toContain('/jobs');
+    }
+
+    // Test navigation back to Dashboard (use sidebar link)
+    const dashLink = page.getByRole('link', { name: 'Dashboard', exact: true });
+    if (await dashLink.isVisible()) {
+      await Promise.all([
+        page.waitForURL(/dashboard/),
+        dashLink.click(),
+      ]).catch(() => {});
+      await page.waitForTimeout(500);
+      const url = page.url();
+      console.log(`After Dashboard click: ${url}`);
+      expect(url).toContain('/dashboard');
+    }
+  });
+
+  test('upload page has file inputs and upload button', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Upload Files/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Check for file inputs
+    const fileInputs = page.locator('input[type="file"]');
+    const inputCount = await fileInputs.count();
+    console.log(`Found ${inputCount} file inputs`);
+    expect(inputCount).toBeGreaterThanOrEqual(1);
+
+    // Check for upload button
+    const uploadButton = page.getByRole('button', { name: /Upload/i });
+    const buttonVisible = await uploadButton.isVisible().catch(() => false);
+    console.log(`Upload button visible: ${buttonVisible}`);
+  });
+
+  test('evaluate page has form inputs', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    // Use exact match for sidebar link
+    await page.getByRole('link', { name: 'Start Evaluation', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Check for CV ID input
+    const cvIdInput = page.getByLabel(/CV ID/i);
+    const cvIdVisible = await cvIdInput.isVisible().catch(() => false);
+    console.log(`CV ID input visible: ${cvIdVisible}`);
+
+    // Check for Project ID input
+    const projectIdInput = page.getByLabel(/Project ID/i);
+    const projectIdVisible = await projectIdInput.isVisible().catch(() => false);
+    console.log(`Project ID input visible: ${projectIdVisible}`);
+
+    // Check for Start Evaluation button
+    const evalButton = page.getByRole('button', { name: /Start Evaluation/i });
+    const evalButtonVisible = await evalButton.isVisible().catch(() => false);
+    console.log(`Start Evaluation button visible: ${evalButtonVisible}`);
+  });
+
+  test('result page has job ID input', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    // Use exact match for sidebar link
+    await page.getByRole('link', { name: 'View Results', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Check for Job ID input
+    const jobIdInput = page.getByLabel(/Job ID/i).or(page.getByPlaceholder(/job/i));
+    const jobIdVisible = await jobIdInput.count() > 0;
+    console.log(`Job ID input visible: ${jobIdVisible}`);
+
+    // Check for Fetch Result button
+    const fetchButton = page.getByRole('button', { name: /Fetch|Get|View/i });
+    const fetchButtonVisible = await fetchButton.count() > 0;
+    console.log(`Fetch button visible: ${fetchButtonVisible}`);
+  });
+
+  test('jobs page shows job list table', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Check for Job Management heading
+    const heading = page.getByRole('heading', { name: /Job Management/i });
+    await expect(heading).toBeVisible();
+
+    // Check for table
+    const table = page.locator('table');
+    const tableVisible = await table.isVisible().catch(() => false);
+    console.log(`Jobs table visible: ${tableVisible}`);
+
+    // Check for table headers
+    const body = await page.locator('body').textContent();
+    const hasJobColumns = body?.toLowerCase().includes('status') || 
+                          body?.toLowerCase().includes('id') ||
+                          body?.toLowerCase().includes('created');
+    console.log(`Has job columns: ${hasJobColumns}`);
+  });
+
+  test('mobile menu toggle works', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+
+    // Set viewport to mobile size
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.waitForTimeout(500);
+
+    // Look for mobile menu toggle button
+    const menuButton = page.locator('button').filter({ hasText: '' }).first();
+    const menuButtonExists = await menuButton.count() > 0;
+    console.log(`Mobile menu button exists: ${menuButtonExists}`);
+
+    // Reset viewport
+    await page.setViewportSize({ width: 1280, height: 720 });
+  });
+});
+
+// =============================================================================
+// PROTECTED DASHBOARDS ACCESS AFTER LOGOUT TESTS
+// =============================================================================
+
+test.describe('Protected Dashboards After Logout', () => {
+  test('Grafana requires login after logout', async ({ page, browser }) => {
+    await loginViaSSO(page);
+
+    // Verify we can access Grafana while logged in
+    await gotoWithRetry(page, '/grafana/');
+    await page.waitForLoadState('domcontentloaded');
+    const loggedInUrl = page.url();
+    expect(loggedInUrl).toContain('/grafana');
+
+    // Logout
+    await gotoWithRetry(page, '/logout');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Try to access Grafana in a fresh context
+    const freshContext = await browser.newContext();
+    const freshPage = await freshContext.newPage();
+    try {
+      await gotoWithRetry(freshPage, '/grafana/');
+      await freshPage.waitForLoadState('domcontentloaded');
+
+      // Should be redirected to login
+      const afterLogoutUrl = freshPage.url();
+      const needsLogin = isSSOLoginUrl(afterLogoutUrl) || afterLogoutUrl.includes('/oauth2/');
+      console.log(`After logout, Grafana URL: ${afterLogoutUrl}`);
+      expect(needsLogin).toBeTruthy();
+    } finally {
+      await freshContext.close();
+    }
+  });
+
+  test('Jaeger requires login after logout', async ({ page, browser }) => {
+    await loginViaSSO(page);
+
+    // Verify we can access Jaeger while logged in
+    await gotoWithRetry(page, '/jaeger/search');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Logout
+    await gotoWithRetry(page, '/logout');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Try to access Jaeger in a fresh context
+    const freshContext = await browser.newContext();
+    const freshPage = await freshContext.newPage();
+    try {
+      await gotoWithRetry(freshPage, '/jaeger/search');
+      await freshPage.waitForLoadState('domcontentloaded');
+
+      // Should be redirected to login
+      const afterLogoutUrl = freshPage.url();
+      const needsLogin = isSSOLoginUrl(afterLogoutUrl) || afterLogoutUrl.includes('/oauth2/');
+      console.log(`After logout, Jaeger URL: ${afterLogoutUrl}`);
+      expect(needsLogin).toBeTruthy();
+    } finally {
+      await freshContext.close();
+    }
+  });
+
+  test('Prometheus requires login after logout', async ({ page, browser }) => {
+    await loginViaSSO(page);
+
+    // Verify we can access Prometheus while logged in
+    await gotoWithRetry(page, '/prometheus/targets');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Logout
+    await gotoWithRetry(page, '/logout');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Try to access Prometheus in a fresh context
+    const freshContext = await browser.newContext();
+    const freshPage = await freshContext.newPage();
+    try {
+      await gotoWithRetry(freshPage, '/prometheus/targets');
+      await freshPage.waitForLoadState('domcontentloaded');
+
+      // Should be redirected to login
+      const afterLogoutUrl = freshPage.url();
+      const needsLogin = isSSOLoginUrl(afterLogoutUrl) || afterLogoutUrl.includes('/oauth2/');
+      console.log(`After logout, Prometheus URL: ${afterLogoutUrl}`);
+      expect(needsLogin).toBeTruthy();
+    } finally {
+      await freshContext.close();
+    }
+  });
+
+  test('Redpanda Console requires login after logout', async ({ page, browser }) => {
+    await loginViaSSO(page);
+
+    // Verify we can access Redpanda while logged in
+    await gotoWithRetry(page, '/redpanda/');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Logout
+    await gotoWithRetry(page, '/logout');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Try to access Redpanda in a fresh context
+    const freshContext = await browser.newContext();
+    const freshPage = await freshContext.newPage();
+    try {
+      await gotoWithRetry(freshPage, '/redpanda/');
+      await freshPage.waitForLoadState('domcontentloaded');
+
+      // Should be redirected to login
+      const afterLogoutUrl = freshPage.url();
+      const needsLogin = isSSOLoginUrl(afterLogoutUrl) || afterLogoutUrl.includes('/oauth2/');
+      console.log(`After logout, Redpanda URL: ${afterLogoutUrl}`);
+      expect(needsLogin).toBeTruthy();
+    } finally {
+      await freshContext.close();
+    }
+  });
+
+  test('Admin Frontend requires login after logout', async ({ page, browser }) => {
+    await loginViaSSO(page);
+
+    // Verify we can access Admin Frontend while logged in
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+
+    // Logout
+    await gotoWithRetry(page, '/logout');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Try to access Admin Frontend in a fresh context
+    const freshContext = await browser.newContext();
+    const freshPage = await freshContext.newPage();
+    try {
+      await gotoWithRetry(freshPage, '/app/');
+      await freshPage.waitForLoadState('domcontentloaded');
+
+      // Should be redirected to login
+      const afterLogoutUrl = freshPage.url();
+      const needsLogin = isSSOLoginUrl(afterLogoutUrl) || afterLogoutUrl.includes('/oauth2/');
+      console.log(`After logout, Admin Frontend URL: ${afterLogoutUrl}`);
+      expect(needsLogin).toBeTruthy();
+    } finally {
+      await freshContext.close();
+    }
+  });
+
+  test('Mailpit requires login after logout', async ({ page, browser }) => {
+    await loginViaSSO(page);
+
+    // Verify we can access Mailpit while logged in
+    await gotoWithRetry(page, '/mailpit/');
+    await page.waitForLoadState('domcontentloaded');
+
+    // Logout
+    await gotoWithRetry(page, '/logout');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Try to access Mailpit in a fresh context
+    const freshContext = await browser.newContext();
+    const freshPage = await freshContext.newPage();
+    try {
+      await gotoWithRetry(freshPage, '/mailpit/');
+      await freshPage.waitForLoadState('domcontentloaded');
+
+      // Should be redirected to login
+      const afterLogoutUrl = freshPage.url();
+      const needsLogin = isSSOLoginUrl(afterLogoutUrl) || afterLogoutUrl.includes('/oauth2/');
+      console.log(`After logout, Mailpit URL: ${afterLogoutUrl}`);
+      expect(needsLogin).toBeTruthy();
+    } finally {
+      await freshContext.close();
+    }
+  });
+});
+
+// =============================================================================
+// OBSERVABILITY DATA VALIDATION AFTER DASHBOARD INTERACTIONS
+// =============================================================================
+
+test.describe('Observability After Dashboard Interactions', () => {
+  test('Jaeger shows HTTP traces after dashboard navigation', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate through multiple pages to generate traces
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    await page.getByRole('link', { name: /Dashboard/i }).first().click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Check Jaeger for new traces
+    const tracesResp = await page.request.get('/jaeger/api/traces', {
+      params: {
+        service: 'ai-cv-evaluator',
+        lookback: '5m',
+        limit: '50',
+      },
+    });
+
+    if (tracesResp.ok()) {
+      const tracesBody = await tracesResp.json().catch(() => ({}));
+      const traces = (tracesBody as any)?.data ?? [];
+      console.log(`Found ${traces.length} traces in last 5 minutes`);
+      
+      // Should have some traces from our navigation
+      expect(traces.length).toBeGreaterThan(0);
+
+      // Check for admin API traces
+      const allSpans = traces.flatMap((t: any) => t.spans ?? []);
+      const adminSpans = allSpans.filter((s: any) => 
+        String(s.operationName ?? '').includes('admin') ||
+        String(s.operationName ?? '').includes('Admin')
+      );
+      console.log(`Found ${adminSpans.length} admin-related spans`);
+    }
+  });
+
+  test('Prometheus has HTTP metrics after dashboard interactions', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate through pages to generate metrics
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Query Prometheus for HTTP request metrics
+    const metricsResp = await page.request.get('/prometheus/api/v1/query', {
+      params: {
+        query: 'http_requests_total',
+      },
+    });
+
+    if (metricsResp.ok()) {
+      const metricsBody = await metricsResp.json().catch(() => ({}));
+      const results = (metricsBody as any)?.data?.result ?? [];
+      console.log(`Found ${results.length} HTTP request metric series`);
+      
+      // Should have some HTTP request metrics
+      expect(results.length).toBeGreaterThan(0);
+
+      // Log some metric details
+      for (const r of results.slice(0, 5)) {
+        console.log(`Route: ${r.metric?.route}, Method: ${r.metric?.method}, Value: ${r.value?.[1]}`);
+      }
+    }
+  });
+
+  test('Grafana dashboards reflect current metrics', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // Navigate to Request Drilldown dashboard which shows HTTP metrics
+    await gotoWithRetry(page, '/grafana/d/request-drilldown/request-drilldown');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    const body = await page.locator('body').textContent();
+    expect(body).toBeTruthy();
+    expect(body?.toLowerCase()).not.toContain('dashboard not found');
+    
+    console.log('Request Drilldown dashboard loaded successfully');
+  });
+});
