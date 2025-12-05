@@ -936,12 +936,12 @@ jobs:
           echo "Initial Mailpit total: $INITIAL_TOTAL"
           
           echo "Generating HTTP errors to trigger HighHttpErrorRate..."
-          # Hit backend directly via Docker network to bypass oauth2-proxy SSO
+          # Hit backend via 'app' alias (same as Prometheus scrape target) to ensure metrics are recorded
           echo "Using Docker network: $NETWORK"
           # Generate errors over a longer period to ensure Prometheus captures them across multiple scrapes
           # Prometheus scrapes every 15s, so we generate errors for ~30s
           for i in $(seq 1 60); do
-            HTTP_CODE=$(docker run --rm --network "$NETWORK" curlimages/curl -s -o /dev/null -w "%{http_code}" "http://backend_blue:8080/v1/__nonexistent_path_for_errors" 2>/dev/null || echo "000")
+            HTTP_CODE=$(docker run --rm --network "$NETWORK" curlimages/curl -s -o /dev/null -w "%{http_code}" "http://app:8080/v1/__nonexistent_path_for_errors" 2>/dev/null || echo "000")
             [ $((i % 10)) -eq 0 ] && echo "Request $i: HTTP $HTTP_CODE"
             sleep 0.5
           done
