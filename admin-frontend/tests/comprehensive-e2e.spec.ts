@@ -771,6 +771,7 @@ test.describe('Observability Dashboards', () => {
 // =============================================================================
 
 test.describe('Alerting + Mailpit Flow', () => {
+  test.skip(IS_PRODUCTION, 'Full alerting + Mailpit flow runs only in dev; production is validated via SSH in CI');
   test('Grafana alert rules page has no error banner', async ({ page }) => {
     test.setTimeout(60000);
     await loginViaSSO(page);
@@ -998,5 +999,8 @@ test.describe('Alerting + Mailpit Flow', () => {
     // 2. Prometheus rules are loaded
     // 3. Mailpit is accessible
     // 4. Contact points are configured
+
+    expect(alertIsActive).toBeTruthy();
+    expect(emailReceived).toBeTruthy();
   });
 });
