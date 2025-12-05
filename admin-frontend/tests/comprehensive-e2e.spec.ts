@@ -1,19 +1,28 @@
 import { test, expect, Page, BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 const PORTAL_PATH = '/';
 
+// ESM compatibility for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Debug helper: dump HTML content to file for investigation
 const dumpHtml = async (page: Page, filename: string): Promise<void> => {
-  const html = await page.content();
-  const debugDir = path.join(__dirname, '..', 'test-results', 'html-dumps');
-  if (!fs.existsSync(debugDir)) {
-    fs.mkdirSync(debugDir, { recursive: true });
+  try {
+    const html = await page.content();
+    const debugDir = path.join(__dirname, '..', 'test-results', 'html-dumps');
+    if (!fs.existsSync(debugDir)) {
+      fs.mkdirSync(debugDir, { recursive: true });
+    }
+    const filepath = path.join(debugDir, `${filename}-${Date.now()}.html`);
+    fs.writeFileSync(filepath, html);
+    console.log(`HTML dumped to: ${filepath}`);
+  } catch (err) {
+    console.log(`Failed to dump HTML: ${err}`);
   }
-  const filepath = path.join(debugDir, `${filename}-${Date.now()}.html`);
-  fs.writeFileSync(filepath, html);
-  console.log(`HTML dumped to: ${filepath}`);
 };
 
 // Helper: Wait for SPA content to load (not just initial HTML)
