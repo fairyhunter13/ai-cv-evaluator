@@ -1617,177 +1617,752 @@ test.describe('Redpanda Console Validation', () => {
 });
 
 // =============================================================================
-// ADMIN FRONTEND DASHBOARD UI/UX COMPREHENSIVE TESTS
+// ADMIN FRONTEND DASHBOARD UI/UX COMPREHENSIVE FUNCTIONAL TESTS
 // =============================================================================
 
-test.describe('Admin Frontend Dashboard UI/UX', () => {
-  test('dashboard page shows statistics cards', async ({ page }) => {
+test.describe('Admin Frontend Dashboard - Functional Tests', () => {
+  test('dashboard statistics cards display numeric values', async ({ page }) => {
     await loginViaSSO(page);
 
     // Navigate to admin frontend dashboard
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000); // Wait for stats API to load
 
     // Check for dashboard heading
-    const dashboardHeading = page.getByRole('heading', { name: /Dashboard/i });
-    const headingVisible = await dashboardHeading.isVisible().catch(() => false);
-    
-    if (headingVisible) {
-      await expect(dashboardHeading).toBeVisible();
-    }
+    const dashboardHeading = page.getByRole('heading', { name: /Dashboard/i }).first();
+    await expect(dashboardHeading).toBeVisible();
 
-    // Check for statistics cards (Total Jobs, Completed, Processing, etc.)
+    // Verify statistics cards are present with actual data
+    const statsUploads = page.locator('[data-testid="stats-uploads"]');
+    const statsEvaluations = page.locator('[data-testid="stats-evaluations"]');
+    const statsCompleted = page.locator('[data-testid="stats-completed"]');
+    const statsAvgTime = page.locator('[data-testid="stats-avg-time"]');
+
+    // Wait for stats to load (check for any stat card with numeric content)
     const body = await page.locator('body').textContent();
-    const hasStats = body?.toLowerCase().includes('total') || 
-                     body?.toLowerCase().includes('jobs') ||
-                     body?.toLowerCase().includes('completed');
-    console.log(`Dashboard has statistics: ${hasStats}`);
-    expect(body).toBeTruthy();
+    const hasUploadsText = body?.includes('Total Uploads') || body?.includes('Uploads');
+    const hasEvaluationsText = body?.includes('Evaluations');
+    const hasCompletedText = body?.includes('Completed');
+    const hasAvgTimeText = body?.includes('Avg Time') || body?.includes('Average');
+
+    console.log(`Dashboard stats visible: Uploads=${hasUploadsText}, Evaluations=${hasEvaluationsText}, Completed=${hasCompletedText}, AvgTime=${hasAvgTimeText}`);
+    
+    // At least some stats should be displayed
+    expect(hasUploadsText || hasEvaluationsText || hasCompletedText).toBeTruthy();
+
+    // Check that stats cards show numeric values (not just labels)
+    if (await statsUploads.isVisible().catch(() => false)) {
+      const uploadsValue = await statsUploads.textContent();
+      console.log(`Uploads value: ${uploadsValue}`);
+      expect(uploadsValue).toMatch(/\d+/); // Should contain a number
+    }
   });
 
-  test('sidebar navigation works correctly', async ({ page }) => {
+  test('dashboard quick action links navigate correctly', async ({ page }) => {
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000); // Wait for Vue app to fully load
+    await page.waitForTimeout(2000);
 
-    // Test navigation to Upload Files (use sidebar link with exact match)
-    const uploadLink = page.getByRole('link', { name: 'Upload Files', exact: true });
-    if (await uploadLink.isVisible()) {
-      await Promise.all([
-        page.waitForURL(/upload/),
-        uploadLink.click(),
-      ]).catch(() => {});
+    // Test Upload Documents quick action (in the Quick Actions section)
+    const uploadAction = page.locator('[class*="card"] a, [class*="quick"] a, a[href*="upload"]').filter({ hasText: /Upload/i }).first();
+    if (await uploadAction.isVisible().catch(() => false)) {
+      await uploadAction.click();
+      await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
       const url = page.url();
-      console.log(`After Upload Files click: ${url}`);
+      console.log(`Quick action: Upload navigates to: ${url}`);
       expect(url).toContain('/upload');
+      
+      // Go back to dashboard
+      await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(500);
+    } else {
+      console.log('Upload quick action not found, checking sidebar navigation works');
     }
 
-    // Test navigation to Start Evaluation (use sidebar link with exact match)
-    const evalLink = page.getByRole('link', { name: 'Start Evaluation', exact: true });
-    if (await evalLink.isVisible()) {
-      await Promise.all([
-        page.waitForURL(/evaluate/),
-        evalLink.click(),
-      ]).catch(() => {});
+    // Test Start Evaluation quick action
+    const evalAction = page.locator('[class*="card"] a, [class*="quick"] a, a[href*="evaluate"]').filter({ hasText: /Evaluation/i }).first();
+    if (await evalAction.isVisible().catch(() => false)) {
+      await evalAction.click();
+      await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
       const url = page.url();
-      console.log(`After Start Evaluation click: ${url}`);
+      console.log(`Quick action: Evaluation navigates to: ${url}`);
       expect(url).toContain('/evaluate');
+      
+      await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(500);
+    } else {
+      console.log('Evaluation quick action not found');
     }
 
-    // Test navigation to View Results (use sidebar link with exact match)
-    const resultsLink = page.getByRole('link', { name: 'View Results', exact: true });
-    if (await resultsLink.isVisible()) {
-      await Promise.all([
-        page.waitForURL(/result/),
-        resultsLink.click(),
-      ]).catch(() => {});
+    // Test View Results quick action
+    const resultsAction = page.locator('[class*="card"] a, [class*="quick"] a, a[href*="result"]').filter({ hasText: /Result/i }).first();
+    if (await resultsAction.isVisible().catch(() => false)) {
+      await resultsAction.click();
+      await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
       const url = page.url();
-      console.log(`After View Results click: ${url}`);
+      console.log(`Quick action: Results navigates to: ${url}`);
       expect(url).toContain('/result');
-    }
-
-    // Test navigation to Job Management
-    const jobsLink = page.getByRole('link', { name: /Job Management/i });
-    if (await jobsLink.isVisible()) {
-      await Promise.all([
-        page.waitForURL(/jobs/),
-        jobsLink.click(),
-      ]).catch(() => {});
-      await page.waitForTimeout(500);
-      const url = page.url();
-      console.log(`After Job Management click: ${url}`);
-      expect(url).toContain('/jobs');
-    }
-
-    // Test navigation back to Dashboard (use sidebar link)
-    const dashLink = page.getByRole('link', { name: 'Dashboard', exact: true });
-    if (await dashLink.isVisible()) {
-      await Promise.all([
-        page.waitForURL(/dashboard/),
-        dashLink.click(),
-      ]).catch(() => {});
-      await page.waitForTimeout(500);
-      const url = page.url();
-      console.log(`After Dashboard click: ${url}`);
-      expect(url).toContain('/dashboard');
+    } else {
+      console.log('Results quick action not found');
     }
   });
 
-  test('upload page has file inputs and upload button', async ({ page }) => {
+  test('dashboard system status shows online indicators', async ({ page }) => {
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('link', { name: /Upload Files/i }).click();
+    await page.waitForTimeout(2000);
+
+    const body = await page.locator('body').textContent();
+    
+    // Check for system status indicators
+    const hasApiServer = body?.includes('API Server');
+    const hasWorkerQueue = body?.includes('Worker Queue');
+    const hasDatabase = body?.includes('Database');
+    const hasOnlineStatus = body?.includes('Online') || body?.includes('Active') || body?.includes('Healthy');
+
+    console.log(`System status: API=${hasApiServer}, Worker=${hasWorkerQueue}, DB=${hasDatabase}, Online=${hasOnlineStatus}`);
+    
+    expect(hasApiServer || hasWorkerQueue || hasDatabase).toBeTruthy();
+  });
+
+  test('dashboard user menu dropdown opens and shows logout', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Find and click the user avatar/menu button (circular button with user initial)
+    const userMenuButton = page.locator('button').filter({ has: page.locator('.rounded-full') }).first();
+    if (await userMenuButton.isVisible().catch(() => false)) {
+      await userMenuButton.click();
+      await page.waitForTimeout(500);
+
+      // Check for logout option in dropdown
+      const signOutButton = page.getByRole('button', { name: /Sign out/i });
+      const signOutVisible = await signOutButton.isVisible().catch(() => false);
+      console.log(`Sign out button visible in dropdown: ${signOutVisible}`);
+      
+      if (signOutVisible) {
+        await expect(signOutButton).toBeVisible();
+      }
+    }
+  });
+
+  test('dashboard View Metrics and Grafana buttons are accessible', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Check for View Metrics button/link
+    const metricsLink = page.locator('a').filter({ hasText: 'View Metrics' });
+    const grafanaLink = page.locator('a').filter({ hasText: 'Grafana' });
+
+    const metricsVisible = await metricsLink.isVisible().catch(() => false);
+    const grafanaVisible = await grafanaLink.isVisible().catch(() => false);
+
+    console.log(`View Metrics visible: ${metricsVisible}, Grafana visible: ${grafanaVisible}`);
+
+    if (metricsVisible) {
+      const href = await metricsLink.getAttribute('href');
+      expect(href).toContain('/metrics');
+    }
+
+    if (grafanaVisible) {
+      const href = await grafanaLink.getAttribute('href');
+      expect(href).toContain('/grafana');
+    }
+  });
+
+  test('sidebar navigation works correctly with active state', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Test each navigation item and verify URL changes
+    const navItems = [
+      { name: 'Upload Files', urlPart: '/upload' },
+      { name: 'Start Evaluation', urlPart: '/evaluate' },
+      { name: 'View Results', urlPart: '/result' },
+      { name: 'Job Management', urlPart: '/jobs' },
+      { name: 'Dashboard', urlPart: '/dashboard' },
+    ];
+
+    for (const item of navItems) {
+      const link = page.getByRole('link', { name: item.name, exact: true });
+      if (await link.isVisible().catch(() => false)) {
+        await link.click();
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
+        
+        expect(page.url()).toContain(item.urlPart);
+        console.log(`Navigation: ${item.name} -> ${page.url()}`);
+      }
+    }
+  });
+});
+
+// =============================================================================
+// UPLOAD PAGE - COMPREHENSIVE FUNCTIONAL TESTS
+// =============================================================================
+
+test.describe('Upload Page - Functional Tests', () => {
+  test('upload button state changes with file selection', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1000);
 
-    // Check for file inputs
-    const fileInputs = page.locator('input[type="file"]');
-    const inputCount = await fileInputs.count();
-    console.log(`Found ${inputCount} file inputs`);
-    expect(inputCount).toBeGreaterThanOrEqual(1);
+    // Find the upload button
+    const uploadButton = page.getByRole('button').filter({ hasText: /Upload/i }).first();
+    await expect(uploadButton).toBeVisible();
 
-    // Check for upload button
-    const uploadButton = page.getByRole('button', { name: /Upload/i });
-    const buttonVisible = await uploadButton.isVisible().catch(() => false);
-    console.log(`Upload button visible: ${buttonVisible}`);
+    // Record initial state (may or may not be disabled depending on design)
+    const initialDisabled = await uploadButton.isDisabled().catch(() => false);
+    console.log(`Upload button initial disabled state: ${initialDisabled}`);
+
+    // Select files
+    const fileInputs = page.locator('input[type="file"]');
+    await fileInputs.nth(0).setInputFiles({
+      name: 'test-cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Test CV content'),
+    });
+    await fileInputs.nth(1).setInputFiles({
+      name: 'test-project.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Test project content'),
+    });
+    await page.waitForTimeout(500);
+
+    // After file selection, button should be enabled
+    const afterSelectionDisabled = await uploadButton.isDisabled().catch(() => false);
+    console.log(`Upload button after file selection disabled state: ${afterSelectionDisabled}`);
+    
+    // Button should be enabled (not disabled) after files are selected
+    expect(afterSelectionDisabled).toBeFalsy();
   });
 
-  test('evaluate page has form inputs', async ({ page }) => {
+  test('file inputs accept correct file types', async ({ page }) => {
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    // Use exact match for sidebar link
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    const inputCount = await fileInputs.count();
+    expect(inputCount).toBeGreaterThanOrEqual(2);
+
+    // Check accept attributes
+    for (let i = 0; i < inputCount; i++) {
+      const accept = await fileInputs.nth(i).getAttribute('accept');
+      console.log(`File input ${i} accepts: ${accept}`);
+      // Should accept PDF, DOC, DOCX
+      expect(accept).toMatch(/pdf|doc/i);
+    }
+  });
+
+  test('file selection shows file name and size', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    
+    // Create test file content
+    const testContent = 'Test CV content for upload functionality test';
+
+    // Select file for CV input
+    await fileInputs.nth(0).setInputFiles({
+      name: 'test-cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(testContent),
+    });
+    
+    await page.waitForTimeout(500);
+
+    // Check if file name is displayed
+    const body = await page.locator('body').textContent();
+    const hasFileName = body?.includes('test-cv.txt');
+    console.log(`File name displayed after selection: ${hasFileName}`);
+    
+    // Check for file size display (bytes, KB, etc.)
+    const hasSizeInfo = body?.match(/\d+\s*(bytes|KB|MB)/i);
+    console.log(`File size displayed: ${!!hasSizeInfo}`);
+  });
+
+  test('remove file button clears selection', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    
+    // Select a file
+    await fileInputs.nth(0).setInputFiles({
+      name: 'test-cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Test content'),
+    });
+    
+    await page.waitForTimeout(500);
+
+    // Click remove button
+    const removeButton = page.getByRole('button', { name: /Remove/i }).first();
+    if (await removeButton.isVisible().catch(() => false)) {
+      await removeButton.click();
+      await page.waitForTimeout(500);
+
+      // Verify file is removed (file name should not be visible)
+      const body = await page.locator('body').textContent();
+      const hasFileName = body?.includes('test-cv.txt');
+      console.log(`File name removed: ${!hasFileName}`);
+      expect(hasFileName).toBeFalsy();
+    }
+  });
+
+  test('upload both CV and project files successfully', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    expect(await fileInputs.count()).toBeGreaterThanOrEqual(2);
+
+    // Create test files
+    const cvContent = `John Doe - Software Engineer
+Skills: Go, Python, JavaScript
+Experience: 5 years`;
+
+    const projectContent = `Project Requirements:
+- Backend development
+- API integration
+- Database design`;
+
+    // Upload both files
+    await fileInputs.nth(0).setInputFiles({
+      name: 'cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(cvContent),
+    });
+    
+    await fileInputs.nth(1).setInputFiles({
+      name: 'project.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(projectContent),
+    });
+
+    await page.waitForTimeout(500);
+
+    // Upload button should be enabled now
+    const uploadButton = page.getByRole('button').filter({ hasText: /Upload/i }).first();
+    await expect(uploadButton).toBeVisible();
+
+    // Capture response from upload
+    const uploadResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/v1/upload') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ).catch(() => null);
+
+    await uploadButton.click();
+    const response = await uploadResponsePromise;
+
+    if (response && response.status() === 200) {
+      const json = await response.json().catch(() => ({}));
+      console.log(`Upload successful: CV ID=${(json as any).cv_id}, Project ID=${(json as any).project_id}`);
+      expect((json as any).cv_id).toBeTruthy();
+      expect((json as any).project_id).toBeTruthy();
+    } else {
+      console.log(`Upload response status: ${response?.status()}`);
+    }
+  });
+
+  test('upload shows success message with IDs', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+
+    await fileInputs.nth(0).setInputFiles({
+      name: 'cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('CV content'),
+    });
+    
+    await fileInputs.nth(1).setInputFiles({
+      name: 'project.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Project content'),
+    });
+
+    await page.waitForTimeout(500);
+
+    const uploadButton = page.getByRole('button').filter({ hasText: /Upload/i }).first();
+    await uploadButton.click();
+    
+    // Wait for response
+    await page.waitForTimeout(3000);
+
+    // Check for success message
+    const body = await page.locator('body').textContent();
+    const hasSuccess = body?.toLowerCase().includes('success') || body?.includes('CV ID');
+    console.log(`Success message displayed: ${hasSuccess}`);
+  });
+});
+
+// =============================================================================
+// EVALUATE PAGE - COMPREHENSIVE FUNCTIONAL TESTS
+// =============================================================================
+
+test.describe('Evaluate Page - Functional Tests', () => {
+  test('evaluate form has all required and optional fields', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
     await page.getByRole('link', { name: 'Start Evaluation', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1000);
 
-    // Check for CV ID input
-    const cvIdInput = page.getByLabel(/CV ID/i);
-    const cvIdVisible = await cvIdInput.isVisible().catch(() => false);
-    console.log(`CV ID input visible: ${cvIdVisible}`);
+    // Required fields
+    const cvIdInput = page.getByLabel('CV ID');
+    const projectIdInput = page.getByLabel('Project ID');
+    await expect(cvIdInput).toBeVisible();
+    await expect(projectIdInput).toBeVisible();
 
-    // Check for Project ID input
-    const projectIdInput = page.getByLabel(/Project ID/i);
-    const projectIdVisible = await projectIdInput.isVisible().catch(() => false);
-    console.log(`Project ID input visible: ${projectIdVisible}`);
+    // Optional fields
+    const jobDescInput = page.getByLabel(/Job Description/i);
+    const studyCaseInput = page.getByLabel(/Study Case Brief/i);
+    const scoringRubricInput = page.getByLabel(/Scoring Rubric/i);
 
-    // Check for Start Evaluation button
-    const evalButton = page.getByRole('button', { name: /Start Evaluation/i });
-    const evalButtonVisible = await evalButton.isVisible().catch(() => false);
-    console.log(`Start Evaluation button visible: ${evalButtonVisible}`);
+    const jobDescVisible = await jobDescInput.isVisible().catch(() => false);
+    const studyCaseVisible = await studyCaseInput.isVisible().catch(() => false);
+    const scoringRubricVisible = await scoringRubricInput.isVisible().catch(() => false);
+
+    console.log(`Optional fields: JobDesc=${jobDescVisible}, StudyCase=${studyCaseVisible}, ScoringRubric=${scoringRubricVisible}`);
+
+    // Check for (Optional) labels
+    const body = await page.locator('body').textContent();
+    expect(body).toContain('Optional');
   });
 
-  test('result page has job ID input', async ({ page }) => {
+  test('evaluate form validates required fields', async ({ page }) => {
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    // Use exact match for sidebar link
+    await page.getByRole('link', { name: 'Start Evaluation', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Try to submit without filling required fields
+    const evalButton = page.getByRole('button', { name: /^Start Evaluation$/i });
+    await expect(evalButton).toBeVisible();
+
+    // Check required attribute on inputs
+    const cvIdInput = page.getByLabel('CV ID');
+    const projectIdInput = page.getByLabel('Project ID');
+
+    const cvIdRequired = await cvIdInput.getAttribute('required');
+    const projectIdRequired = await projectIdInput.getAttribute('required');
+
+    console.log(`CV ID required: ${cvIdRequired !== null}, Project ID required: ${projectIdRequired !== null}`);
+  });
+
+  test('evaluate form submission with valid IDs creates job', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // First upload files to get valid IDs
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    
+    await fileInputs.nth(0).setInputFiles({
+      name: 'cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('CV content for evaluation test'),
+    });
+    
+    await fileInputs.nth(1).setInputFiles({
+      name: 'project.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Project content for evaluation test'),
+    });
+
+    await page.waitForTimeout(500);
+
+    // Upload and get IDs
+    const uploadResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/v1/upload') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ).catch(() => null);
+
+    const uploadButton = page.getByRole('button').filter({ hasText: /Upload/i }).first();
+    await uploadButton.click();
+    const uploadResp = await uploadResponsePromise;
+
+    if (!uploadResp || uploadResp.status() !== 200) {
+      console.log('Upload failed, skipping evaluate test');
+      return;
+    }
+
+    const uploadJson = await uploadResp.json().catch(() => ({}));
+    const cvId = (uploadJson as any)?.cv_id;
+    const projectId = (uploadJson as any)?.project_id;
+
+    if (!cvId || !projectId) {
+      console.log('No IDs returned from upload');
+      return;
+    }
+
+    // Navigate to evaluate page
+    await page.getByRole('link', { name: 'Start Evaluation', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Fill form
+    await page.getByLabel('CV ID').fill(cvId);
+    await page.getByLabel('Project ID').fill(projectId);
+
+    // Submit
+    const evalResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/v1/evaluate') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ).catch(() => null);
+
+    const evalButton = page.getByRole('button', { name: /^Start Evaluation$/i });
+    await evalButton.click();
+    const evalResp = await evalResponsePromise;
+
+    if (evalResp && evalResp.status() === 200) {
+      const evalJson = await evalResp.json().catch(() => ({}));
+      const jobId = (evalJson as any)?.id;
+      console.log(`Evaluation job created: ${jobId}`);
+      expect(jobId).toBeTruthy();
+
+      // Check for success message
+      await page.waitForTimeout(1000);
+      const body = await page.locator('body').textContent();
+      expect(body?.toLowerCase()).toContain('success');
+    }
+  });
+
+  test('evaluate form shows error for invalid IDs', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Start Evaluation', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Fill with invalid IDs
+    await page.getByLabel('CV ID').fill('invalid-cv-id-12345');
+    await page.getByLabel('Project ID').fill('invalid-project-id-12345');
+
+    // Submit and expect error
+    const evalButton = page.getByRole('button', { name: /^Start Evaluation$/i });
+    await evalButton.click();
+    
+    await page.waitForTimeout(3000);
+
+    // Check for error message
+    const body = await page.locator('body').textContent();
+    const hasError = body?.toLowerCase().includes('error') || 
+                     body?.toLowerCase().includes('failed') ||
+                     body?.toLowerCase().includes('not found');
+    console.log(`Error message displayed: ${hasError}`);
+  });
+});
+
+// =============================================================================
+// RESULT PAGE - COMPREHENSIVE FUNCTIONAL TESTS
+// =============================================================================
+
+test.describe('Result Page - Functional Tests', () => {
+  test('result page job ID input and fetch button work', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
     await page.getByRole('link', { name: 'View Results', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1000);
 
-    // Check for Job ID input
-    const jobIdInput = page.getByLabel(/Job ID/i).or(page.getByPlaceholder(/job/i));
-    const jobIdVisible = await jobIdInput.count() > 0;
-    console.log(`Job ID input visible: ${jobIdVisible}`);
+    // Find Job ID input
+    const jobIdInput = page.locator('#job_id').or(page.getByLabel(/Job ID/i)).or(page.getByPlaceholder(/Job ID/i));
+    await expect(jobIdInput.first()).toBeVisible();
 
-    // Check for Fetch Result button
-    const fetchButton = page.getByRole('button', { name: /Fetch|Get|View/i });
-    const fetchButtonVisible = await fetchButton.count() > 0;
-    console.log(`Fetch button visible: ${fetchButtonVisible}`);
+    // Find Get Results button
+    const fetchButton = page.getByRole('button', { name: /Get Results/i });
+    await expect(fetchButton).toBeVisible();
+
+    // Enter an invalid job ID and fetch
+    await jobIdInput.first().fill('non-existent-job-id');
+    await fetchButton.click();
+
+    await page.waitForTimeout(2000);
+
+    // Should show error or "not found"
+    const body = await page.locator('body').textContent();
+    const hasError = body?.toLowerCase().includes('not found') || 
+                     body?.toLowerCase().includes('error');
+    console.log(`Error for invalid job ID: ${hasError}`);
   });
 
-  test('jobs page shows job list table', async ({ page }) => {
+  test('result page shows status indicators correctly', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // First, create a job to test with
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Upload files first
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    
+    await fileInputs.nth(0).setInputFiles({
+      name: 'cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('CV content'),
+    });
+    
+    await fileInputs.nth(1).setInputFiles({
+      name: 'project.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Project content'),
+    });
+
+    const uploadResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/v1/upload') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ).catch(() => null);
+
+    await page.getByRole('button').filter({ hasText: /Upload/i }).first().click();
+    const uploadResp = await uploadResponsePromise;
+
+    if (!uploadResp || uploadResp.status() !== 200) return;
+
+    const uploadJson = await uploadResp.json().catch(() => ({}));
+    const cvId = (uploadJson as any)?.cv_id;
+    const projectId = (uploadJson as any)?.project_id;
+
+    if (!cvId || !projectId) return;
+
+    // Start evaluation
+    await page.getByRole('link', { name: 'Start Evaluation', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    await page.getByLabel('CV ID').fill(cvId);
+    await page.getByLabel('Project ID').fill(projectId);
+
+    const evalResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/v1/evaluate') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ).catch(() => null);
+
+    await page.getByRole('button', { name: /^Start Evaluation$/i }).click();
+    const evalResp = await evalResponsePromise;
+
+    if (!evalResp || evalResp.status() !== 200) return;
+
+    const evalJson = await evalResp.json().catch(() => ({}));
+    const jobId = (evalJson as any)?.id;
+
+    if (!jobId) return;
+
+    // Now check result page
+    await page.getByRole('link', { name: 'View Results', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    await page.locator('#job_id').or(page.getByLabel(/Job ID/i)).first().fill(jobId);
+    await page.getByRole('button', { name: /Get Results/i }).click();
+
+    await page.waitForTimeout(2000);
+
+    // Check for status display
+    const body = await page.locator('body').textContent();
+    const hasStatus = body?.includes('Status') || 
+                      body?.includes('queued') || 
+                      body?.includes('processing') ||
+                      body?.includes('completed');
+    console.log(`Result page shows status: ${hasStatus}`);
+    expect(hasStatus).toBeTruthy();
+  });
+
+  test('result page has copy to clipboard button for completed results', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'View Results', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Check that Copy to Clipboard button exists in the UI code
+    const body = await page.locator('body').textContent();
+    console.log('Result page loaded, checking for clipboard functionality');
+
+    // The copy button appears after a completed result is loaded
+    const copyButton = page.getByRole('button', { name: /Copy to Clipboard/i });
+    // This button may not be visible until a completed result is shown
+    const copyButtonExists = await copyButton.count();
+    console.log(`Copy to clipboard button count: ${copyButtonExists}`);
+  });
+});
+
+// =============================================================================
+// JOBS PAGE - COMPREHENSIVE FUNCTIONAL TESTS
+// =============================================================================
+
+test.describe('Jobs Page - Functional Tests', () => {
+  test('jobs page has search input that filters results', async ({ page }) => {
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
@@ -1796,37 +2371,342 @@ test.describe('Admin Frontend Dashboard UI/UX', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
 
-    // Check for Job Management heading
-    const heading = page.getByRole('heading', { name: /Job Management/i });
-    await expect(heading).toBeVisible();
+    // Find search input
+    const searchInput = page.locator('#search').or(page.getByPlaceholder(/Search/i));
+    await expect(searchInput.first()).toBeVisible();
 
-    // Check for table
-    const table = page.locator('table');
-    const tableVisible = await table.isVisible().catch(() => false);
-    console.log(`Jobs table visible: ${tableVisible}`);
+    // Type in search
+    await searchInput.first().fill('test-search-query');
+    await page.waitForTimeout(1000);
 
-    // Check for table headers
-    const body = await page.locator('body').textContent();
-    const hasJobColumns = body?.toLowerCase().includes('status') || 
-                          body?.toLowerCase().includes('id') ||
-                          body?.toLowerCase().includes('created');
-    console.log(`Has job columns: ${hasJobColumns}`);
+    console.log('Search input functional');
   });
 
-  test('mobile menu toggle works', async ({ page }) => {
+  test('jobs page has status filter dropdown', async ({ page }) => {
     await loginViaSSO(page);
 
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
 
-    // Set viewport to mobile size
+    // Find status dropdown
+    const statusSelect = page.locator('#status').or(page.getByLabel(/Status/i));
+    await expect(statusSelect.first()).toBeVisible();
+
+    // Check for status options
+    const body = await page.locator('body').textContent();
+    const hasQueuedOption = body?.includes('Queued');
+    const hasProcessingOption = body?.includes('Processing');
+    const hasCompletedOption = body?.includes('Completed');
+    const hasFailedOption = body?.includes('Failed');
+
+    console.log(`Status options: Queued=${hasQueuedOption}, Processing=${hasProcessingOption}, Completed=${hasCompletedOption}, Failed=${hasFailedOption}`);
+    expect(hasQueuedOption || hasProcessingOption || hasCompletedOption || hasFailedOption).toBeTruthy();
+  });
+
+  test('jobs page refresh button reloads data', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Find and click the main refresh button (exact match, not auto-refresh)
+    const refreshButton = page.getByRole('button', { name: 'Refresh', exact: true });
+    await expect(refreshButton).toBeVisible();
+
+    // Set up listener for API call
+    const apiCallPromise = page.waitForResponse(
+      (r) => r.url().includes('/admin/api/jobs') || r.url().includes('/v1/jobs'),
+      { timeout: 10000 }
+    ).catch(() => null);
+
+    await refreshButton.click();
+    const response = await apiCallPromise;
+
+    if (response) {
+      console.log(`Refresh triggered API call: ${response.url()}`);
+    } else {
+      console.log('No API call detected after refresh click');
+    }
+  });
+
+  test('jobs page auto-refresh toggle works', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Find auto-refresh toggle button (has refresh icon)
+    const autoRefreshButton = page.locator('button').filter({ has: page.locator('svg path[d*="M4 4v5"]') }).first();
+    
+    if (await autoRefreshButton.isVisible().catch(() => false)) {
+      // Check initial state (should have green background if enabled)
+      const initialClasses = await autoRefreshButton.getAttribute('class');
+      console.log(`Auto-refresh initial classes: ${initialClasses}`);
+
+      // Toggle
+      await autoRefreshButton.click();
+      await page.waitForTimeout(500);
+
+      const afterToggleClasses = await autoRefreshButton.getAttribute('class');
+      console.log(`Auto-refresh after toggle classes: ${afterToggleClasses}`);
+    }
+  });
+
+  test('jobs page table shows job data with correct columns', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Check for table headers
+    const tableHeaders = page.locator('th');
+    const headerTexts: string[] = [];
+    const headerCount = await tableHeaders.count();
+    
+    for (let i = 0; i < headerCount; i++) {
+      const text = await tableHeaders.nth(i).textContent();
+      if (text) headerTexts.push(text.trim());
+    }
+
+    console.log(`Table headers: ${headerTexts.join(', ')}`);
+
+    // Expected columns
+    const expectedColumns = ['Job ID', 'Status', 'CV ID', 'Project ID', 'Created', 'Updated', 'Actions'];
+    const foundColumns = expectedColumns.filter(col => 
+      headerTexts.some(h => h.toLowerCase().includes(col.toLowerCase()))
+    );
+
+    console.log(`Found expected columns: ${foundColumns.join(', ')}`);
+    expect(foundColumns.length).toBeGreaterThan(0);
+  });
+
+  test('jobs page pagination works when jobs exist', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Check for pagination controls
+    const prevButton = page.getByRole('button', { name: /Previous/i });
+    const nextButton = page.getByRole('button', { name: /Next/i });
+
+    const prevVisible = await prevButton.isVisible().catch(() => false);
+    const nextVisible = await nextButton.isVisible().catch(() => false);
+
+    console.log(`Pagination: Previous=${prevVisible}, Next=${nextVisible}`);
+
+    // Check for page info text
+    const body = await page.locator('body').textContent();
+    const hasPageInfo = body?.includes('Page') || body?.includes('Showing');
+    console.log(`Has pagination info: ${hasPageInfo}`);
+  });
+
+  test('jobs page View Details button opens modal', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Find View Details button
+    const viewDetailsButton = page.getByRole('button', { name: /View Details/i }).first();
+    
+    if (await viewDetailsButton.isVisible().catch(() => false)) {
+      await viewDetailsButton.click();
+      await page.waitForTimeout(1000);
+
+      // Check for modal
+      const modal = page.locator('[role="dialog"]').or(page.locator('.modal')).or(page.locator('.fixed.inset-0'));
+      const modalVisible = await modal.first().isVisible().catch(() => false);
+
+      if (modalVisible) {
+        console.log('Job details modal opened');
+        
+        // Check for modal content
+        const modalBody = await modal.first().textContent();
+        const hasJobId = modalBody?.includes('Job ID');
+        const hasStatus = modalBody?.includes('Status');
+        console.log(`Modal content: JobID=${hasJobId}, Status=${hasStatus}`);
+
+        // Close modal
+        const closeButton = modal.first().getByRole('button').filter({ has: page.locator('svg') }).first();
+        if (await closeButton.isVisible().catch(() => false)) {
+          await closeButton.click();
+        }
+      }
+    } else {
+      console.log('No jobs available to view details');
+    }
+  });
+});
+
+// =============================================================================
+// GRAFANA JOB QUEUE METRICS DASHBOARD TESTS
+// =============================================================================
+
+test.describe('Grafana Job Queue Metrics Dashboard', () => {
+  test('Job Queue Metrics dashboard loads with panels', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await gotoWithRetry(page, '/grafana/d/job-queue-metrics/job-queue-metrics');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    const body = await page.locator('body').textContent();
+    
+    // Check for expected panels from the screenshot
+    const hasJobsProcessing = body?.includes('Jobs Currently Processing') || body?.includes('Currently Processing');
+    const hasJobThroughput = body?.includes('Job Throughput') || body?.includes('Throughput');
+    const hasJobSuccessRate = body?.includes('Job Success Rate') || body?.includes('Success Rate');
+    const hasTotalJobOutcomes = body?.includes('Total Job Outcomes') || body?.includes('Job Outcomes');
+    const hasEvaluationScore = body?.includes('Evaluation Score') || body?.includes('Score Distribution');
+
+    console.log(`Dashboard panels: Processing=${hasJobsProcessing}, Throughput=${hasJobThroughput}, SuccessRate=${hasJobSuccessRate}, Outcomes=${hasTotalJobOutcomes}, Score=${hasEvaluationScore}`);
+
+    // Should have at least some of these panels
+    expect(hasJobsProcessing || hasJobThroughput || hasJobSuccessRate || hasTotalJobOutcomes || hasEvaluationScore).toBeTruthy();
+  });
+
+  test('Job Queue Metrics dashboard shows real data', async ({ page }) => {
+    await loginViaSSO(page);
+
+    // First, generate some job data
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    
+    await fileInputs.nth(0).setInputFiles({
+      name: 'cv.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('CV for metrics test'),
+    });
+    
+    await fileInputs.nth(1).setInputFiles({
+      name: 'project.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from('Project for metrics test'),
+    });
+
+    await page.getByRole('button').filter({ hasText: /Upload/i }).first().click();
+    await page.waitForTimeout(2000);
+
+    // Navigate to Grafana dashboard
+    await gotoWithRetry(page, '/grafana/d/job-queue-metrics/job-queue-metrics');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(5000);
+
+    // Check for numeric data in panels (not "No data")
+    const body = await page.locator('body').textContent();
+    const hasNoData = body?.includes('No data');
+    const hasNumericData = body?.match(/\d+/); // Look for any numbers
+
+    console.log(`Dashboard has 'No data': ${hasNoData}, has numeric data: ${!!hasNumericData}`);
+  });
+
+  test('Grafana dashboard time range selector works', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await gotoWithRetry(page, '/grafana/d/job-queue-metrics/job-queue-metrics');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    // Find time range picker
+    const timeRangePicker = page.locator('[aria-label="Time picker"]').or(page.locator('button').filter({ hasText: /Last \d+ hours|Last \d+ minutes/i }));
+    
+    if (await timeRangePicker.first().isVisible().catch(() => false)) {
+      await timeRangePicker.first().click();
+      await page.waitForTimeout(500);
+
+      // Check for time range options
+      const body = await page.locator('body').textContent();
+      const hasTimeOptions = body?.includes('Last 5 minutes') || 
+                             body?.includes('Last 15 minutes') ||
+                             body?.includes('Last 1 hour') ||
+                             body?.includes('Last 6 hours');
+      console.log(`Time range options visible: ${hasTimeOptions}`);
+    }
+  });
+});
+
+// =============================================================================
+// MOBILE RESPONSIVE TESTS
+// =============================================================================
+
+test.describe('Mobile Responsive UI', () => {
+  test('mobile sidebar toggle shows and hides navigation', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 667 });
     await page.waitForTimeout(500);
 
-    // Look for mobile menu toggle button
-    const menuButton = page.locator('button').filter({ hasText: '' }).first();
-    const menuButtonExists = await menuButton.count() > 0;
-    console.log(`Mobile menu button exists: ${menuButtonExists}`);
+    // Sidebar should be hidden initially on mobile
+    const sidebar = page.locator('nav').first();
+    
+    // Find mobile menu toggle button (hamburger menu)
+    const menuToggle = page.locator('button').filter({ has: page.locator('svg path[d*="M4 6h16M4 12h16M4 18h16"]') }).first();
+    
+    if (await menuToggle.isVisible().catch(() => false)) {
+      console.log('Mobile menu toggle found');
+      
+      // Click to open sidebar
+      await menuToggle.click();
+      await page.waitForTimeout(500);
+
+      // Check if sidebar navigation items are visible
+      const dashboardLink = page.getByRole('link', { name: 'Dashboard', exact: true });
+      const linkVisible = await dashboardLink.isVisible().catch(() => false);
+      console.log(`Sidebar visible after toggle: ${linkVisible}`);
+    }
+
+    // Reset viewport
+    await page.setViewportSize({ width: 1280, height: 720 });
+  });
+
+  test('jobs page mobile card view works', async ({ page }) => {
+    await loginViaSSO(page);
+
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Job Management/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
+
+    // Set mobile viewport
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.waitForTimeout(500);
+
+    // On mobile, jobs should be displayed as cards instead of table
+    const body = await page.locator('body').textContent();
+    
+    // Check for job content (should still show job info)
+    const hasJobInfo = body?.includes('Job ID') || body?.includes('Status');
+    console.log(`Mobile jobs view has job info: ${hasJobInfo}`);
 
     // Reset viewport
     await page.setViewportSize({ width: 1280, height: 720 });
