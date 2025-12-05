@@ -108,6 +108,11 @@ jobs:
             # Deploy with blue-green strategy
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             
+            # Reload nginx to pick up new config files
+            echo "Reloading nginx configuration..."
+            docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || \
+              docker compose -f docker-compose.prod.yml restart nginx
+            
             # Wait for health
             echo "Waiting for services to be healthy..."
             sleep 30
