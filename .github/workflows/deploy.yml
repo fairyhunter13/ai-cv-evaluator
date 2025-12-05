@@ -941,20 +941,27 @@ jobs:
             sleep 0.1
           done
           
-          echo "Checking Prometheus metrics..."
-          HTTP_METRICS=$(curl -sfk 'https://localhost/prometheus/api/v1/query?query=http_requests_total' || echo "")
+          echo "Checking Prometheus metrics via Docker network (bypassing SSO)..."
+          # Query Prometheus directly on internal network to bypass oauth2-proxy SSO
+          HTTP_METRICS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/api/v1/query?query=http_requests_total' 2>/dev/null || echo "")
           echo "http_requests_total metric sample:"
-          echo "$HTTP_METRICS" | head -c 300
+          echo "$HTTP_METRICS" | head -c 500
           
-          ERROR_RATE=$(curl -sfk 'https://localhost/prometheus/api/v1/query?query=sum(rate(http_requests_total{status!="OK"}[5m]))' || echo "")
+          ERROR_RATE=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/api/v1/query?query=sum(rate(http_requests_total{status!="OK"}[5m]))' 2>/dev/null || echo "")
           echo "Error rate query result:"
           echo "$ERROR_RATE" | head -c 300
+          
+          # Check Prometheus scrape targets
+          echo "Checking Prometheus targets..."
+          TARGETS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/api/v1/targets' 2>/dev/null || echo "")
+          echo "Prometheus targets:"
+          echo "$TARGETS" | head -c 500
           
           echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
           ALERT_FIRING=0
           for attempt in $(seq 1 15); do
-            ALL_ALERTS=$(curl -sfk "https://localhost/prometheus/api/v1/alerts" || echo "")
-            ALERT_RESP=$(curl -sfk 'https://localhost/prometheus/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}' || echo "")
+            ALL_ALERTS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/api/v1/alerts' 2>/dev/null || echo "")
+            ALERT_RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/api/v1/query?query=ALERTS{alertname="HighHttpErrorRate"}' 2>/dev/null || echo "")
             if echo "$ALERT_RESP" | grep -q "HighHttpErrorRate"; then
               ALERT_FIRING=1
               echo "HighHttpErrorRate is firing/pending (attempt $attempt)."
