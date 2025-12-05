@@ -136,6 +136,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Wait for deployment to stabilize
+        run: |
+          echo "Waiting 60 seconds for deployment to stabilize..."
+          sleep 60
+
+      - name: Debug - Test health endpoints with curl
+        run: |
+          echo "Testing health endpoints with curl..."
+          curl -sL -w "\nHTTP_CODE: %{http_code}\n" "${{ env.PRODUCTION_URL }}/healthz" || true
+          curl -sL -w "\nHTTP_CODE: %{http_code}\n" "${{ env.PRODUCTION_URL }}/readyz" || true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
