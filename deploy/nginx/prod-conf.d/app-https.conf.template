@@ -160,13 +160,15 @@ server {
     proxy_pass http://$grafana_upstream;
   }
 
-  # Prometheus
+  # Prometheus - configured with --web.route-prefix=/prometheus
+  # Note: When using variables in proxy_pass, nginx doesn't do URI replacement,
+  # so we must pass $request_uri to preserve the full path including /prometheus/
   location /prometheus/ {
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_pass http://$prometheus_upstream/;
+    proxy_pass http://$prometheus_upstream$request_uri;
   }
 
   # Jaeger UI - redirect bare /jaeger/ to /jaeger/search
