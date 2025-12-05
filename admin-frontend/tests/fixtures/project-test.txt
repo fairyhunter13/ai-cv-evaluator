@@ -1,0 +1,56 @@
+PROJECT REQUIREMENTS DOCUMENT
+
+Project: AI-Powered CV Evaluation Platform
+Version: 1.0
+Date: 2024
+
+EXECUTIVE SUMMARY
+Build an intelligent CV evaluation system that automatically assesses candidate 
+qualifications against job requirements using AI/ML techniques. The platform should 
+provide objective scoring and detailed feedback to streamline the hiring process.
+
+TECHNICAL REQUIREMENTS
+
+1. Backend Development
+   - Build RESTful API using Go with Gin/Echo framework
+   - Implement microservices architecture with proper separation of concerns
+   - Design database schema for PostgreSQL with proper indexing
+   - Implement message queue integration (Redis/Kafka) for async processing
+   - Add comprehensive logging and observability (OpenTelemetry)
+
+2. AI/ML Integration
+   - Integrate with LLM APIs (OpenAI/Anthropic) for text analysis
+   - Implement vector embeddings for semantic similarity matching
+   - Build scoring algorithms based on configurable rubrics
+   - Handle rate limiting and fallback strategies
+
+3. Frontend Development
+   - Create modern SPA using Vue.js/React with TypeScript
+   - Implement responsive design for mobile/desktop
+   - Build intuitive file upload with drag-and-drop
+   - Display results with interactive visualizations
+
+4. DevOps & Infrastructure
+   - Containerize with Docker and orchestrate with Kubernetes
+   - Set up CI/CD pipeline with GitHub Actions
+   - Implement monitoring with Prometheus/Grafana
+   - Configure distributed tracing with Jaeger
+
+REQUIRED SKILLS
+- Strong Go programming experience (3+ years)
+- Experience with microservices and distributed systems
+- Familiarity with AI/ML concepts and LLM integration
+- Frontend development with modern JavaScript frameworks
+- Cloud infrastructure (AWS/GCP) and Kubernetes experience
+
+EVALUATION CRITERIA
+1. Technical Depth (40%) - Expertise in required technologies
+2. Problem Solving (25%) - Approach to complex challenges
+3. Communication (20%) - Clarity in documentation and code
+4. Experience (15%) - Relevant project history
+
+DELIVERABLES
+- Working prototype with core features
+- API documentation (OpenAPI spec)
+- Unit and integration tests (>80% coverage)
+- Deployment scripts and documentation
