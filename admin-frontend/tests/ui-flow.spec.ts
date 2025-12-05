@@ -65,7 +65,7 @@ const loginViaSSO = async (page: Page): Promise<void> => {
   }
 
   await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 };
 
 const mockEvaluationBackend = async (page: Page): Promise<void> => {

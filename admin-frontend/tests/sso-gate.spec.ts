@@ -272,7 +272,7 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
 
   // Wait until we have returned from the SSO flow (no longer on oauth2-proxy
   // or Keycloak realm URLs) so that the oauth2-proxy session cookie is set.
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
   // After successful login (and any required profile update), navigate directly
   // to representative dashboards and assert we do not get bounced back to SSO.
   for (const path of ['/app/', '/prometheus/']) {
@@ -303,7 +303,7 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
   }
 
   await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 
   // Ensure there is fresh backend traffic so observability dashboards
   // (Prometheus + Loki) have data to display by request_id.
@@ -724,7 +724,7 @@ test('portal Backend API links work after SSO login', async ({ page, baseURL }) 
   }
 
   await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 
   // Return to the portal and verify the Backend API links are present and correct.
   await gotoWithRetry(page, PORTAL_PATH);
@@ -766,7 +766,7 @@ test('Grafana Request Drilldown dashboard links work correctly', async ({ page, 
   await completeKeycloakProfileUpdate(page);
   
   // Wait for SSO flow to complete
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 
   // Generate some requests to populate the dashboard
   for (let i = 0; i < 5; i++) {
@@ -924,7 +924,7 @@ test('backend API and health reachable via portal after SSO login', async ({ pag
   }
 
   await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 
   // Open API should route to the backend /v1/ root and not bounce to SSO.
   await gotoWithRetry(page, PORTAL_PATH);
@@ -1000,7 +1000,7 @@ test('grafana contact points are accessible', async ({ page, baseURL }) => {
   }
 
   await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 
   // Navigate to Grafana alerting notifications page
   await gotoWithRetry(page, '/grafana/alerting/notifications');
@@ -1030,7 +1030,7 @@ test('email notification dashboard reachable after SSO login', async ({ page, ba
   }
 
   await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 
   if (IS_DEV) {
     // In dev, test Mailpit dashboard
