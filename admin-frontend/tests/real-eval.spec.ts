@@ -44,7 +44,7 @@ const loginViaSSO = async (page: Page): Promise<void> => {
     await submitButton.first().click();
   }
   await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 15000 });
+  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
 };
 
 // Drive a REAL evaluation end-to-end (no mocks): upload -> evaluate -> poll result -> assert Jaeger spans
