@@ -70,6 +70,13 @@ jobs:
         id: safety_check
         run: |
           # Check if this is a production deployment
+          # Skip tag checks in fast_iteration mode
+          if [[ "${{ github.event.inputs.fast_iteration }}" == "true" ]]; then
+            echo "Fast iteration mode enabled - skipping tag requirements"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           if [[ "${{ github.event.inputs.environment || 'production' }}" == "production" && "${{ github.event.inputs.force_deploy }}" != "true" ]]; then
             # Ensure we're deploying a tagged version to production
             if [[ "${{ github.ref }}" != refs/tags/* ]]; then
