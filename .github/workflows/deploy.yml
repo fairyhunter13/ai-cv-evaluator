@@ -924,17 +924,20 @@ jobs:
           set -e
           cd ~/ai-cv-evaluator
           
-          echo "Fetching initial Mailpit message count..."
-          INITIAL_RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
+          # Set up Docker network for internal queries
+          NETWORK="ai-cv-evaluator_default"
+          docker pull curlimages/curl:latest >/dev/null 2>&1 || true
+          
+          echo "Fetching initial Mailpit message count via Docker network..."
+          # Query Mailpit directly - it uses --webroot /mailpit/ so API is at /mailpit/api/v1/
+          INITIAL_RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || echo "")
           INITIAL_TOTAL=$(echo "$INITIAL_RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
           [ -z "$INITIAL_TOTAL" ] && INITIAL_TOTAL=0
           echo "Initial Mailpit total: $INITIAL_TOTAL"
           
           echo "Generating HTTP errors to trigger HighHttpErrorRate..."
           # Hit backend directly via Docker network to bypass oauth2-proxy SSO
-          NETWORK="ai-cv-evaluator_default"
           echo "Using Docker network: $NETWORK"
-          docker pull curlimages/curl:latest >/dev/null 2>&1 || true
           for i in $(seq 1 30); do
             HTTP_CODE=$(docker run --rm --network "$NETWORK" curlimages/curl -s -o /dev/null -w "%{http_code}" "http://backend_blue:8080/v1/__nonexistent_path_for_errors" 2>/dev/null || echo "000")
             echo "Request $i: HTTP $HTTP_CODE"
@@ -982,10 +985,10 @@ jobs:
           fi
           
           if [ "$ALERT_FIRING" -eq 1 ]; then
-            echo "Waiting for alert email to arrive in Mailpit..."
+            echo "Waiting for alert email to arrive in Mailpit via Docker network..."
             EMAIL_RECEIVED=0
             for attempt in $(seq 1 18); do
-              RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
+              RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || echo "")
               TOTAL=$(echo "$RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
               [ -z "$TOTAL" ] && TOTAL=0
               if [ "$TOTAL" -gt "$INITIAL_TOTAL" ]; then
