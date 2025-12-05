@@ -928,12 +928,15 @@ jobs:
           NETWORK="ai-cv-evaluator_default"
           docker pull curlimages/curl:latest >/dev/null 2>&1 || true
           
-          echo "Fetching initial Mailpit message count via Docker network..."
-          # Query Mailpit directly - it uses --webroot /mailpit/ so API is at /mailpit/api/v1/
+          echo "Clearing all Mailpit messages before test..."
+          # DELETE without body clears all messages
+          docker run --rm --network "$NETWORK" curlimages/curl -s -X DELETE 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || true
+          
+          echo "Verifying Mailpit is cleared..."
           INITIAL_RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || echo "")
           INITIAL_TOTAL=$(echo "$INITIAL_RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
           [ -z "$INITIAL_TOTAL" ] && INITIAL_TOTAL=0
-          echo "Initial Mailpit total: $INITIAL_TOTAL"
+          echo "Mailpit message count after clearing: $INITIAL_TOTAL"
           
           echo "Generating HTTP errors to trigger HighHttpErrorRate..."
           # Hit backend via 'app' alias (same as Prometheus scrape target) to ensure metrics are recorded
@@ -1145,5 +1148,21 @@ jobs:
                 -d "${data}" | jq '.success, .errors'
             fi
           done
+
+      - name: Purge Cloudflare cache
+        run: |
+          echo "Purging Cloudflare cache to ensure fresh content..."
+          response=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+          
+          success=$(echo "$response" | jq -r '.success')
+          if [ "$success" = "true" ]; then
+            echo "✓ Cloudflare cache purged successfully"
+          else
+            echo "⚠ Cache purge failed:"
+            echo "$response" | jq '.errors'
+          fi
 
   # Slack notifications intentionally omitted; see Windsurf rules for rationale
