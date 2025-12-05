@@ -864,21 +864,21 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
 
       - name: Run production Playwright tests
-        # Only run full SSO Playwright tests when validation is triggered manually.
-        # For automatic runs after Deploy (push tags), we rely on health/SSL/DNS checks.
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_sso_tests != 'true' }}
+        # Run SSO and alerting tests on both manual triggers and tag pushes
+        if: ${{ github.event.inputs.skip_sso_tests != 'true' }}
         working-directory: admin-frontend
         env:
           E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
           SSO_USERNAME: ${{ secrets.PROD_SSO_USERNAME }}
           SSO_PASSWORD: ${{ secrets.PROD_SSO_PASSWORD }}
         run: |
-          # Run a subset of tests suitable for production validation
+          # Run production validation tests including health, SSO, and alerting
           npx playwright test \
             --project=chromium \
-            --grep "health|Backend API|SSO" \
+            --grep "health|Backend API|SSO|Alerting \+ Mailpit" \
             --reporter=list \
-            --timeout=60000
+            --retries=2 \
+            --timeout=120000
 
       - name: Validate SSL certificates
         run: |
