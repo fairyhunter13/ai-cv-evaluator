@@ -33,6 +33,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
 
 # Temporarily disabled concurrency for debugging
 # concurrency:
