@@ -903,6 +903,68 @@ jobs:
             echo "✓ Service validation completed"
           '
 
+      - name: Trigger test alert and verify Mailpit via SSH
+        run: |
+          echo "=== Triggering test alert and verifying Mailpit via SSH ==="
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd ~/ai-cv-evaluator
+            
+            echo "Fetching initial Mailpit message count..."
+            INITIAL_RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
+            INITIAL_TOTAL=$(echo "$INITIAL_RESP" | grep -o "\"total\":[0-9]*" | head -1 | sed "s/[^0-9]//g")
+            [ -z "$INITIAL_TOTAL" ] && INITIAL_TOTAL=0
+            echo "Initial Mailpit total: $INITIAL_TOTAL"
+            
+            echo "Generating HTTP errors to trigger HighHttpErrorRate..."
+            for i in $(seq 1 20); do
+              curl -sk -o /dev/null -w "%{http_code}\n" "https://localhost/v1/__nonexistent_path_for_errors" || true
+              sleep 0.1
+            done
+            
+            echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
+            ALERT_FIRING=0
+            for attempt in $(seq 1 12); do
+              ALERT_RESP=$(curl -sfk "https://localhost/prometheus/api/v1/query?query=ALERTS{alertname=\"HighHttpErrorRate\",alertstate=\"firing\"}" || echo "")
+              if echo "$ALERT_RESP" | grep -q "HighHttpErrorRate"; then
+                ALERT_FIRING=1
+                echo "HighHttpErrorRate is firing (attempt $attempt)."
+                break
+              fi
+              echo "Attempt $attempt/12: alert not firing yet, waiting 10s..."
+              sleep 10
+            done
+            
+            if [ "$ALERT_FIRING" -ne 1 ]; then
+              echo "HighHttpErrorRate alert did not fire within expected time."
+              exit 1
+            fi
+            
+            echo "Waiting for alert email to arrive in Mailpit..."
+            EMAIL_RECEIVED=0
+            for attempt in $(seq 1 18); do
+              RESP=$(curl -sfk https://localhost/mailpit/api/v1/messages || echo "")
+              TOTAL=$(echo "$RESP" | grep -o "\"total\":[0-9]*" | head -1 | sed "s/[^0-9]//g")
+              [ -z "$TOTAL" ] && TOTAL=0
+              if [ "$TOTAL" -gt "$INITIAL_TOTAL" ]; then
+                EMAIL_RECEIVED=1
+                echo "Mailpit message count increased from $INITIAL_TOTAL to $TOTAL"
+                echo "Sample messages payload:"
+                echo "$RESP" | head -c 500 || true
+                break
+              fi
+              echo "Attempt $attempt/18: no new emails yet (total=$TOTAL), waiting 10s..."
+              sleep 10
+            done
+            
+            if [ "$EMAIL_RECEIVED" -ne 1 ]; then
+              echo "No alert email arrived in Mailpit within expected time."
+              exit 1
+            fi
+            
+            echo "✓ Alert pipeline verified end-to-end (HighHttpErrorRate -> Grafana -> Mailpit)."
+          '
+
       - name: Validate SSL certificates
         run: |
           echo "=== SSL Certificate Validation ==="
