@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Client is a minimal Qdrant HTTP client used by the app.
@@ -26,10 +27,16 @@ type Client struct {
 
 // New constructs a Qdrant client with baseURL and optional apiKey.
 func New(baseURL, apiKey string) *Client {
+	// Use otelhttp transport for distributed tracing
+	transport := otelhttp.NewTransport(http.DefaultTransport,
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return fmt.Sprintf("Qdrant %s %s", r.Method, r.URL.Path)
+		}),
+	)
 	return &Client{
 		baseURL:    baseURL,
 		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: &http.Client{Timeout: 10 * time.Second, Transport: transport},
 		obs: observability.NewIntegratedObservableClient(
 			observability.ConnectionTypeVectorDB,
 			observability.OperationTypeQuery,
