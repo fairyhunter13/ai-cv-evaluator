@@ -27,19 +27,30 @@ All observability UIs are protected by SSO. After authenticating via Keycloak:
 - **Location**: Grafana → Dashboards → AI Metrics
 - **Purpose**: Monitor AI provider performance, rate limits, and costs
 - **Key Panels**:
-  - Request latency by provider (Groq, OpenRouter, OpenAI)
-  - Rate limit hits and cooldown periods
-  - Model usage distribution
-  - Token consumption
+  - **Total AI Requests** - Cumulative count of all AI provider API calls
+  - **Median AI Latency (p50)** - 50th percentile response time
+  - **95th Percentile Latency** - p95 response time for SLA monitoring
+  - **Total Tokens Used** - Cumulative token consumption across providers
+  - **AI Request Rate** - Requests per second by provider and operation
+  - **AI Request Latency Percentiles** - p95/p99 latency timeseries
+  - **Median Project Score** - Average project evaluation scores
+  - **Median CV Match Rate** - Average CV-to-job matching scores
+  - **Total AI Requests by Provider** - Breakdown by Groq, OpenRouter, OpenAI
+- **Note**: AI metrics are recorded by the worker process when evaluations call AI providers. Metrics will show 0 if no evaluations have been triggered recently.
 
 ### 2. HTTP Metrics Dashboard
 - **Location**: Grafana → Dashboards → HTTP Metrics
-- **Purpose**: API endpoint performance
+- **Purpose**: API endpoint performance and error tracking
 - **Key Panels**:
-  - Request rate by endpoint
-  - Latency percentiles (p50, p95, p99)
-  - Error rate by status code
-  - Request size distribution
+  - **Request Rate by Route** - Requests per second by API endpoint
+  - **Request Distribution by Status** - Pie chart of HTTP status codes
+  - **Response Time Percentiles by Route** - p50/p95/p99 latency by endpoint
+  - **95th Percentile Response Time** - Gauge for overall p95 latency
+  - **Error Rate** - Overall error rate percentage
+  - **Error Rate Over Time by Route** - Timeseries showing which routes are causing errors
+  - **Top Error Routes** - Table of routes with highest error counts, including status codes
+  - **AI Provider Request Rate** - Rate of AI provider calls
+  - **AI Provider Response Time** - Latency of AI provider calls
 
 ### 3. Job Queue Metrics Dashboard
 - **Location**: Grafana → Dashboards → Job Queue Metrics
