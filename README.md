@@ -2,9 +2,39 @@
 
 Backend service that ingests a candidate CV + project report, evaluates against a job description + study case brief, and returns structured results. Built with Go and Clean Architecture.
 
+## Admin UI & Dashboards
+
+### Production Site & Admin Login
+
+- **Production site**: https://ai-cv-evaluator.web.id
+- **Admin Dashboard**: https://ai-cv-evaluator.web.id/app/dashboard
+- **SSO Login** (Keycloak):
+  - Username: `admin`
+  - Password: `admin123`
+
+### Observability Stack (Production)
+
+- **Grafana Dashboards**: https://ai-cv-evaluator.web.id/grafana/
+  - HTTP Metrics (RED method)
+  - Job Queue Metrics
+  - AI Provider Metrics
+  - Request Drilldown (traces + logs)
+- **Prometheus**: https://ai-cv-evaluator.web.id/prometheus/
+- **Jaeger Traces**: https://ai-cv-evaluator.web.id/jaeger/
+- **Mailpit (Email Testing)**: https://ai-cv-evaluator.web.id/mailpit/
+
+### Local Development
+
+- **Frontend**: http://localhost:3001 (Vue 3 + Vite with HMR)
+- **Backend API**: http://localhost:8080
+- **Grafana**: http://localhost:3000
+- **Prometheus**: http://localhost:9090
+- **Jaeger**: http://localhost:16686
+- **Redpanda Console**: http://localhost:8090
+
 ## Status
 
-- **CI (unit tests, coverage gate, dev Playwright)**
+- **CI (unit tests, 80% coverage gate, dev Playwright)**
   [![CI](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml)
 
 - **Coverage (Codecov)**
@@ -15,6 +45,9 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 
 - **Production Validation (prod health + Playwright)**
   [![Production Validation](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/production-validate.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/production-validate.yml)
+
+- **Deploy (strict semantic versioning required)**
+  [![Deploy](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/deploy.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/deploy.yml)
 
 ## 📚 Documentation
 
@@ -212,30 +245,6 @@ sops secrets/env.production.sops.yaml
   ```bash
   make seed-rag  # requires QDRANT_URL (defaults http://localhost:6333); uses configured embeddings (e.g., OPENAI_API_KEY)
   ```
-
-## Admin UI & Dashboards
-
-### Production Site & Admin Login
-
-- **Production site**: https://ai-cv-evaluator.web.id
-- **Admin API login** (for testing/demo):
-  - Username: `admin`
-  - Password: `admin123`
-
-### Frontend Development (Recommended)
-- **Frontend**: http://localhost:3001 (Vue 3 + Vite with HMR)
-- **Backend API**: http://localhost:8080
-- **Development**: `make dev-full` or `make frontend-dev`
-
-### Traditional Backend-Only Admin
-- Enable admin by setting credentials:
-  JWT is the default admin auth; use `POST /admin/token` to obtain a token.
-- Access: http://localhost:8080/admin/ (login required)
-
-### Observability Dashboards
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3000 (anonymous access enabled via docker-compose for local dev)
-- **Jaeger**: http://localhost:16686
 
 ## Testing
 - Unit tests:

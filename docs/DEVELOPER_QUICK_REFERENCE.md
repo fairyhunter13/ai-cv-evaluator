@@ -79,3 +79,62 @@ These tests assume `make dev-full` is running and verify that:
 - Production stack is defined in `docker-compose.prod.yml`.
 - Public entrypoint is the Nginx container, which frontends the API, frontend, SSO, and dashboards.
 - CI/CD is orchestrated via GitHub Actions workflows in `.github/workflows/`.
+
+### Deployment Pipeline
+
+The deploy workflow enforces strict quality gates:
+
+1. **Pre-deploy checks** - Requires semantic version tags (v1.2.3)
+2. **Security gate** - CI and Docker Publish workflows must succeed
+3. **E2E verify** - Smoke tests must pass
+4. **Deploy** - Blue/green deployment with automatic rollback
+5. **Production validation** - Health checks, Playwright E2E, alerting validation
+6. **Cloudflare DNS sync** - Automatic DNS record updates
+
+### Creating a Release
+
+```bash
+# Commit your changes
+git add .
+git commit -m "feat: your feature description"
+git push origin main
+
+# Create and push a semantic version tag to trigger deploy
+git tag v1.0.125
+git push origin v1.0.125
+```
+
+## Coverage Gate
+
+The CI workflow enforces an 80% minimum code coverage gate via `make ci-test`. This is checked locally by:
+
+```bash
+make ci-test  # Fails if coverage < 80%
+```
+
+Note: Codecov may show a different percentage due to its own calculation method. The authoritative gate is the `make ci-test` target which uses `go tool cover`.
+
+## Observability
+
+### Local Development URLs
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3001 |
+| Backend API | http://localhost:8080 |
+| SSO Portal | http://localhost:8088 |
+| Grafana | http://localhost:3000 |
+| Prometheus | http://localhost:9090 |
+| Jaeger | http://localhost:16686 |
+| Redpanda Console | http://localhost:8090 |
+
+### Production URLs
+
+| Service | URL |
+|---------|-----|
+| Production Site | https://ai-cv-evaluator.web.id |
+| Admin Dashboard | https://ai-cv-evaluator.web.id/app/dashboard |
+| Grafana | https://ai-cv-evaluator.web.id/grafana/ |
+| Prometheus | https://ai-cv-evaluator.web.id/prometheus/ |
+| Jaeger | https://ai-cv-evaluator.web.id/jaeger/ |
+| Mailpit | https://ai-cv-evaluator.web.id/mailpit/ |
