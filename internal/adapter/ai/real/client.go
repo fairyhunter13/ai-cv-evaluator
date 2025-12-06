@@ -20,6 +20,7 @@ import (
 	"time"
 
 	backoff "github.com/cenkalti/backoff/v4"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"log/slog"
 
@@ -274,10 +275,22 @@ func NewWithLimiter(cfg config.Config, lim ratelimiter.Limiter) *Client {
 		2*chatTimeout,
 	)
 
+	// Create HTTP clients with OpenTelemetry tracing for external AI calls
+	chatTransport := otelhttp.NewTransport(http.DefaultTransport,
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return fmt.Sprintf("AI %s %s", r.Method, r.URL.Host)
+		}),
+	)
+	embedTransport := otelhttp.NewTransport(http.DefaultTransport,
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return fmt.Sprintf("AI Embed %s %s", r.Method, r.URL.Host)
+		}),
+	)
+
 	return &Client{
 		cfg:               cfg,
-		chatHC:            &http.Client{Timeout: chatTimeout},
-		embedHC:           &http.Client{Timeout: embedTimeout},
+		chatHC:            &http.Client{Timeout: chatTimeout, Transport: chatTransport},
+		embedHC:           &http.Client{Timeout: embedTimeout, Transport: embedTransport},
 		freeModelsSvc:     freeModelsSvc,
 		rlc:               aiadapter.NewRateLimitCache(),
 		limiter:           lim,

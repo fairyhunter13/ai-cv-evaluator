@@ -216,8 +216,9 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "sum(rate(jobs_completed_total[5m])) / (sum(rate(jobs_completed_total[5m])) + sum(rate(jobs_failed_total[5m])))",
-          "refId": "A"
+          "expr": "sum(jobs_completed_total) / clamp_min(sum(jobs_completed_total) + sum(jobs_failed_total), 1)",
+          "refId": "A",
+          "legendFormat": "All-time Success Rate"
         }
       ],
       "title": "Job Success Rate",

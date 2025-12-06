@@ -9,104 +9,49 @@
   "links": [],
   "panels": [
     {
-      "type": "table",
-      "title": "Requests (per request_id)",
-      "id": 1,
-      "datasource": "Prometheus",
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [ { "color": "green", "value": null } ]
-          }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "request_id" },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "View logs for this request_id",
-                    "url": "/grafana/explore?orgId=1&left={\"datasource\":\"Loki\",\"queries\":[{\"refId\":\"A\",\"expr\":\"{request_id=\\\"${__value.raw}\\\"}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
-                    "targetBlank": true
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "method" },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "View logs for this method",
-                    "url": "/grafana/explore?orgId=1&left={\"datasource\":\"Loki\",\"queries\":[{\"refId\":\"A\",\"expr\":\"{method=\\\"${__value.raw}\\\"}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
-                    "targetBlank": true
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "route" },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "View logs for this route (path)",
-                    "url": "/grafana/explore?orgId=1&left={\"datasource\":\"Loki\",\"queries\":[{\"refId\":\"A\",\"expr\":\"{route=\\\"${__value.raw}\\\"}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
-                    "targetBlank": true
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "matcher": { "id": "byName", "options": "status" },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "View logs for this status",
-                    "url": "/grafana/explore?orgId=1&left={\"datasource\":\"Loki\",\"queries\":[{\"refId\":\"A\",\"expr\":\"{status=\\\"${__value.raw}\\\"}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
-                    "targetBlank": true
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
+      "type": "text",
+      "title": "Request Drilldown Info",
+      "id": 10,
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
       "options": {
-        "showHeader": true,
-        "sortBy": [ { "displayName": "Time", "desc": true } ]
+        "mode": "markdown",
+        "content": "**Note:** This dashboard provides request-level correlation using Loki logs. Use the filters above to narrow down by Route, Status, or Request ID. Click any request_id in the logs below to see full request lifecycle."
+      }
+    },
+    {
+      "type": "logs",
+      "title": "HTTP Requests (from Loki)",
+      "id": 1,
+      "datasource": "Loki",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 2 },
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false,
+        "sortOrder": "Descending"
       },
       "targets": [
         {
-          "expr": "http_request_by_id_total{route=~\"$route\",status=~\"$status\",request_id=~\"$request_id\"}",
+          "expr": "{job=\"app-logs\",request_id=~\"$request_id\"} |~ \"http_access|request completed\" | json | line_format \"{{.request_id}} {{.method}} {{.path}} {{.status}} {{.duration_ms}}ms\"",
           "refId": "A"
         }
       ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": { "mode": "columns" }
-        }
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      }
     },
     {
       "type": "logs",
       "title": "Error / warning logs for selected request_id",
       "id": 2,
       "datasource": "Loki",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 10 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
       "options": {
         "showLabels": true,
         "showTime": true,
@@ -124,7 +69,7 @@
       "title": "External calls for selected request_id",
       "id": 4,
       "datasource": "Loki",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 18 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 22 },
       "options": {
         "showLabels": true,
         "showTime": true,
@@ -142,7 +87,7 @@
       "title": "Failed HTTP / job logs for selected request_id",
       "id": 5,
       "datasource": "Loki",
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 26 },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 30 },
       "options": {
         "showLabels": true,
         "showTime": true,
@@ -160,7 +105,7 @@
       "title": "Logs for selected request_id",
       "id": 3,
       "datasource": "Loki",
-      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 32 },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 36 },
       "options": {
         "showLabels": true,
         "showTime": true,
@@ -183,8 +128,8 @@
         "name": "route",
         "label": "Route",
         "type": "query",
-        "datasource": "Prometheus",
-        "query": "label_values(http_request_by_id_total, route)",
+        "datasource": "Loki",
+        "query": "label_values({job=\"app-logs\"}, route)",
         "refresh": 1,
         "hide": 0,
         "multi": true,
@@ -196,8 +141,8 @@
         "name": "status",
         "label": "Status",
         "type": "query",
-        "datasource": "Prometheus",
-        "query": "label_values(http_request_by_id_total, status)",
+        "datasource": "Loki",
+        "query": "label_values({job=\"app-logs\"}, status)",
         "refresh": 1,
         "hide": 0,
         "multi": true,
