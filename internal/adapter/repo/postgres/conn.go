@@ -25,7 +25,9 @@ func NewPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	cfg.MaxConns = 10
 	cfg.MaxConnIdleTime = 5 * time.Minute
 
-	// Add OpenTelemetry tracing to PostgreSQL connections
+	// Add OpenTelemetry tracing to PostgreSQL connections.
+	// Note: otelpgx.NewTracer() captures the global tracer provider at creation time,
+	// so SetupTracing() must be called before NewPool() to ensure spans are recorded.
 	cfg.ConnConfig.Tracer = otelpgx.NewTracer(
 		otelpgx.WithTrimSQLInSpanName(),
 	)
