@@ -3059,6 +3059,7 @@ test.describe('External Service Tracing', () => {
 
     // Query Jaeger for database traces
     let hasDbSpans = false;
+    let dbSpanNames: string[] = [];
     for (let attempt = 0; attempt < 10 && !hasDbSpans; attempt += 1) {
       const tracesResp = await page.request.get('/jaeger/api/traces', {
         params: {
@@ -3073,19 +3074,21 @@ test.describe('External Service Tracing', () => {
         const traces = (tracesBody as any)?.data ?? [];
         const allSpans = traces.flatMap((t: any) => t.spans ?? []);
         
-        // Check for PostgreSQL/database spans (otelpgx creates spans with "query" or "pgx" in name)
+        // Check for repository-level database spans (jobs.Get, uploads.Create, results.Upsert, etc.)
+        // These spans have db.system=postgresql attribute set by the repository layer
         const dbSpans = allSpans.filter((s: any) => {
           const opName = String(s.operationName ?? '').toLowerCase();
-          return opName.includes('query') || 
-                 opName.includes('pgx') || 
-                 opName.includes('select') ||
-                 opName.includes('insert') ||
-                 opName.includes('update') ||
-                 opName.includes('db');
+          const tags = s.tags ?? [];
+          const hasDbSystemTag = tags.some((t: any) => t.key === 'db.system' && t.value === 'postgresql');
+          const isRepoSpan = opName.includes('jobs.') || 
+                             opName.includes('uploads.') || 
+                             opName.includes('results.');
+          return hasDbSystemTag || isRepoSpan;
         });
         
         hasDbSpans = dbSpans.length > 0;
-        console.log(`Attempt ${attempt + 1}: Found ${dbSpans.length} DB-related spans`);
+        dbSpanNames = dbSpans.map((s: any) => s.operationName).slice(0, 5);
+        console.log(`Attempt ${attempt + 1}: Found ${dbSpans.length} DB-related spans: ${dbSpanNames.join(', ')}`);
         
         if (!hasDbSpans) {
           await page.waitForTimeout(2000);
@@ -3094,17 +3097,11 @@ test.describe('External Service Tracing', () => {
     }
     
     // DB spans should be present after navigation that triggers queries
-    // Note: otelpgx creates spans with SQL operation names like "SELECT", "INSERT", etc.
-    // If not found, it could mean:
-    // 1. Services weren't rebuilt with new tracing code
-    // 2. DB queries haven't been executed yet
-    // 3. Trace sampling is filtering them out
-    console.log(`DB spans validation: ${hasDbSpans ? 'PASSED' : 'NOT FOUND (may need service rebuild)'}`);
+    // Repository-level spans (jobs.Get, uploads.Create, etc.) have db.system=postgresql attribute
+    console.log(`DB spans validation: ${hasDbSpans ? 'PASSED' : 'NOT FOUND'}`);
     
-    // Soft assertion - log but don't fail as DB spans depend on actual queries being traced
-    if (!hasDbSpans) {
-      console.log('Warning: No DB spans found. Verify services are rebuilt with otelpgx tracing.');
-    }
+    // Assert that we found DB spans - these are created by the repository layer
+    expect(hasDbSpans).toBeTruthy();
   });
 
   test('Jaeger has queue/kafka spans after activity', async ({ page }) => {
