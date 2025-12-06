@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/plugin/kotel"
 
 	qdrantcli "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/vector/qdrant"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
@@ -129,6 +130,14 @@ func NewConsumerWithTopic(brokers []string, groupID string, transactionalID stri
 		slog.String("group_id", groupID),
 		slog.String("topic", topic))
 
+	// Create OpenTelemetry tracer for Kafka instrumentation
+	kotelTracer := kotel.NewTracer(
+		kotel.TracerProvider(otel.GetTracerProvider()),
+	)
+	kotelService := kotel.NewKotel(
+		kotel.WithTracer(kotelTracer),
+	)
+
 	// Configure consumer options for parallel processing
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
@@ -137,6 +146,9 @@ func NewConsumerWithTopic(brokers []string, groupID string, transactionalID stri
 		kgo.ConsumerGroup(groupID),
 		kgo.ConsumeTopics(topic),
 		kgo.RequireStableFetchOffsets(),
+
+		// Add OpenTelemetry hooks for distributed tracing
+		kgo.WithHooks(kotelService.Hooks()...),
 
 		// ✅ FIXED: Optimized timeouts for better Redpanda connectivity
 		kgo.DialTimeout(10 * time.Second),           // Further reduced for faster connection

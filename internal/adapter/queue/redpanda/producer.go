@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/plugin/kotel"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
@@ -49,6 +50,14 @@ func NewProducerWithTransactionalID(brokers []string, transactionalID string) (*
 		return nil, fmt.Errorf("no seed brokers provided")
 	}
 
+	// Create OpenTelemetry tracer and meter for Kafka instrumentation
+	kotelTracer := kotel.NewTracer(
+		kotel.TracerProvider(otel.GetTracerProvider()),
+	)
+	kotelService := kotel.NewKotel(
+		kotel.WithTracer(kotelTracer),
+	)
+
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(brokers...),
 		// Enable transactional producer for EOS semantics
@@ -57,6 +66,8 @@ func NewProducerWithTransactionalID(brokers []string, transactionalID string) (*
 		kgo.RequestRetries(10),
 		// Producer batch configuration
 		kgo.ProducerBatchMaxBytes(1000000),
+		// Add OpenTelemetry hooks for distributed tracing
+		kgo.WithHooks(kotelService.Hooks()...),
 	}
 
 	client, err := kgo.NewClient(opts...)
