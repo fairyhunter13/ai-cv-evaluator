@@ -1,0 +1,42 @@
+# Codecov configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  # Require 80% project coverage
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%  # Allow 1% fluctuation
+        if_ci_failed: error
+    patch:
+      default:
+        target: 70%  # New code should have at least 70% coverage
+        threshold: 5%
+
+  # Precision of coverage percentage
+  precision: 2
+  round: down
+
+# Comment configuration for PRs
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+
+# Ignore certain paths from coverage
+ignore:
+  - "test/**/*"
+  - "**/*_test.go"
+  - "**/mock_*.go"
+  - "**/mocks/**"
+  - "cmd/**"  # Entry points typically have low coverage
+  - "internal/adapter/httpserver/static/**"  # Static files
+
+# Flag management
+flags:
+  unit:
+    paths:
+      - "internal/"
+      - "pkg/"
+    carryforward: true
