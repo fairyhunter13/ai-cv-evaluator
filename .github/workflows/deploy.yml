@@ -1043,11 +1043,18 @@ jobs:
         working-directory: admin-frontend
         env:
           E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
-          SSO_USERNAME: ${{ secrets.ADMIN_USERNAME }}
-          SSO_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          SSO_USERNAME: ${{ secrets.SSO_USERNAME }}
+          SSO_PASSWORD: ${{ secrets.SSO_PASSWORD }}
         run: |
           echo "=== Running Playwright E2E tests against production ==="
           echo "Base URL: $E2E_BASE_URL"
+          
+          # Check if SSO credentials are available
+          if [ -z "$SSO_PASSWORD" ]; then
+            echo "⚠ SSO_PASSWORD not set, skipping Playwright E2E tests"
+            echo "To enable: Add SSO_USERNAME and SSO_PASSWORD secrets to GitHub repository"
+            exit 0
+          fi
           
           # Run the real-eval test to trigger actual CV evaluations
           npx playwright test real-eval.spec.ts --reporter=list --timeout=180000 || {
