@@ -216,7 +216,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "sum(jobs_completed_total) / clamp_min(sum(jobs_completed_total) + sum(jobs_failed_total), 1)",
+          "expr": "sum(jobs_completed_total) / clamp_min(sum(jobs_completed_total) + sum(jobs_failed_total or vector(0)), 1)",
           "refId": "A",
           "legendFormat": "All-time Success Rate"
         }

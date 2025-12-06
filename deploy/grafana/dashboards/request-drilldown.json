@@ -55,11 +55,12 @@
       "options": {
         "showLabels": true,
         "showTime": true,
-        "wrapLogMessage": true
+        "wrapLogMessage": true,
+        "enableLogDetails": true
       },
       "targets": [
         {
-          "expr": "{job=\"app-logs\",request_id=~\"$request_id\",level=~\"WARN|ERROR|FATAL\"}",
+          "expr": "{job=\"app-logs\"} |~ \"$request_id\" | json | level=~\"WARN|ERROR|FATAL|error|warn\"",
           "refId": "A"
         }
       ]
@@ -73,11 +74,12 @@
       "options": {
         "showLabels": true,
         "showTime": true,
-        "wrapLogMessage": true
+        "wrapLogMessage": true,
+        "enableLogDetails": true
       },
       "targets": [
         {
-          "expr": "{job=\"app-logs\",request_id=~\"$request_id\"} |= \"external connection executed\"",
+          "expr": "{job=\"app-logs\"} |~ \"$request_id\" | json | msg=~\".*external.*|.*http.*|.*request.*completed.*|.*AI.*|.*Tika.*|.*Qdrant.*|.*OpenRouter.*\"",
           "refId": "A"
         }
       ]
@@ -91,29 +93,31 @@
       "options": {
         "showLabels": true,
         "showTime": true,
-        "wrapLogMessage": true
+        "wrapLogMessage": true,
+        "enableLogDetails": true
       },
       "targets": [
         {
-          "expr": "{job=\"app-logs\",request_id=~\"$request_id\",status!=\"OK\",status!=\"success\"}",
+          "expr": "{job=\"app-logs\"} |~ \"$request_id\" | json | status_text!=\"OK\" or level=~\"ERROR|FATAL|error\"",
           "refId": "A"
         }
       ]
     },
     {
       "type": "logs",
-      "title": "Logs for selected request_id",
+      "title": "All logs for selected request_id",
       "id": 3,
       "datasource": "Loki",
       "gridPos": { "h": 14, "w": 24, "x": 0, "y": 36 },
       "options": {
         "showLabels": true,
         "showTime": true,
-        "wrapLogMessage": true
+        "wrapLogMessage": true,
+        "enableLogDetails": true
       },
       "targets": [
         {
-          "expr": "{route=~\"$route\",status=~\"$status\",request_id=~\"$request_id\"}",
+          "expr": "{job=\"app-logs\"} |~ \"$request_id\" | json",
           "refId": "A"
         }
       ]
