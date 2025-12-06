@@ -2614,14 +2614,39 @@ test.describe('Grafana Job Queue Metrics Dashboard', () => {
     // Navigate to Grafana dashboard
     await gotoWithRetry(page, '/grafana/d/job-queue-metrics/job-queue-metrics');
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(5000);
+    // Allow some time for Prometheus to scrape and Grafana to update
+    // Retry a few times so we don't flake on slow environments.
+    let hasNoData = false;
+    let hasNumericData = false;
 
-    // Check for numeric data in panels (not "No data")
-    const body = await page.locator('body').textContent();
-    const hasNoData = body?.includes('No data');
-    const hasNumericData = body?.match(/\d+/); // Look for any numbers
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const body = await page.locator('body').textContent();
+      const lowerBody = (body ?? '').toLowerCase();
 
-    console.log(`Dashboard has 'No data': ${hasNoData}, has numeric data: ${!!hasNumericData}`);
+      // Focus on the Job Success Rate section if present
+      const idx = lowerBody.indexOf('job success rate');
+      let windowText = lowerBody;
+      if (idx !== -1) {
+        windowText = lowerBody.substring(idx, Math.min(lowerBody.length, idx + 300));
+      }
+
+      hasNoData = windowText.includes('no data');
+      const numericMatch = windowText.match(/\b\d+(\.\d+)?\b/);
+      hasNumericData = !!numericMatch;
+
+      console.log(`Job Queue Metrics attempt ${attempt + 1}: hasNoData=${hasNoData}, hasNumericData=${hasNumericData}`);
+
+      if (!hasNoData && hasNumericData) {
+        break;
+      }
+
+      await page.waitForTimeout(5000);
+    }
+
+    // In both dev and prod, we expect the Job Success Rate panel to have
+    // real numeric data (not the generic "No data" state).
+    expect(hasNoData).toBeFalsy();
+    expect(hasNumericData).toBeTruthy();
   });
 
   test('Grafana dashboard time range selector works', async ({ page }) => {
