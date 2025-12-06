@@ -395,8 +395,45 @@ See [Observability Runbook](./observability.md) for alert handling procedures.
 | Database Admin | (define contact method) |
 | Security Team | (define contact method) |
 
+## CI/CD Pipeline
+
+The GitHub Actions deployment pipeline enforces strict quality gates:
+
+### Workflow Triggers
+
+- **Tag push** (`v*`) - Triggers full deploy pipeline
+- **Manual dispatch** - Via GitHub Actions UI (requires semantic version tag)
+
+### Pipeline Stages
+
+1. **pre-deploy-checks** - Validates semantic version tag (v1.2.3 format required)
+2. **security-gate** - Waits for CI and Docker Publish workflows to succeed
+3. **e2e-verify** - Runs smoke E2E tests
+4. **deploy** - Blue/green deployment with migrations
+5. **validate-production** - Health checks, Playwright E2E, alerting validation
+6. **cloudflare-dns-sync** - Updates DNS records
+
+### Creating a Release
+
+```bash
+# Ensure changes are committed and pushed to main
+git push origin main
+
+# Create semantic version tag
+git tag v1.0.125
+git push origin v1.0.125
+```
+
+The deploy workflow will automatically:
+- Wait for CI to pass (includes 80% coverage gate)
+- Wait for Docker images to be published
+- Deploy to production with blue/green strategy
+- Run post-deployment validation
+- Update Cloudflare DNS records
+
 ## Revision History
 
 | Date | Author | Changes |
 |------|--------|---------|
+| 2024-12-06 | AI Assistant | Added CI/CD pipeline section, updated for strict deploy checks |
 | 2024-12-01 | AI Assistant | Initial version |
