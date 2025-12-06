@@ -22,6 +22,7 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v4"
 	tiktoken "github.com/pkoukk/tiktoken-go"
+	tiktoken_loader "github.com/pkoukk/tiktoken-go-loader"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	aiadapter "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai"
@@ -32,6 +33,12 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/freemodels"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/ratelimiter"
 )
+
+func init() {
+	// Use offline BPE loader to avoid downloading encoding files at runtime.
+	// This is required for Docker containers that may not have internet access.
+	tiktoken.SetBpeLoader(tiktoken_loader.NewOfflineLoader())
+}
 
 // recordTokenUsage records token usage metrics for AI provider calls.
 // It records both prompt and completion tokens separately for detailed tracking.
