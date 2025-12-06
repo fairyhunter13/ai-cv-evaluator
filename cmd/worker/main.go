@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/freemodels"
@@ -65,8 +64,8 @@ func main() {
 
 	slog.Info("starting worker", slog.String("env", cfg.AppEnv))
 
-	// Database connection
-	pool, err := pgxpool.New(context.Background(), cfg.DBURL)
+	// Database connection with OpenTelemetry tracing
+	pool, err := postgres.NewPool(context.Background(), cfg.DBURL)
 	if err != nil {
 		slog.Error("database connection failed", slog.Any("error", err))
 		os.Exit(1)
