@@ -810,6 +810,12 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		}
 
 		// Record token usage from API response
+		slog.Info("OpenRouter API response usage info",
+			slog.String("provider", "openrouter"),
+			slog.String("model", actualModel),
+			slog.Int("prompt_tokens", out.Usage.PromptTokens),
+			slog.Int("completion_tokens", out.Usage.CompletionTokens),
+			slog.Int("total_tokens", out.Usage.TotalTokens))
 		if out.Usage.TotalTokens > 0 {
 			recordTokenUsage("openrouter", actualModel, out.Usage.PromptTokens, out.Usage.CompletionTokens)
 			slog.Info("OpenRouter token usage recorded",
@@ -818,6 +824,19 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 				slog.Int("prompt_tokens", out.Usage.PromptTokens),
 				slog.Int("completion_tokens", out.Usage.CompletionTokens),
 				slog.Int("total_tokens", out.Usage.TotalTokens))
+		} else {
+			slog.Warn("OpenRouter API response did not include usage info, estimating tokens",
+				slog.String("provider", "openrouter"),
+				slog.String("model", actualModel))
+			// Fallback to estimation if API doesn't return usage
+			responseContent := out.Choices[0].Message.Content
+			promptTokens, completionTokens := estimateChatTokens(systemPrompt, userPrompt, responseContent)
+			recordTokenUsage("openrouter", actualModel, promptTokens, completionTokens)
+			slog.Info("OpenRouter token usage estimated",
+				slog.String("provider", "openrouter"),
+				slog.String("model", actualModel),
+				slog.Int("prompt_tokens", promptTokens),
+				slog.Int("completion_tokens", completionTokens))
 		}
 
 		slog.Info("OpenRouter API call successful",
@@ -1660,6 +1679,12 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, system
 		}
 
 		// Record token usage from API response
+		lg.Info("Groq API response usage info",
+			slog.String("provider", "groq"),
+			slog.String("model", model),
+			slog.Int("prompt_tokens", out.Usage.PromptTokens),
+			slog.Int("completion_tokens", out.Usage.CompletionTokens),
+			slog.Int("total_tokens", out.Usage.TotalTokens))
 		if out.Usage.TotalTokens > 0 {
 			actualModel := out.Model
 			if actualModel == "" {
@@ -1672,6 +1697,19 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, system
 				slog.Int("prompt_tokens", out.Usage.PromptTokens),
 				slog.Int("completion_tokens", out.Usage.CompletionTokens),
 				slog.Int("total_tokens", out.Usage.TotalTokens))
+		} else {
+			lg.Warn("Groq API response did not include usage info, estimating tokens",
+				slog.String("provider", "groq"),
+				slog.String("model", model))
+			// Fallback to estimation if API doesn't return usage
+			responseContent := out.Choices[0].Message.Content
+			promptTokens, completionTokens := estimateChatTokens(systemPrompt, userPrompt, responseContent)
+			recordTokenUsage("groq", model, promptTokens, completionTokens)
+			lg.Info("Groq token usage estimated",
+				slog.String("provider", "groq"),
+				slog.String("model", model),
+				slog.Int("prompt_tokens", promptTokens),
+				slog.Int("completion_tokens", completionTokens))
 		}
 
 		result = out.Choices[0].Message.Content

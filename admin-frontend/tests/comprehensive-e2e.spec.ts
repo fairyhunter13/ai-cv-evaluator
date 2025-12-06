@@ -3599,6 +3599,13 @@ test.describe('Dashboard Completeness Validation', () => {
     const rawMetricBody = await rawMetricResp.json();
     console.log(`Raw ai_tokens_total metric: ${JSON.stringify((rawMetricBody as any)?.data?.result ?? [])}`);
 
+    // Check what ai_ metrics are available
+    const aiMetricsResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/label/__name__/values', {
+      params: { match: '{__name__=~"ai_.*"}' },
+    });
+    const aiMetricsBody = await aiMetricsResp.json();
+    console.log(`Available ai_ metrics: ${JSON.stringify((aiMetricsBody as any)?.data ?? [])}`);
+
     // Query Prometheus for AI token usage metrics
     const tokenUsageResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_tokens_total) or vector(0)' },
