@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -22,15 +23,25 @@ import (
 	backoff "github.com/cenkalti/backoff/v4"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
-	"log/slog"
-
 	aiadapter "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
 	intobs "github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/freemodels"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/ratelimiter"
 )
+
+// recordTokenUsage records token usage metrics for AI provider calls.
+// It records both prompt and completion tokens separately for detailed tracking.
+func recordTokenUsage(provider, model string, promptTokens, completionTokens int) {
+	if promptTokens > 0 {
+		observability.RecordAITokenUsage(provider, "prompt", model, promptTokens)
+	}
+	if completionTokens > 0 {
+		observability.RecordAITokenUsage(provider, "completion", model, completionTokens)
+	}
+}
 
 // Client implements domain.AIClient using OpenRouter (chat) and OpenAI (embeddings).
 type Client struct {
@@ -549,6 +560,11 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 	}
 	openRouterKey = c.getOpenRouterAPIKey()
 
@@ -743,6 +759,17 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 		// Record success for actual model used
 		if c.rlc != nil && actualModel != "" && actualModel != "unknown" {
 			c.rlc.RecordSuccess(actualModel)
+		}
+
+		// Record token usage from API response
+		if out.Usage.TotalTokens > 0 {
+			recordTokenUsage("openrouter", actualModel, out.Usage.PromptTokens, out.Usage.CompletionTokens)
+			slog.Info("OpenRouter token usage recorded",
+				slog.String("provider", "openrouter"),
+				slog.String("model", actualModel),
+				slog.Int("prompt_tokens", out.Usage.PromptTokens),
+				slog.Int("completion_tokens", out.Usage.CompletionTokens),
+				slog.Int("total_tokens", out.Usage.TotalTokens))
 		}
 
 		slog.Info("OpenRouter API call successful",
@@ -1436,6 +1463,12 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, system
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
+		Model string `json:"model"`
 	}
 
 	var result string
@@ -1558,6 +1591,21 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, system
 		if len(out.Choices) == 0 {
 			lg.Error("Groq API returned empty choices", slog.String("provider", "groq"))
 			return errors.New("empty choices from Groq API")
+		}
+
+		// Record token usage from API response
+		if out.Usage.TotalTokens > 0 {
+			actualModel := out.Model
+			if actualModel == "" {
+				actualModel = model
+			}
+			recordTokenUsage("groq", actualModel, out.Usage.PromptTokens, out.Usage.CompletionTokens)
+			lg.Info("Groq token usage recorded",
+				slog.String("provider", "groq"),
+				slog.String("model", actualModel),
+				slog.Int("prompt_tokens", out.Usage.PromptTokens),
+				slog.Int("completion_tokens", out.Usage.CompletionTokens),
+				slog.Int("total_tokens", out.Usage.TotalTokens))
 		}
 
 		result = out.Choices[0].Message.Content
@@ -1976,6 +2024,11 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 		Data []struct {
 			Embedding []float64 `json:"embedding"`
 		} `json:"data"`
+		Usage struct {
+			PromptTokens int `json:"prompt_tokens"`
+			TotalTokens  int `json:"total_tokens"`
+		} `json:"usage"`
+		Model string `json:"model"`
 	}
 	op := func(callCtx context.Context) error {
 		connectionStart := time.Now()
@@ -2051,6 +2104,20 @@ func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) 
 	if len(out.Data) == 0 {
 		slog.Error("OpenAI API returned empty data", slog.String("provider", "openai"))
 		return nil, errors.New("empty data from OpenAI API")
+	}
+
+	// Record token usage from API response (embeddings only have prompt tokens)
+	if out.Usage.TotalTokens > 0 {
+		actualModel := out.Model
+		if actualModel == "" {
+			actualModel = c.cfg.EmbeddingsModel
+		}
+		recordTokenUsage("openai", actualModel, out.Usage.PromptTokens, 0)
+		slog.Info("OpenAI embeddings token usage recorded",
+			slog.String("provider", "openai"),
+			slog.String("model", actualModel),
+			slog.Int("prompt_tokens", out.Usage.PromptTokens),
+			slog.Int("total_tokens", out.Usage.TotalTokens))
 	}
 
 	slog.Info("OpenAI API call successful", slog.String("provider", "openai"), slog.Int("data_count", len(out.Data)))
