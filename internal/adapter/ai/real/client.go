@@ -21,6 +21,7 @@ import (
 	"time"
 
 	backoff "github.com/cenkalti/backoff/v4"
+	tiktoken "github.com/pkoukk/tiktoken-go"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	aiadapter "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai"
@@ -41,6 +42,29 @@ func recordTokenUsage(provider, model string, promptTokens, completionTokens int
 	if completionTokens > 0 {
 		observability.RecordAITokenUsage(provider, "completion", model, completionTokens)
 	}
+}
+
+// estimateTokenCount estimates the number of tokens in a text using tiktoken.
+// It uses cl100k_base encoding which is compatible with most modern LLMs.
+// Returns 0 if encoding fails.
+func estimateTokenCount(text string) int {
+	enc, err := tiktoken.GetEncoding("cl100k_base")
+	if err != nil {
+		slog.Warn("failed to get tiktoken encoding", slog.Any("error", err))
+		return 0
+	}
+	tokens := enc.Encode(text, nil, nil)
+	return len(tokens)
+}
+
+// estimateChatTokens estimates the total tokens for a chat completion request.
+// It accounts for message formatting overhead used by chat models.
+func estimateChatTokens(systemPrompt, userPrompt, response string) (promptTokens, completionTokens int) {
+	// Estimate prompt tokens (system + user messages with formatting overhead)
+	// Chat models add ~4 tokens per message for formatting
+	promptTokens = estimateTokenCount(systemPrompt) + estimateTokenCount(userPrompt) + 8
+	completionTokens = estimateTokenCount(response)
+	return promptTokens, completionTokens
 }
 
 // Client implements domain.AIClient using OpenRouter (chat) and OpenAI (embeddings).
@@ -712,6 +736,15 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 						Content string `json:"content"`
 					}{Content: content}},
 				}
+				// For streaming responses, estimate tokens using tiktoken since API doesn't return usage
+				promptTokens, completionTokens := estimateChatTokens(systemPrompt, userPrompt, content)
+				recordTokenUsage("openrouter", model, promptTokens, completionTokens)
+				slog.Info("OpenRouter streaming token usage estimated",
+					slog.String("provider", "openrouter"),
+					slog.String("model", model),
+					slog.Int("prompt_tokens", promptTokens),
+					slog.Int("completion_tokens", completionTokens),
+					slog.Int("total_tokens", promptTokens+completionTokens))
 				return nil
 			}
 
@@ -1331,6 +1364,15 @@ func (c *Client) callOpenRouterWithModelForKey(ctx domain.Context, apiKey, model
 						Content string `json:"content"`
 					}{Content: content}},
 				}
+				// For streaming responses, estimate tokens using tiktoken since API doesn't return usage
+				promptTokens, completionTokens := estimateChatTokens(systemPrompt, userPrompt, content)
+				recordTokenUsage("openrouter", model, promptTokens, completionTokens)
+				slog.Info("OpenRouter streaming token usage estimated (model switching)",
+					slog.String("provider", "openrouter"),
+					slog.String("model", model),
+					slog.Int("prompt_tokens", promptTokens),
+					slog.Int("completion_tokens", completionTokens),
+					slog.Int("total_tokens", promptTokens+completionTokens))
 				return nil
 			}
 
@@ -1567,6 +1609,15 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, system
 						Content string `json:"content"`
 					}{Content: content}},
 				}
+				// For streaming responses, estimate tokens using tiktoken since API doesn't return usage
+				promptTokens, completionTokens := estimateChatTokens(systemPrompt, userPrompt, content)
+				recordTokenUsage("groq", model, promptTokens, completionTokens)
+				lg.Info("Groq streaming token usage estimated",
+					slog.String("provider", "groq"),
+					slog.String("model", model),
+					slog.Int("prompt_tokens", promptTokens),
+					slog.Int("completion_tokens", completionTokens),
+					slog.Int("total_tokens", promptTokens+completionTokens))
 				return nil
 			}
 
