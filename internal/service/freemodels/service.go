@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Model represents a model from OpenRouter API
@@ -53,12 +55,18 @@ type Service struct {
 	refreshDur time.Duration
 }
 
-// NewService creates a new free models service
+// NewService creates a new free models service with OpenTelemetry tracing
 func NewService(apiKey, baseURL string, refreshDur time.Duration) *Service {
+	// Use otelhttp transport for distributed tracing
+	transport := otelhttp.NewTransport(http.DefaultTransport,
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return fmt.Sprintf("FreeModels %s %s", r.Method, r.URL.Host)
+		}),
+	)
 	return &Service{
 		apiKey:     apiKey,
 		baseURL:    baseURL,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: &http.Client{Timeout: 30 * time.Second, Transport: transport},
 		refreshDur: refreshDur,
 	}
 }
