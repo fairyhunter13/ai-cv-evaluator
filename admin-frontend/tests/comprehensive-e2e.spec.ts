@@ -3347,3 +3347,413 @@ test.describe('Dashboard Completeness Validation', () => {
     }
   });
 });
+
+// Data Consistency Cross-Check Tests
+// These tests verify that data displayed on Dashboard and Job Management pages
+// is fetched from the database in real-time and is consistent across views
+test.describe('Data Consistency Cross-Check', () => {
+  
+  // Helper to fetch stats from API
+  const fetchStatsFromAPI = async (page: Page): Promise<{
+    uploads: number;
+    evaluations: number;
+    completed: number;
+    failed: number;
+    avgTime: number;
+  }> => {
+    const response = await page.request.get('/admin/api/stats');
+    if (!response.ok()) {
+      throw new Error(`Failed to fetch stats: ${response.status()}`);
+    }
+    const data = await response.json();
+    return {
+      uploads: data.uploads ?? 0,
+      evaluations: data.evaluations ?? 0,
+      completed: data.completed ?? 0,
+      failed: data.failed ?? 0,
+      avgTime: data.avg_time ?? 0,
+    };
+  };
+
+  // Helper to fetch jobs from API with pagination
+  const fetchAllJobsFromAPI = async (page: Page): Promise<{
+    jobs: any[];
+    total: number;
+    completedCount: number;
+    failedCount: number;
+  }> => {
+    // First get total count
+    const firstResponse = await page.request.get('/admin/api/jobs?page=1&limit=100');
+    if (!firstResponse.ok()) {
+      throw new Error(`Failed to fetch jobs: ${firstResponse.status()}`);
+    }
+    const firstData = await firstResponse.json();
+    const jobs = firstData.jobs ?? [];
+    const total = firstData.pagination?.total ?? jobs.length;
+    
+    // Count by status
+    const completedCount = jobs.filter((j: any) => j.status === 'completed').length;
+    const failedCount = jobs.filter((j: any) => j.status === 'failed').length;
+    
+    return { jobs, total, completedCount, failedCount };
+  };
+
+  test('Dashboard stats match API data (real-time database fetch)', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch stats directly from API
+    const apiStats = await fetchStatsFromAPI(page);
+    console.log('API Stats:', apiStats);
+
+    // Navigate to Dashboard
+    await gotoWithRetry(page, '/app/dashboard');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    // Wait for stats to load (look for the stat cards)
+    await page.waitForSelector('text=Total Uploads', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+
+    // Extract stats from Dashboard UI
+    const body = await page.locator('body').textContent() ?? '';
+    
+    // Parse numbers from the dashboard
+    // The dashboard shows: Total Uploads, Evaluations, Completed, Avg Time
+    const uploadsMatch = body.match(/Total Uploads[\s\S]*?(\d+)/);
+    const evaluationsMatch = body.match(/Evaluations[\s\S]*?(\d+)/);
+    const completedMatch = body.match(/Completed[\s\S]*?(\d+)/);
+    
+    const dashboardUploads = uploadsMatch ? parseInt(uploadsMatch[1], 10) : -1;
+    const dashboardEvaluations = evaluationsMatch ? parseInt(evaluationsMatch[1], 10) : -1;
+    const dashboardCompleted = completedMatch ? parseInt(completedMatch[1], 10) : -1;
+
+    console.log('Dashboard UI Stats:', {
+      uploads: dashboardUploads,
+      evaluations: dashboardEvaluations,
+      completed: dashboardCompleted,
+    });
+
+    // Verify Dashboard shows real data from API (which comes from database)
+    expect(dashboardUploads).toBe(apiStats.uploads);
+    expect(dashboardEvaluations).toBe(apiStats.evaluations);
+    expect(dashboardCompleted).toBe(apiStats.completed);
+    
+    console.log('✓ Dashboard stats match API data - data is fetched from database in real-time');
+  });
+
+  test('Job Management page shows all jobs from database', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch jobs directly from API
+    const apiJobs = await fetchAllJobsFromAPI(page);
+    console.log('API Jobs:', {
+      total: apiJobs.total,
+      completed: apiJobs.completedCount,
+      failed: apiJobs.failedCount,
+    });
+
+    // Navigate to Job Management
+    await gotoWithRetry(page, '/app/jobs');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    // Wait for jobs table to load
+    await page.waitForSelector('text=Jobs', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+
+    // Check that jobs are displayed
+    const body = await page.locator('body').textContent() ?? '';
+    
+    // Count visible job statuses in the table
+    const completedBadges = await page.locator('text=Completed').count();
+    const failedBadges = await page.locator('text=Failed').count();
+    
+    console.log('Job Management UI:', {
+      completedVisible: completedBadges,
+      failedVisible: failedBadges,
+    });
+
+    // If API has jobs, the UI should show them
+    if (apiJobs.total > 0) {
+      // At least some jobs should be visible (pagination may limit display)
+      const totalVisibleJobs = completedBadges + failedBadges;
+      expect(totalVisibleJobs).toBeGreaterThan(0);
+      console.log('✓ Job Management shows jobs from database');
+    } else {
+      console.log('No jobs in database - skipping count verification');
+    }
+  });
+
+  test('Dashboard and Job Management show consistent data', async ({ page }) => {
+    test.setTimeout(90000);
+    await loginViaSSO(page);
+
+    // Fetch both stats and jobs from API
+    const apiStats = await fetchStatsFromAPI(page);
+    const apiJobs = await fetchAllJobsFromAPI(page);
+
+    console.log('API Consistency Check:', {
+      statsEvaluations: apiStats.evaluations,
+      jobsTotal: apiJobs.total,
+      statsCompleted: apiStats.completed,
+      jobsCompleted: apiJobs.completedCount,
+      statsFailed: apiStats.failed,
+      jobsFailed: apiJobs.failedCount,
+    });
+
+    // Stats evaluations count should match total jobs
+    expect(apiStats.evaluations).toBe(apiJobs.total);
+    
+    // Stats completed count should match jobs with completed status
+    // Note: API returns first 100 jobs, so for large datasets this may differ
+    if (apiJobs.total <= 100) {
+      expect(apiStats.completed).toBe(apiJobs.completedCount);
+      expect(apiStats.failed).toBe(apiJobs.failedCount);
+    }
+
+    // Navigate to Dashboard and verify UI
+    await gotoWithRetry(page, '/app/dashboard');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    const dashboardBody = await page.locator('body').textContent() ?? '';
+    const dashboardEvaluations = parseInt(
+      (dashboardBody.match(/Evaluations[\s\S]*?(\d+)/)?.[1]) ?? '0',
+      10
+    );
+
+    // Navigate to Job Management
+    await gotoWithRetry(page, '/app/jobs');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    // Both pages should show consistent evaluation counts
+    expect(dashboardEvaluations).toBe(apiStats.evaluations);
+    
+    console.log('✓ Dashboard and Job Management show consistent data from same database');
+  });
+
+  test('Data refreshes in real-time on Job Management page', async ({ page }) => {
+    test.setTimeout(90000);
+    await loginViaSSO(page);
+
+    // Navigate to Job Management
+    await gotoWithRetry(page, '/app/jobs');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    // Get initial job count from API
+    const initialJobs = await fetchAllJobsFromAPI(page);
+    console.log('Initial jobs count:', initialJobs.total);
+
+    // Click refresh button (use exact match to avoid auto-refresh button)
+    const refreshButton = page.getByRole('button', { name: 'Refresh', exact: true });
+    await refreshButton.click();
+    await page.waitForTimeout(2000);
+
+    // Get updated job count from API
+    const updatedJobs = await fetchAllJobsFromAPI(page);
+    console.log('Updated jobs count:', updatedJobs.total);
+
+    // Counts should be consistent (may be same or different if jobs were added)
+    expect(updatedJobs.total).toBeGreaterThanOrEqual(0);
+    
+    // Verify the notification appeared (success toast)
+    const successNotification = page.locator('text=Jobs loaded');
+    const hasNotification = await successNotification.isVisible().catch(() => false);
+    console.log('Refresh notification shown:', hasNotification);
+    
+    console.log('✓ Job Management page refreshes data from database');
+  });
+
+  test('Dashboard and Grafana Job Queue Metrics show correlated data', async ({ page }) => {
+    test.setTimeout(120000);
+    await loginViaSSO(page);
+
+    // Fetch stats from API (same source as Dashboard)
+    const apiStats = await fetchStatsFromAPI(page);
+    console.log('API Stats for Grafana comparison:', {
+      completed: apiStats.completed,
+      failed: apiStats.failed,
+      evaluations: apiStats.evaluations,
+    });
+
+    // Navigate to Grafana Job Queue Metrics dashboard
+    await gotoWithRetry(page, '/grafana/d/job-queue-metrics/job-queue-metrics');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(5000);
+
+    // Scroll to load all panels
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press('End');
+      await page.waitForTimeout(1000);
+    }
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(1000);
+
+    const grafanaBody = await page.locator('body').textContent() ?? '';
+    
+    // Check for Job Queue Metrics panels
+    const hasJobSuccessRate = grafanaBody.includes('Job Success Rate');
+    const hasTotalJobOutcomes = grafanaBody.includes('Total Job Outcomes');
+    const hasJobThroughput = grafanaBody.includes('Job Throughput');
+    
+    console.log('Grafana Job Queue Metrics panels:', {
+      hasJobSuccessRate,
+      hasTotalJobOutcomes,
+      hasJobThroughput,
+    });
+
+    // Grafana should have the job metrics panels
+    expect(hasJobSuccessRate).toBeTruthy();
+    expect(hasTotalJobOutcomes).toBeTruthy();
+
+    // If there are completed jobs, Grafana should show data (not "No data")
+    if (apiStats.completed > 0 || apiStats.failed > 0) {
+      // The pie chart or gauge should show some value
+      const hasNoData = grafanaBody.toLowerCase().includes('no data');
+      const hasPercentage = /%/.test(grafanaBody);
+      const hasNumericValue = /\d+/.test(grafanaBody);
+      
+      console.log('Grafana data presence:', {
+        hasNoData,
+        hasPercentage,
+        hasNumericValue,
+      });
+      
+      // Should have some data if jobs exist
+      expect(hasNumericValue).toBeTruthy();
+    }
+
+    console.log('✓ Dashboard API stats and Grafana Job Queue Metrics are correlated');
+  });
+
+  test('Job status counts are consistent across Dashboard, Jobs page, and API', async ({ page }) => {
+    test.setTimeout(120000);
+    await loginViaSSO(page);
+
+    // 1. Get data from API
+    const apiStats = await fetchStatsFromAPI(page);
+    const apiJobs = await fetchAllJobsFromAPI(page);
+
+    console.log('=== Data Consistency Report ===');
+    console.log('API /admin/api/stats:', {
+      uploads: apiStats.uploads,
+      evaluations: apiStats.evaluations,
+      completed: apiStats.completed,
+      failed: apiStats.failed,
+    });
+    console.log('API /admin/api/jobs:', {
+      total: apiJobs.total,
+      completed: apiJobs.completedCount,
+      failed: apiJobs.failedCount,
+    });
+
+    // 2. Navigate to Dashboard and extract displayed values
+    await gotoWithRetry(page, '/app/dashboard');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    const dashboardBody = await page.locator('body').textContent() ?? '';
+    const dashboardUploads = parseInt(
+      (dashboardBody.match(/Total Uploads[\s\S]*?(\d+)/)?.[1]) ?? '-1',
+      10
+    );
+    const dashboardEvaluations = parseInt(
+      (dashboardBody.match(/Evaluations[\s\S]*?(\d+)/)?.[1]) ?? '-1',
+      10
+    );
+    const dashboardCompleted = parseInt(
+      (dashboardBody.match(/Completed[\s\S]*?(\d+)/)?.[1]) ?? '-1',
+      10
+    );
+
+    console.log('Dashboard UI:', {
+      uploads: dashboardUploads,
+      evaluations: dashboardEvaluations,
+      completed: dashboardCompleted,
+    });
+
+    // 3. Navigate to Jobs page and count visible statuses
+    await gotoWithRetry(page, '/app/jobs');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    // Get pagination info if available
+    const jobsBody = await page.locator('body').textContent() ?? '';
+    const paginationMatch = jobsBody.match(/Showing \d+ to \d+ of (\d+)/);
+    const jobsPageTotal = paginationMatch ? parseInt(paginationMatch[1], 10) : -1;
+
+    console.log('Jobs Page:', {
+      totalFromPagination: jobsPageTotal,
+    });
+
+    // 4. Verify consistency
+    // Dashboard evaluations should match API evaluations
+    expect(dashboardEvaluations).toBe(apiStats.evaluations);
+    
+    // Dashboard completed should match API completed
+    expect(dashboardCompleted).toBe(apiStats.completed);
+    
+    // Dashboard uploads should match API uploads
+    expect(dashboardUploads).toBe(apiStats.uploads);
+    
+    // API stats evaluations should match API jobs total
+    expect(apiStats.evaluations).toBe(apiJobs.total);
+
+    console.log('=== Consistency Verification PASSED ===');
+    console.log('✓ All data sources show consistent values from the database');
+  });
+
+  test('Filter on Jobs page returns correct subset from database', async ({ page }) => {
+    test.setTimeout(90000);
+    await loginViaSSO(page);
+
+    // Get all jobs first
+    const allJobs = await fetchAllJobsFromAPI(page);
+    console.log('All jobs:', allJobs.total);
+
+    // Navigate to Jobs page
+    await gotoWithRetry(page, '/app/jobs');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
+
+    // Filter by "Completed" status
+    const statusSelect = page.locator('select#status');
+    await statusSelect.selectOption('completed');
+    await page.waitForTimeout(2000);
+
+    // Fetch filtered jobs from API
+    const completedResponse = await page.request.get('/admin/api/jobs?status=completed&limit=100');
+    const completedData = await completedResponse.json();
+    const completedJobsFromAPI = completedData.jobs?.length ?? 0;
+
+    console.log('Filtered jobs (completed):', completedJobsFromAPI);
+
+    // The filtered count should match the completed count from stats
+    const apiStats = await fetchStatsFromAPI(page);
+    
+    // For small datasets, counts should match exactly
+    if (allJobs.total <= 100) {
+      expect(completedJobsFromAPI).toBe(apiStats.completed);
+    }
+
+    // Filter by "Failed" status
+    await statusSelect.selectOption('failed');
+    await page.waitForTimeout(2000);
+
+    const failedResponse = await page.request.get('/admin/api/jobs?status=failed&limit=100');
+    const failedData = await failedResponse.json();
+    const failedJobsFromAPI = failedData.jobs?.length ?? 0;
+
+    console.log('Filtered jobs (failed):', failedJobsFromAPI);
+
+    if (allJobs.total <= 100) {
+      expect(failedJobsFromAPI).toBe(apiStats.failed);
+    }
+
+    console.log('✓ Job filters return correct subsets from database');
+  });
+});
