@@ -3346,6 +3346,132 @@ test.describe('Dashboard Completeness Validation', () => {
       console.log('Note: External calls panel not visible in viewport - this is OK for lazy-loaded dashboards');
     }
   });
+
+  test('HTTP Metrics dashboard has Error Rate by Route panel', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch dashboard via API to verify panel configuration
+    const resp = await page.request.get('/grafana/api/dashboards/uid/http-metrics');
+    expect(resp.ok()).toBeTruthy();
+    
+    const body = await resp.json();
+    const dashboard = (body as any).dashboard ?? body;
+    const panels: any[] = dashboard.panels ?? [];
+    
+    // Find the Error Rate by Route panel
+    const errorRateByRoutePanel = panels.find((p) => 
+      p.title === 'Error Rate Over Time by Route'
+    );
+    
+    expect(errorRateByRoutePanel).toBeTruthy();
+    expect(errorRateByRoutePanel.type).toBe('timeseries');
+    
+    // Verify the query includes route breakdown
+    const expr = String(errorRateByRoutePanel?.targets?.[0]?.expr ?? '');
+    expect(expr).toContain('by (route)');
+    expect(expr).toContain('http_requests_total');
+    expect(expr).toContain('status=~');
+    
+    console.log('HTTP Metrics: Error Rate by Route panel configured correctly');
+  });
+
+  test('HTTP Metrics dashboard has Top Error Routes table', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch dashboard via API to verify panel configuration
+    const resp = await page.request.get('/grafana/api/dashboards/uid/http-metrics');
+    expect(resp.ok()).toBeTruthy();
+    
+    const body = await resp.json();
+    const dashboard = (body as any).dashboard ?? body;
+    const panels: any[] = dashboard.panels ?? [];
+    
+    // Find the Top Error Routes table panel
+    const topErrorRoutesPanel = panels.find((p) => 
+      p.title === 'Top Error Routes'
+    );
+    
+    expect(topErrorRoutesPanel).toBeTruthy();
+    expect(topErrorRoutesPanel.type).toBe('table');
+    
+    // Verify the query includes route and status breakdown
+    const expr = String(topErrorRoutesPanel?.targets?.[0]?.expr ?? '');
+    expect(expr).toContain('topk');
+    expect(expr).toContain('http_requests_total');
+    expect(expr).toContain('by (route, status)');
+    
+    // Verify table has transformations for column renaming
+    const transformations = topErrorRoutesPanel.transformations ?? [];
+    expect(transformations.length).toBeGreaterThan(0);
+    
+    console.log('HTTP Metrics: Top Error Routes table panel configured correctly');
+  });
+
+  test('AI Metrics dashboard has summary stat panels', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch dashboard via API to verify panel configuration
+    const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
+    expect(resp.ok()).toBeTruthy();
+    
+    const body = await resp.json();
+    const dashboard = (body as any).dashboard ?? body;
+    const panels: any[] = dashboard.panels ?? [];
+    
+    // Check for summary stat panels at the top
+    const totalAiRequestsPanel = panels.find((p) => p.title === 'Total AI Requests');
+    const medianLatencyPanel = panels.find((p) => p.title === 'Median AI Latency (p50)');
+    const p95LatencyPanel = panels.find((p) => p.title === '95th Percentile Latency');
+    const totalTokensPanel = panels.find((p) => p.title === 'Total Tokens Used');
+    
+    expect(totalAiRequestsPanel).toBeTruthy();
+    expect(totalAiRequestsPanel.type).toBe('stat');
+    expect(String(totalAiRequestsPanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
+    
+    expect(medianLatencyPanel).toBeTruthy();
+    expect(medianLatencyPanel.type).toBe('stat');
+    expect(String(medianLatencyPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.50');
+    
+    expect(p95LatencyPanel).toBeTruthy();
+    expect(p95LatencyPanel.type).toBe('stat');
+    expect(String(p95LatencyPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.95');
+    
+    expect(totalTokensPanel).toBeTruthy();
+    expect(totalTokensPanel.type).toBe('stat');
+    expect(String(totalTokensPanel?.targets?.[0]?.expr ?? '')).toContain('ai_tokens_total');
+    
+    console.log('AI Metrics: All summary stat panels configured correctly');
+  });
+
+  test('AI Metrics dashboard queries use fallback for empty data', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch dashboard via API to verify panel configuration
+    const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
+    expect(resp.ok()).toBeTruthy();
+    
+    const body = await resp.json();
+    const dashboard = (body as any).dashboard ?? body;
+    const panels: any[] = dashboard.panels ?? [];
+    
+    // Check that stat panels use "or vector(0)" fallback to show 0 instead of "No data"
+    const statPanels = panels.filter((p) => p.type === 'stat');
+    
+    for (const panel of statPanels) {
+      const expr = String(panel?.targets?.[0]?.expr ?? '');
+      // Stat panels should use "or vector(0)" to show 0 when no data
+      if (expr.includes('ai_requests_total') || expr.includes('ai_tokens_total') || expr.includes('histogram_quantile')) {
+        expect(expr).toContain('or vector(0)');
+        console.log(`Panel "${panel.title}" uses fallback: ${expr.includes('or vector(0)')}`);
+      }
+    }
+    
+    console.log('AI Metrics: Stat panels use proper fallback for empty data');
+  });
 });
 
 // Data Consistency Cross-Check Tests
