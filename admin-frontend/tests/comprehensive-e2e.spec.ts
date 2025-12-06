@@ -3452,7 +3452,7 @@ test.describe('Dashboard Completeness Validation', () => {
     
     // Check for summary stat panels at the top
     const totalAiRequestsPanel = panels.find((p) => p.title === 'Total AI Requests');
-    const medianLatencyPanel = panels.find((p) => p.title === 'Median AI Latency (p50)');
+    const avgLatencyPanel = panels.find((p) => p.title === 'Average AI Latency');
     const p95LatencyPanel = panels.find((p) => p.title === '95th Percentile Latency');
     const totalTokensPanel = panels.find((p) => p.title === 'Total Tokens Used');
     
@@ -3460,9 +3460,9 @@ test.describe('Dashboard Completeness Validation', () => {
     expect(totalAiRequestsPanel.type).toBe('stat');
     expect(String(totalAiRequestsPanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
     
-    expect(medianLatencyPanel).toBeTruthy();
-    expect(medianLatencyPanel.type).toBe('stat');
-    expect(String(medianLatencyPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.50');
+    expect(avgLatencyPanel).toBeTruthy();
+    expect(avgLatencyPanel.type).toBe('stat');
+    expect(String(avgLatencyPanel?.targets?.[0]?.expr ?? '')).toContain('ai_request_duration_seconds');
     
     expect(p95LatencyPanel).toBeTruthy();
     expect(p95LatencyPanel.type).toBe('stat');
@@ -3493,13 +3493,99 @@ test.describe('Dashboard Completeness Validation', () => {
     for (const panel of statPanels) {
       const expr = String(panel?.targets?.[0]?.expr ?? '');
       // Stat panels should use "or vector(0)" to show 0 when no data
-      if (expr.includes('ai_requests_total') || expr.includes('ai_tokens_total') || expr.includes('histogram_quantile')) {
+      if (expr.includes('ai_requests_total') || expr.includes('ai_tokens_total') || expr.includes('histogram_quantile') || expr.includes('ai_request_duration_seconds')) {
         expect(expr).toContain('or vector(0)');
         console.log(`Panel "${panel.title}" uses fallback: ${expr.includes('or vector(0)')}`);
       }
     }
     
     console.log('AI Metrics: Stat panels use proper fallback for empty data');
+  });
+
+  test('AI Metrics dashboard has AI Provider panels', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch dashboard via API to verify panel configuration
+    const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
+    expect(resp.ok()).toBeTruthy();
+    
+    const body = await resp.json();
+    const dashboard = (body as any).dashboard ?? body;
+    const panels: any[] = dashboard.panels ?? [];
+    
+    // Check for AI Provider panels
+    const providerRequestRatePanel = panels.find((p) => p.title === 'AI Provider Request Rate');
+    const providerResponseTimePanel = panels.find((p) => p.title === 'AI Provider Response Time');
+    const aiRequestRatePanel = panels.find((p) => p.title === 'AI Request Rate');
+    const aiLatencyPercentilesPanel = panels.find((p) => p.title === 'AI Request Latency Percentiles');
+    
+    expect(providerRequestRatePanel).toBeTruthy();
+    expect(providerRequestRatePanel.type).toBe('timeseries');
+    expect(String(providerRequestRatePanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
+    console.log('AI Provider Request Rate panel configured correctly');
+    
+    expect(providerResponseTimePanel).toBeTruthy();
+    expect(providerResponseTimePanel.type).toBe('timeseries');
+    expect(String(providerResponseTimePanel?.targets?.[0]?.expr ?? '')).toContain('ai_request_duration_seconds');
+    console.log('AI Provider Response Time panel configured correctly');
+    
+    expect(aiRequestRatePanel).toBeTruthy();
+    expect(aiRequestRatePanel.type).toBe('timeseries');
+    expect(String(aiRequestRatePanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
+    console.log('AI Request Rate panel configured correctly');
+    
+    expect(aiLatencyPercentilesPanel).toBeTruthy();
+    expect(aiLatencyPercentilesPanel.type).toBe('timeseries');
+    expect(String(aiLatencyPercentilesPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile');
+    console.log('AI Request Latency Percentiles panel configured correctly');
+  });
+
+  test('AI Metrics dashboard shows actual data from Prometheus', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Query Prometheus for AI metrics
+    const aiRequestsResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_requests_total) or vector(0)' },
+    });
+    expect(aiRequestsResp.ok()).toBeTruthy();
+    
+    const aiRequestsBody = await aiRequestsResp.json();
+    const aiRequestsResult = (aiRequestsBody as any)?.data?.result ?? [];
+    const totalAiRequests = aiRequestsResult.length > 0 ? parseFloat(aiRequestsResult[0]?.value?.[1] ?? '0') : 0;
+    console.log(`Total AI Requests from Prometheus: ${totalAiRequests}`);
+    
+    // Query for AI duration metrics
+    const aiDurationResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_request_duration_seconds_count) or vector(0)' },
+    });
+    expect(aiDurationResp.ok()).toBeTruthy();
+    
+    const aiDurationBody = await aiDurationResp.json();
+    const aiDurationResult = (aiDurationBody as any)?.data?.result ?? [];
+    const totalAiDurationCount = aiDurationResult.length > 0 ? parseFloat(aiDurationResult[0]?.value?.[1] ?? '0') : 0;
+    console.log(`Total AI Duration Count from Prometheus: ${totalAiDurationCount}`);
+    
+    // Query for average latency
+    const avgLatencyResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_request_duration_seconds_sum) / clamp_min(sum(ai_request_duration_seconds_count), 1) or vector(0)' },
+    });
+    expect(avgLatencyResp.ok()).toBeTruthy();
+    
+    const avgLatencyBody = await avgLatencyResp.json();
+    const avgLatencyResult = (avgLatencyBody as any)?.data?.result ?? [];
+    const avgLatency = avgLatencyResult.length > 0 ? parseFloat(avgLatencyResult[0]?.value?.[1] ?? '0') : 0;
+    console.log(`Average AI Latency from Prometheus: ${avgLatency}s`);
+    
+    // If there are AI requests, verify the metrics are consistent
+    if (totalAiRequests > 0) {
+      expect(totalAiDurationCount).toBeGreaterThan(0);
+      expect(avgLatency).toBeGreaterThan(0);
+      console.log('AI Metrics are being recorded and show consistent data');
+    } else {
+      console.log('No AI requests recorded yet - this is expected for fresh deployments');
+    }
   });
 
   test('AI Metrics are recorded after evaluation triggers AI calls', async ({ page }) => {
