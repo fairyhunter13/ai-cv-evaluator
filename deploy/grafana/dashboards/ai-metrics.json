@@ -86,13 +86,13 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(ai_request_duration_seconds_bucket[1h])) by (le)) or vector(0)",
+          "expr": "sum(ai_request_duration_seconds_sum) / clamp_min(sum(ai_request_duration_seconds_count), 1) or vector(0)",
           "refId": "A"
         }
       ],
-      "title": "Median AI Latency (p50)",
+      "title": "Average AI Latency",
       "type": "stat",
-      "description": "Median response time for AI provider API calls"
+      "description": "Average response time for AI provider API calls (sum/count)"
     },
     {
       "datasource": "Prometheus",
@@ -125,7 +125,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[1h])) by (le)) or vector(0)",
+          "expr": "histogram_quantile(0.95, sum by (le) (ai_request_duration_seconds_bucket)) or vector(0)",
           "refId": "A"
         }
       ],
@@ -239,7 +239,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "sum(rate(ai_requests_total[5m])) by (provider, operation)",
+          "expr": "sum(increase(ai_requests_total[5m])) by (provider, operation)",
           "refId": "A",
           "legendFormat": "{{provider}} - {{operation}}"
         }
@@ -324,12 +324,12 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le))",
+          "expr": "histogram_quantile(0.95, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le))",
           "refId": "A",
           "legendFormat": "p95 {{provider}} - {{operation}}"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le))",
+          "expr": "histogram_quantile(0.99, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le))",
           "refId": "B",
           "legendFormat": "p99 {{provider}} - {{operation}}"
         }
@@ -508,6 +508,218 @@
       ],
       "title": "Total AI Requests by Provider",
       "type": "piechart"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "id": 14,
+      "options": {
+        "legend": { "calcs": ["sum"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "expr": "sum(increase(ai_requests_total[5m])) by (provider)",
+          "refId": "A",
+          "legendFormat": "{{provider}}"
+        }
+      ],
+      "title": "AI Provider Request Rate",
+      "type": "timeseries",
+      "description": "Rate of requests to external AI providers (OpenRouter, Groq, OpenAI) over time"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "off" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "id": 15,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, le))",
+          "refId": "A",
+          "legendFormat": "p50 {{provider}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, le))",
+          "refId": "B",
+          "legendFormat": "p95 {{provider}}"
+        }
+      ],
+      "title": "AI Provider Response Time",
+      "type": "timeseries",
+      "description": "Response time percentiles for external AI provider API calls"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 28 },
+      "id": 16,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "expr": "sum(ai_request_duration_seconds_sum) / clamp_min(sum(ai_request_duration_seconds_count), 1) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Average AI Latency",
+      "type": "stat",
+      "description": "Average response time for AI provider API calls (sum/count)"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 28 },
+      "id": 17,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "expr": "sum(ai_request_duration_seconds_count) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Total AI Request Count",
+      "type": "stat",
+      "description": "Total number of AI requests (from histogram count)"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "purple", "value": null }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 28 },
+      "id": 18,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.0.0",
+      "targets": [
+        {
+          "expr": "sum(ai_request_duration_seconds_sum) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Total AI Processing Time",
+      "type": "stat",
+      "description": "Total time spent on AI provider API calls"
     }
   ],
   "schemaVersion": 27,
