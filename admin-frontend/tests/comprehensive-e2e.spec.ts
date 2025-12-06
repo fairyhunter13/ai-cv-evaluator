@@ -3409,6 +3409,35 @@ test.describe('Dashboard Completeness Validation', () => {
     console.log('HTTP Metrics: Top Error Routes table panel configured correctly');
   });
 
+  test('Prometheus worker target is healthy for AI metrics', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Query Prometheus targets API to verify worker is being scraped
+    const targetsResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/targets');
+    if (!targetsResp.ok()) {
+      console.log('Could not query Prometheus targets API');
+      return;
+    }
+
+    const targetsBody = await targetsResp.json().catch(() => ({}));
+    const activeTargets = (targetsBody as any)?.data?.activeTargets ?? [];
+    
+    // Find the worker target
+    const workerTarget = activeTargets.find((t: any) => 
+      t.labels?.job === 'worker' || t.scrapeUrl?.includes('worker:9090')
+    );
+    
+    if (workerTarget) {
+      console.log(`Worker target health: ${workerTarget.health}`);
+      console.log(`Worker last scrape: ${workerTarget.lastScrape}`);
+      expect(workerTarget.health).toBe('up');
+    } else {
+      console.log('Worker target not found in Prometheus targets');
+      console.log('Available targets:', activeTargets.map((t: any) => t.labels?.job).join(', '));
+    }
+  });
+
   test('AI Metrics dashboard has summary stat panels', async ({ page }) => {
     test.setTimeout(60000);
     await loginViaSSO(page);
