@@ -136,6 +136,26 @@ const validateAiMetricsDashboard = async (page: Page): Promise<void> => {
   const aiBody = await aiResp.json();
   const aiDash: any = (aiBody as any).dashboard ?? aiBody;
   const aiPanels: any[] = aiDash.panels ?? [];
+  
+  // Validate new summary stat panels
+  const totalAiRequestsPanel = aiPanels.find((p) => p.title === 'Total AI Requests');
+  expect(totalAiRequestsPanel).toBeTruthy();
+  expect(totalAiRequestsPanel?.type ?? '').toBe('stat');
+  expect(String(totalAiRequestsPanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
+  
+  const medianLatencyPanel = aiPanels.find((p) => p.title === 'Median AI Latency (p50)');
+  expect(medianLatencyPanel).toBeTruthy();
+  expect(String(medianLatencyPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.50');
+  
+  const p95LatencyPanel = aiPanels.find((p) => p.title === '95th Percentile Latency');
+  expect(p95LatencyPanel).toBeTruthy();
+  expect(String(p95LatencyPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.95');
+  
+  const totalTokensPanel = aiPanels.find((p) => p.title === 'Total Tokens Used');
+  expect(totalTokensPanel).toBeTruthy();
+  expect(String(totalTokensPanel?.targets?.[0]?.expr ?? '')).toContain('ai_tokens_total');
+  
+  // Validate existing panels
   const ratePanel = aiPanels.find((p) => p.title === 'AI Request Rate');
   expect(String(ratePanel?.targets?.[0]?.expr ?? '')).toContain('sum(rate(ai_requests_total');
   expect(ratePanel?.fieldConfig?.defaults?.unit ?? '').toBe('ops');
@@ -164,6 +184,35 @@ const validateAiMetricsDashboard = async (page: Page): Promise<void> => {
   // Default AI Metrics time range: last 6 hours.
   expect(aiDash.time?.from ?? '').toBe('now-6h');
   expect(aiDash.time?.to ?? '').toBe('now');
+};
+
+// Validate HTTP Metrics dashboard panels via Grafana API.
+const validateHttpMetricsDashboard = async (page: Page): Promise<void> => {
+  const httpResp = await page.request.get('/grafana/api/dashboards/uid/http-metrics');
+  expect(httpResp.ok()).toBeTruthy();
+  const httpBody = await httpResp.json();
+  const httpDash: any = (httpBody as any).dashboard ?? httpBody;
+  const httpPanels: any[] = httpDash.panels ?? [];
+  
+  // Validate Error Rate by Route panel
+  const errorRateByRoutePanel = httpPanels.find((p) => p.title === 'Error Rate Over Time by Route');
+  expect(errorRateByRoutePanel).toBeTruthy();
+  expect(errorRateByRoutePanel?.type ?? '').toBe('timeseries');
+  const errorRateExpr = String(errorRateByRoutePanel?.targets?.[0]?.expr ?? '');
+  expect(errorRateExpr).toContain('by (route)');
+  expect(errorRateExpr).toContain('http_requests_total');
+  
+  // Validate Top Error Routes table panel
+  const topErrorRoutesPanel = httpPanels.find((p) => p.title === 'Top Error Routes');
+  expect(topErrorRoutesPanel).toBeTruthy();
+  expect(topErrorRoutesPanel?.type ?? '').toBe('table');
+  const topErrorExpr = String(topErrorRoutesPanel?.targets?.[0]?.expr ?? '');
+  expect(topErrorExpr).toContain('topk');
+  expect(topErrorExpr).toContain('by (route, status)');
+  
+  // Validate table has transformations
+  const transformations = topErrorRoutesPanel?.transformations ?? [];
+  expect(transformations.length).toBeGreaterThan(0);
 };
 
 // Validate Job Queue Metrics dashboard panels via Grafana API.
@@ -584,11 +633,28 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
       const statusPiePanel = httpPanels.find((p) => p.title === 'Request Distribution by Status');
       const respPctlsPanel = httpPanels.find((p) => p.title === 'Response Time Percentiles by Route');
       const p95Gauge = httpPanels.find((p) => p.title === '95th Percentile Response Time');
+      
+      // New panels for error tracking
+      const errorRateByRoutePanel = httpPanels.find((p) => p.title === 'Error Rate Over Time by Route');
+      const topErrorRoutesPanel = httpPanels.find((p) => p.title === 'Top Error Routes');
 
       expect(reqRatePanel).toBeTruthy();
       expect(statusPiePanel).toBeTruthy();
       expect(respPctlsPanel).toBeTruthy();
       expect(p95Gauge).toBeTruthy();
+      
+      // Validate new error tracking panels
+      expect(errorRateByRoutePanel).toBeTruthy();
+      expect(errorRateByRoutePanel?.type ?? '').toBe('timeseries');
+      const errorRateExpr = String(errorRateByRoutePanel?.targets?.[0]?.expr ?? '');
+      expect(errorRateExpr).toContain('by (route)');
+      expect(errorRateExpr).toContain('http_requests_total');
+      
+      expect(topErrorRoutesPanel).toBeTruthy();
+      expect(topErrorRoutesPanel?.type ?? '').toBe('table');
+      const topErrorExpr = String(topErrorRoutesPanel?.targets?.[0]?.expr ?? '');
+      expect(topErrorExpr).toContain('topk');
+      expect(topErrorExpr).toContain('by (route, status)');
 
       const reqRateExpr = String(reqRatePanel.targets?.[0]?.expr ?? '');
       expect(reqRateExpr).toContain('sum(rate(http_requests_total[5m])) by (route)');
