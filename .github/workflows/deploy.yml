@@ -15,16 +15,6 @@ on:
         type: choice
         options:
           - production
-      force_deploy:
-        description: 'Force deployment (skip safety checks)'
-        required: false
-        default: false
-        type: boolean
-      skip_sso_tests:
-        description: 'Skip SSO login tests during production validation (useful for initial setup)'
-        required: false
-        default: false
-        type: boolean
       target_ip:
         description: 'Override A record target IP for Cloudflare DNS sync (defaults to SSH_HOST secret)'
         required: false
@@ -66,7 +56,7 @@ jobs:
         run: |
           # Check if this is a production deployment
           
-          if [[ "${{ github.event.inputs.environment || 'production' }}" == "production" && "${{ github.event.inputs.force_deploy }}" != "true" ]]; then
+          if [[ "${{ github.event.inputs.environment || 'production' }}" == "production" ]]; then
             # Ensure we're deploying a tagged version to production
             if [[ "${{ github.ref }}" != refs/tags/* ]]; then
               echo "Error: Production deployments require a git tag"
