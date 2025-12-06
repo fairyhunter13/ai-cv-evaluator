@@ -43,6 +43,11 @@ func init() {
 // recordTokenUsage records token usage metrics for AI provider calls.
 // It records both prompt and completion tokens separately for detailed tracking.
 func recordTokenUsage(provider, model string, promptTokens, completionTokens int) {
+	slog.Debug("recordTokenUsage called",
+		slog.String("provider", provider),
+		slog.String("model", model),
+		slog.Int("prompt_tokens", promptTokens),
+		slog.Int("completion_tokens", completionTokens))
 	if promptTokens > 0 {
 		observability.RecordAITokenUsage(provider, "prompt", model, promptTokens)
 	}
@@ -55,9 +60,12 @@ func recordTokenUsage(provider, model string, promptTokens, completionTokens int
 // It uses cl100k_base encoding which is compatible with most modern LLMs.
 // Returns 0 if encoding fails.
 func estimateTokenCount(text string) int {
+	if text == "" {
+		return 0
+	}
 	enc, err := tiktoken.GetEncoding("cl100k_base")
 	if err != nil {
-		slog.Warn("failed to get tiktoken encoding", slog.Any("error", err))
+		slog.Error("failed to get tiktoken encoding", slog.Any("error", err))
 		return 0
 	}
 	tokens := enc.Encode(text, nil, nil)
