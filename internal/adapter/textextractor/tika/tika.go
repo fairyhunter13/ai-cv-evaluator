@@ -19,6 +19,7 @@ import (
 
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/pkg/textx"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Client is a minimal Apache Tika HTTP client implementing domain.TextExtractor.
@@ -45,9 +46,15 @@ func New(baseURL string) *Client {
 		5*time.Second,  // min timeout
 		60*time.Second, // max timeout
 	)
+	// Use otelhttp transport for distributed tracing
+	transport := otelhttp.NewTransport(http.DefaultTransport,
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return fmt.Sprintf("Tika %s", r.Method)
+		}),
+	)
 	return &Client{
 		baseURL:    baseURL,
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		httpClient: &http.Client{Timeout: 15 * time.Second, Transport: transport},
 		obs:        obsClient,
 	}
 }
