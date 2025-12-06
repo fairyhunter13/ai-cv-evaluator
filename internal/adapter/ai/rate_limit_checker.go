@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // OpenRouterAPIKeyResponse represents the response from the OpenRouter API key endpoint
@@ -28,13 +30,20 @@ type RateLimitChecker struct {
 	httpClient *http.Client
 }
 
-// NewRateLimitChecker creates a new rate limit checker
+// NewRateLimitChecker creates a new rate limit checker with OpenTelemetry tracing
 func NewRateLimitChecker(apiKey, baseURL string) *RateLimitChecker {
+	// Use otelhttp transport for distributed tracing
+	transport := otelhttp.NewTransport(http.DefaultTransport,
+		otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+			return fmt.Sprintf("RateLimit %s %s", r.Method, r.URL.Host)
+		}),
+	)
 	return &RateLimitChecker{
 		apiKey:  apiKey,
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 	}
 }
