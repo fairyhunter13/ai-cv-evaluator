@@ -413,6 +413,24 @@ The GitHub Actions deployment pipeline enforces strict quality gates:
 5. **validate-production** - Health checks, Playwright E2E, alerting validation
 6. **cloudflare-dns-sync** - Updates DNS records
 
+### Required GitHub Secrets
+
+| Secret | Purpose |
+|--------|---------|
+| `SSH_PRIVATE_KEY` | SSH key for production server access |
+| `SSH_HOST` | Production server hostname/IP |
+| `SSH_USER` | SSH username for production server |
+| `SOPS_AGE_KEY` | Age key for decrypting SOPS secrets |
+| `OPENROUTER_API_KEY` | OpenRouter API key for AI calls |
+| `OPENROUTER_API_KEY_2` | Secondary OpenRouter API key (fallback) |
+| `OPENAI_API_KEY` | OpenAI API key for embeddings |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token for DNS updates |
+| `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID for DNS updates |
+| `SSO_USERNAME` | Keycloak SSO username for E2E tests |
+| `SSO_PASSWORD` | Keycloak SSO password for E2E tests |
+| `ADMIN_USERNAME` | Backend admin username |
+| `ADMIN_PASSWORD` | Backend admin password |
+
 ### Creating a Release
 
 ```bash
