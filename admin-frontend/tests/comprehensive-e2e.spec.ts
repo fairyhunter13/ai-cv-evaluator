@@ -3592,6 +3592,13 @@ test.describe('Dashboard Completeness Validation', () => {
     test.setTimeout(60000);
     await loginViaSSO(page);
 
+    // First, check if the metric exists at all (without aggregation)
+    const rawMetricResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'ai_tokens_total' },
+    });
+    const rawMetricBody = await rawMetricResp.json();
+    console.log(`Raw ai_tokens_total metric: ${JSON.stringify((rawMetricBody as any)?.data?.result ?? [])}`);
+
     // Query Prometheus for AI token usage metrics
     const tokenUsageResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_tokens_total) or vector(0)' },
