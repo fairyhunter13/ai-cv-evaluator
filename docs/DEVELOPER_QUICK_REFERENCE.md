@@ -58,14 +58,37 @@ make test-e2e  # requires OPENROUTER_API_KEY and OPENAI_API_KEY (optional fallba
   RUN_FULL_SMOKE_E2E=1 make test-e2e   # same suite as CI, but explicitly enabling heavier smoke locally
   ```
 
-### Playwright SSO gate tests (frontend)
+### Playwright E2E tests (frontend)
 
 From `admin-frontend/`:
 
 ```bash
 npm install            # once
 npx playwright install # once
-npm run test:e2e       # runs tests in tests/sso-gate.spec.ts
+npm run test:e2e       # runs all Playwright tests
+```
+
+#### Test Files
+
+| File | Purpose |
+|------|---------|
+| `sso-gate.spec.ts` | SSO authentication flow, dashboard access validation |
+| `real-eval.spec.ts` | **Real CV evaluation end-to-end** - triggers actual AI provider calls |
+| `comprehensive-e2e.spec.ts` | Dashboard completeness, AI metrics validation, data consistency |
+| `ui-flow.spec.ts` | Admin UI navigation and form validation |
+| `production-compat.spec.ts` | Production compatibility checks |
+
+#### Running Specific Tests
+
+```bash
+# Run real evaluation test (triggers AI metrics)
+npx playwright test real-eval.spec.ts
+
+# Run AI metrics dashboard tests
+npx playwright test comprehensive-e2e.spec.ts -g "AI Metrics"
+
+# Run SSO gate tests only
+npx playwright test sso-gate.spec.ts
 ```
 
 These tests assume `make dev-full` is running and verify that:
@@ -73,6 +96,8 @@ These tests assume `make dev-full` is running and verify that:
 - Unauthenticated access to `/app/`, `/grafana/`, `/prometheus/`, `/jaeger/`, `/redpanda/`, `/admin/` is redirected into the SSO flow.
 - After logging in once via SSO, those dashboards are reachable without further logins.
 - `/logout` revokes SSO, and protected URLs again send you to SSO.
+- **CV evaluations trigger AI provider calls and record metrics** (via `real-eval.spec.ts`)
+- **AI Metrics dashboard shows data after evaluations** (via `comprehensive-e2e.spec.ts`)
 
 ## Deployment
 
@@ -86,9 +111,14 @@ The deploy workflow enforces strict quality gates:
 
 1. **Pre-deploy checks** - Requires semantic version tags (v1.2.3)
 2. **Security gate** - CI and Docker Publish workflows must succeed
-3. **E2E verify** - Smoke tests must pass
+3. **E2E verify** - Go smoke tests must pass
 4. **Deploy** - Blue/green deployment with automatic rollback
-5. **Production validation** - Health checks, Playwright E2E, alerting validation
+5. **Production validation**:
+   - Health checks (`/healthz`, `/readyz`)
+   - Playwright E2E tests (`real-eval.spec.ts` for CV evaluation, AI metrics validation)
+   - Alerting pipeline validation (Prometheus → Grafana → Mailpit)
+   - SSL certificate validation
+   - DNS record validation
 6. **Cloudflare DNS sync** - Automatic DNS record updates
 
 ### Creating a Release

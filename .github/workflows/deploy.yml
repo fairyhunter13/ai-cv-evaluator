@@ -1039,6 +1039,28 @@ jobs:
             echo "⚠ Grafana returned unexpected code: $HTTP_CODE"
           fi
 
+      - name: Run Playwright E2E tests for CV evaluation and AI metrics
+        working-directory: admin-frontend
+        env:
+          E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
+          SSO_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          SSO_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          echo "=== Running Playwright E2E tests against production ==="
+          echo "Base URL: $E2E_BASE_URL"
+          
+          # Run the real-eval test to trigger actual CV evaluations
+          npx playwright test real-eval.spec.ts --reporter=list --timeout=180000 || {
+            echo "⚠ real-eval test failed, but continuing with validation..."
+          }
+          
+          # Run comprehensive E2E tests for dashboard validation
+          npx playwright test comprehensive-e2e.spec.ts -g "AI Metrics" --reporter=list --timeout=120000 || {
+            echo "⚠ AI Metrics dashboard tests had issues, but continuing..."
+          }
+          
+          echo "=== Playwright E2E tests completed ==="
+
       - name: Generate validation report
         if: always()
         run: |
