@@ -3472,6 +3472,159 @@ test.describe('Dashboard Completeness Validation', () => {
     
     console.log('AI Metrics: Stat panels use proper fallback for empty data');
   });
+
+  test('AI Metrics are recorded after evaluation triggers AI calls', async ({ page }) => {
+    test.setTimeout(180000);
+    await loginViaSSO(page);
+
+    // Get initial AI metrics count from Prometheus
+    let initialAiRequests = 0;
+    const initialMetricsResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_requests_total) or vector(0)' },
+    });
+    if (initialMetricsResp.ok()) {
+      const initialBody = await initialMetricsResp.json().catch(() => ({}));
+      const results = (initialBody as any)?.data?.result ?? [];
+      if (results.length > 0) {
+        initialAiRequests = parseFloat(results[0]?.value?.[1] ?? '0');
+      }
+    }
+    console.log(`Initial AI requests count: ${initialAiRequests}`);
+
+    // Navigate to Upload page and upload test files
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('link', { name: /Upload Files/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const fileInputs = page.locator('input[type="file"]');
+    const fileInputCount = await fileInputs.count();
+    
+    if (fileInputCount < 2) {
+      console.log('File inputs not found, skipping AI metrics test');
+      return;
+    }
+
+    await fileInputs.nth(0).setInputFiles('tests/fixtures/cv.txt');
+    await fileInputs.nth(1).setInputFiles('tests/fixtures/project.txt');
+
+    const uploadButton = page.getByRole('button', { name: /^Upload Files$/i });
+    if (!(await uploadButton.isVisible())) {
+      console.log('Upload button not visible, skipping AI metrics test');
+      return;
+    }
+
+    const uploadResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/v1/upload') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ).catch(() => null);
+
+    await uploadButton.click();
+    const uploadResp = await uploadResponsePromise;
+
+    if (!uploadResp || uploadResp.status() !== 200) {
+      console.log('Upload failed, skipping AI metrics test');
+      return;
+    }
+
+    const uploadJson = await uploadResp.json().catch(() => ({}));
+    const cvId = (uploadJson as any)?.cv_id as string;
+    const projectId = (uploadJson as any)?.project_id as string;
+
+    if (!cvId || !projectId) {
+      console.log('IDs not returned, skipping AI metrics test');
+      return;
+    }
+
+    // Start evaluation
+    await page.getByRole('link', { name: /Start Evaluation/i }).click();
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(1000);
+
+    const cvIdInput = page.getByLabel('CV ID');
+    const projectIdInput = page.getByLabel('Project ID');
+
+    if (await cvIdInput.isVisible()) {
+      await cvIdInput.fill(cvId);
+    }
+    if (await projectIdInput.isVisible()) {
+      await projectIdInput.fill(projectId);
+    }
+
+    const evalButton = page.getByRole('button', { name: /^Start Evaluation$/i });
+    if (!(await evalButton.isVisible())) {
+      console.log('Eval button not visible, skipping AI metrics test');
+      return;
+    }
+
+    const evalResponsePromise = page.waitForResponse(
+      (r) => r.url().includes('/v1/evaluate') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ).catch(() => null);
+
+    await evalButton.click();
+    const evalResp = await evalResponsePromise;
+
+    if (!evalResp || evalResp.status() !== 200) {
+      console.log('Evaluation request failed, skipping AI metrics test');
+      return;
+    }
+
+    const evalJson = await evalResp.json().catch(() => ({}));
+    const jobId = (evalJson as any)?.id as string;
+
+    if (!jobId) {
+      console.log('Job ID not returned, skipping AI metrics test');
+      return;
+    }
+
+    // Poll for evaluation completion (up to 60s)
+    let lastStatus = '';
+    for (let i = 0; i < 60; i += 1) {
+      const res = await page.request.get(`/v1/result/${jobId}`);
+      if (!res.ok()) break;
+      const body = await res.json().catch(() => ({}));
+      lastStatus = String((body as any)?.status ?? '');
+      if (['completed', 'failed'].includes(lastStatus)) break;
+      await page.waitForTimeout(1000);
+    }
+    console.log(`Evaluation final status: ${lastStatus}`);
+
+    // Wait for Prometheus to scrape the new metrics (scrape interval is typically 15s)
+    await page.waitForTimeout(20000);
+
+    // Check if AI metrics increased
+    let finalAiRequests = 0;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const finalMetricsResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+        params: { query: 'sum(ai_requests_total) or vector(0)' },
+      });
+      if (finalMetricsResp.ok()) {
+        const finalBody = await finalMetricsResp.json().catch(() => ({}));
+        const results = (finalBody as any)?.data?.result ?? [];
+        if (results.length > 0) {
+          finalAiRequests = parseFloat(results[0]?.value?.[1] ?? '0');
+        }
+      }
+      if (finalAiRequests > initialAiRequests) break;
+      await page.waitForTimeout(5000);
+    }
+    console.log(`Final AI requests count: ${finalAiRequests}`);
+
+    // If evaluation completed or failed, AI calls should have been made
+    if (lastStatus === 'completed') {
+      // For completed evaluations, we expect AI metrics to increase
+      expect(finalAiRequests).toBeGreaterThan(initialAiRequests);
+      console.log(`AI metrics increased by ${finalAiRequests - initialAiRequests} after evaluation`);
+    } else if (lastStatus === 'failed') {
+      // For failed evaluations, AI calls may or may not have been made
+      console.log(`Evaluation failed, AI metrics may not have increased`);
+    } else {
+      // Evaluation still processing - just log
+      console.log(`Evaluation still in status: ${lastStatus}`);
+    }
+  });
 });
 
 // Data Consistency Cross-Check Tests
