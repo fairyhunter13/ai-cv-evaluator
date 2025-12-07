@@ -474,3 +474,39 @@ func TestModelValidator_ValidateModelComprehensive_AllPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestModelValidator_ValidateModelStability_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// First two responses valid, third invalid JSON
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"test": "stability", "number": 42}`, nil).Once()
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"test": "stability", "number": 42}`, nil).Once()
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return("invalid json", nil).Once()
+
+	validator := NewModelValidator(mockAI)
+	err := validator.ValidateModelStability(context.Background())
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid JSON")
+	mockAI.AssertExpectations(t)
+}
+
+func TestModelValidator_ValidateModelStability_ContextTimeout(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Simulate slow response that causes context timeout
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Run(func(args mock.Arguments) {
+		ctx := args.Get(0).(context.Context)
+		<-ctx.Done() // Wait for context to be cancelled
+	}).Return("", context.DeadlineExceeded).Once()
+
+	validator := NewModelValidator(mockAI)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	err := validator.ValidateModelStability(ctx)
+	assert.Error(t, err)
+	mockAI.AssertExpectations(t)
+}
