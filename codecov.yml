@@ -58,4 +58,4 @@ flags:
     paths:
       - "internal/"
       - "pkg/"
-    carryforward: true
+    carryforward: false  # Disable carryforward to ensure fresh coverage calculation
