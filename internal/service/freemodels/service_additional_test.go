@@ -551,3 +551,97 @@ func TestCapacityScore_PerRequestAndContext(t *testing.T) {
 	}
 	require.InDelta(t, 8192.0, capacityScore(m2), 1e-6)
 }
+
+func TestGetFreeModels_CacheUsedOnAPIFailure(t *testing.T) {
+	t.Parallel()
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// First call succeeds
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{
+						"id":   "cached-model",
+						"name": "Cached Model",
+						"pricing": map[string]string{
+							"prompt":     "0",
+							"completion": "0",
+							"request":    "0",
+							"image":      "0",
+						},
+					},
+				},
+			})
+		} else {
+			// Subsequent calls fail
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	svc := NewService("test-key", server.URL, 1*time.Millisecond)
+	ctx := context.Background()
+
+	// First call - should succeed and cache
+	models, err := svc.GetFreeModels(ctx)
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+
+	// Wait for cache to expire
+	time.Sleep(5 * time.Millisecond)
+
+	// Second call - API fails but should return cached models
+	models, err = svc.GetFreeModels(ctx)
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+	require.Equal(t, "cached-model", models[0].ID)
+}
+
+func TestIsFreeModel_ExcludedPatterns(t *testing.T) {
+	t.Parallel()
+
+	svc := &Service{}
+
+	tests := []struct {
+		name     string
+		modelID  string
+		pricing  Pricing
+		expected bool
+	}{
+		{
+			name:     "openrouter_auto_excluded",
+			modelID:  "openrouter/auto",
+			pricing:  Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"},
+			expected: false,
+		},
+		{
+			name:     "openrouter_prefix_excluded",
+			modelID:  "openrouter/gpt-4-turbo",
+			pricing:  Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"},
+			expected: false,
+		},
+		{
+			name:     "free_model_included",
+			modelID:  "meta-llama/llama-3.1-8b-instruct:free",
+			pricing:  Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"},
+			expected: true,
+		},
+		{
+			name:     "paid_model_excluded",
+			modelID:  "openai/gpt-4",
+			pricing:  Pricing{Prompt: "0.01", Completion: "0.02", Request: "0", Image: "0"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := Model{ID: tt.modelID, Pricing: tt.pricing}
+			result := svc.isFreeModel(model)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
