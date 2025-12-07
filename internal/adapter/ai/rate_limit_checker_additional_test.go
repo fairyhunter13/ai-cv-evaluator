@@ -339,3 +339,73 @@ func TestRateLimitChecker_WaitForQuota_TimeoutNoQuota(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "insufficient quota")
 }
+
+func TestRateLimitChecker_CheckAccountStatus_ActiveWithCredits(t *testing.T) {
+	limitRemaining := 50.0
+	mockResponse := map[string]any{
+		"data": map[string]any{
+			"label":               "Test API Key",
+			"usage":               50.0,
+			"limit":               100.0,
+			"is_free_tier":        false,
+			"limit_remaining":     limitRemaining,
+			"is_provisioning_key": false,
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(mockResponse))
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	isActive, hasCredits, err := checker.CheckAccountStatus(ctx)
+	require.NoError(t, err)
+	require.True(t, isActive)
+	require.True(t, hasCredits)
+}
+
+func TestRateLimitChecker_CheckAccountStatus_FreeTierNoCredits(t *testing.T) {
+	mockResponse := map[string]any{
+		"data": map[string]any{
+			"label":               "Free Tier API Key",
+			"usage":               0.0,
+			"limit":               nil,
+			"is_free_tier":        true,
+			"limit_remaining":     nil,
+			"is_provisioning_key": false,
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(mockResponse))
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	isActive, hasCredits, err := checker.CheckAccountStatus(ctx)
+	require.NoError(t, err)
+	require.True(t, isActive)   // Free tier is active
+	require.True(t, hasCredits) // Unlimited (nil limit) counts as having credits
+}
+
+func TestRateLimitChecker_CheckAccountStatus_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	isActive, hasCredits, err := checker.CheckAccountStatus(ctx)
+	require.Error(t, err)
+	require.False(t, isActive)
+	require.False(t, hasCredits)
+}
