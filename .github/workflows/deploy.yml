@@ -262,67 +262,55 @@ jobs:
             exit 1
           fi
 
-          # Check Codecov coverage status (hard gate)
-          # Note: Codecov posts status to GitHub commits. If not available, we rely on CI's
-          # built-in 80% coverage gate (make ci-test fails if coverage < 80%).
-          echo "Checking Codecov coverage status for commit $SHA..."
-          check_codecov_status() {
-            local max_attempts=5
-            local sleep_seconds=20
+          # Check Codecov coverage from main branch (hard gate)
+          # Uses Codecov API v2 to get actual coverage percentage
+          echo "Checking Codecov coverage for main branch..."
+          check_codecov_coverage() {
+            local max_attempts=10
+            local sleep_seconds=30
+            local min_coverage=80
             
             for attempt in $(seq 1 "$max_attempts"); do
-              echo "Attempt $attempt/$max_attempts: Checking Codecov status..."
+              echo "Attempt $attempt/$max_attempts: Querying Codecov API..."
               
-              # Check both statuses and check-runs APIs
-              statuses_json=$(curl -sS \
-                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-                -H "Accept: application/vnd.github+json" \
-                "https://api.github.com/repos/${OWNER}/${REPO}/commits/${SHA}/statuses")
+              # Query Codecov API v2 for main branch coverage
+              codecov_response=$(curl -sS \
+                "https://codecov.io/api/v2/github/${OWNER}/repos/${REPO}/commits?branch=main" \
+                2>/dev/null || echo '{"results":[]}')
               
-              # Look for codecov/project status
-              codecov_status=$(echo "$statuses_json" | jq -r '
-                [.[] | select(.context | startswith("codecov"))] | 
-                sort_by(.created_at) | last // empty
-              ')
+              # Extract coverage from the latest commit
+              coverage=$(echo "$codecov_response" | jq -r '.results[0].totals.coverage // empty')
+              commit_sha=$(echo "$codecov_response" | jq -r '.results[0].commitid // empty')
               
-              if [ -n "$codecov_status" ]; then
-                state=$(echo "$codecov_status" | jq -r '.state')
-                context=$(echo "$codecov_status" | jq -r '.context')
-                description=$(echo "$codecov_status" | jq -r '.description // ""')
-                target_url=$(echo "$codecov_status" | jq -r '.target_url // ""')
+              if [ -n "$coverage" ] && [ "$coverage" != "null" ]; then
+                coverage_int=${coverage%.*}
+                echo "Codecov coverage for main branch: ${coverage}% (commit: ${commit_sha:0:7})"
                 
-                echo "Codecov status: context=$context, state=$state"
-                echo "Description: $description"
-                
-                if [ "$state" = "success" ]; then
-                  echo "✓ Codecov coverage check passed"
+                if [ "$coverage_int" -ge "$min_coverage" ]; then
+                  echo "✓ Codecov coverage ${coverage}% meets minimum ${min_coverage}%"
                   return 0
-                elif [ "$state" = "failure" ] || [ "$state" = "error" ]; then
-                  echo "✗ Codecov coverage check failed: $description"
-                  echo "Details: $target_url"
+                else
+                  echo "✗ Codecov coverage ${coverage}% is below minimum ${min_coverage}%"
+                  echo "Please improve unit test coverage before deploying."
                   return 1
                 fi
-                # state is pending, continue waiting
               else
-                echo "No Codecov status found for commit $SHA."
+                echo "No Codecov coverage data available yet for main branch."
               fi
               
               if [ "$attempt" -lt "$max_attempts" ]; then
-                echo "Waiting ${sleep_seconds}s before re-checking Codecov status..."
+                echo "Waiting ${sleep_seconds}s for Codecov to process coverage..."
                 sleep "$sleep_seconds"
               fi
             done
             
-            # Codecov status not available - rely on CI's built-in coverage gate
-            echo "[INFO] Codecov status not available; relying on CI workflow's 80% coverage gate."
-            echo "       CI workflow uses 'make ci-test' which fails if coverage < 80%."
-            echo "       Since CI passed, coverage requirement is met."
-            return 0
+            echo "[ERROR] Codecov coverage data not available after $((max_attempts * sleep_seconds))s."
+            echo "Failing deployment - coverage verification is required."
+            return 1
           }
           
-          if ! check_codecov_status; then
-            echo "Codecov coverage is below threshold; failing deployment."
-            echo "Please ensure unit test coverage is at least 80% before deploying."
+          if ! check_codecov_coverage; then
+            echo "Codecov coverage check failed; blocking deployment."
             exit 1
           fi
 
