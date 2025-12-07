@@ -379,3 +379,47 @@ func TestResponseValidator_HasRepetitiveContent(t *testing.T) {
 		})
 	}
 }
+
+func TestResponseValidator_ValidateResponse_CleaningFailed(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Mock refusal detection to return no refusal
+	resp := `{"is_refusal": false, "confidence": 0.1, "refusal_type": "", "reason": "", "suggestions":[]}`
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return(resp, nil).Once()
+
+	v := NewResponseValidator(mockAI)
+
+	// Use a response that will fail JSON cleaning but still proceed
+	result, err := v.ValidateResponse(context.Background(), "This is not JSON at all")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	// Should have issues related to invalid JSON
+	hasJSONIssue := false
+	for _, issue := range result.Issues {
+		if issue.Type == "invalid_json" || issue.Type == "cleaning_failed" {
+			hasJSONIssue = true
+			break
+		}
+	}
+	assert.True(t, hasJSONIssue)
+}
+
+func TestResponseValidator_ValidateResponse_RefusalDetected(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Mock refusal detection to return a refusal
+	resp := `{"is_refusal": true, "confidence": 0.95, "refusal_type": "content_policy", "reason": "Content violates policy", "suggestions":["Try different content"]}`
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return(resp, nil).Once()
+
+	v := NewResponseValidator(mockAI)
+
+	result, err := v.ValidateResponse(context.Background(), `{"message": "test"}`)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.IsRefusal)
+	assert.False(t, result.IsValid)
+}
