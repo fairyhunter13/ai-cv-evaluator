@@ -92,7 +92,8 @@ jobs:
         run: |
           # Filter out infrastructure files that require external services
           # These are excluded from Codecov coverage calculation
-          grep -v -E "(dlq_consumer|retry_manager|consumer|producer|evaluation_handler|integrated_evaluation_handler|qdrant|router|client|wrapper)\.go:" \
+          # Use specific file paths to avoid over-matching
+          grep -v -E "(redpanda/(dlq_consumer|retry_manager|consumer|producer|evaluation_handler|integrated_evaluation_handler)|app/(qdrant|router)|ai/real/client|ai/freemodels/wrapper)\.go:" \
             coverage/coverage.unit.out > coverage/coverage.filtered.out || true
           # Ensure the file has the mode line
           if ! grep -q "^mode:" coverage/coverage.filtered.out; then
@@ -102,6 +103,8 @@ jobs:
             mv coverage/coverage.filtered.out coverage/coverage.codecov.out
           fi
           echo "Filtered coverage file created for Codecov upload"
+          echo "Original lines: $(wc -l < coverage/coverage.unit.out)"
+          echo "Filtered lines: $(wc -l < coverage/coverage.codecov.out)"
       - name: Upload unit coverage
         uses: actions/upload-artifact@v4
         with:
