@@ -426,3 +426,82 @@ func TestJSONValidationError_Error(t *testing.T) {
 
 	assert.Equal(t, "test error", err.Error())
 }
+
+func TestResponseCleaner_ExtractJSON(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "no_json",
+			input:    "This is plain text without JSON",
+			expected: "This is plain text without JSON",
+		},
+		{
+			name:     "simple_json",
+			input:    `{"key": "value"}`,
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "json_with_prefix",
+			input:    `Here is the result: {"key": "value"}`,
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "json_with_suffix",
+			input:    `{"key": "value"} and some more text`,
+			expected: `{"key": "value"}`,
+		},
+		{
+			name:     "nested_json",
+			input:    `{"outer": {"inner": "value"}}`,
+			expected: `{"outer": {"inner": "value"}}`,
+		},
+		{
+			name:     "unbalanced_braces",
+			input:    `{"key": "value"`,
+			expected: `{"key": "value"`,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := cleaner.extractJSON(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestResponseCleaner_ValidateAndFixJSON(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"valid_json", `{"key": "value"}`},
+		{"invalid_json_single_quotes", `{'key': 'value'}`},
+		{"invalid_json_trailing_comma", `{"key": "value",}`},
+		{"invalid_json_unquoted_keys", `{key: "value"}`},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := cleaner.validateAndFixJSON(tt.input)
+			assert.NotEmpty(t, result)
+		})
+	}
+}
