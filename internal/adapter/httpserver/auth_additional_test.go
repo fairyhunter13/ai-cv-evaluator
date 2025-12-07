@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -182,4 +183,83 @@ func TestSessionManager_AuthRequired_PassesThrough(t *testing.T) {
 
 	require.True(t, called)
 	require.Equal(t, http.StatusOK, rec.Result().StatusCode)
+}
+
+func TestValidateJWT_EmptyToken(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+	_, err := sm.ValidateJWT("")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "empty token")
+}
+
+func TestValidateJWT_InvalidParts(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+	_, err := sm.ValidateJWT("invalid.token")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid token")
+}
+
+func TestValidateJWT_BadSignatureEncoding(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+	// Token with invalid base64 in signature
+	_, err := sm.ValidateJWT("header.payload.!!!invalid!!!")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bad signature encoding")
+}
+
+func TestValidateJWT_InvalidSignature(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+	// Generate a valid token then modify the signature
+	token, err := sm.GenerateJWT("testuser", time.Hour)
+	require.NoError(t, err)
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+
+	// Modify the signature
+	modifiedToken := parts[0] + "." + parts[1] + ".wrongsignature"
+	_, err = sm.ValidateJWT(modifiedToken)
+	require.Error(t, err)
+}
+
+func TestValidateJWT_ExpiredToken(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+	// Generate a token with very short duration
+	token, err := sm.GenerateJWT("testuser", 1*time.Millisecond)
+	require.NoError(t, err)
+
+	// Wait for token to expire
+	time.Sleep(10 * time.Millisecond)
+
+	_, err = sm.ValidateJWT(token)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "token expired")
+}
+
+func TestValidateJWT_ValidToken(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+	token, err := sm.GenerateJWT("testuser", time.Hour)
+	require.NoError(t, err)
+
+	sub, err := sm.ValidateJWT(token)
+	require.NoError(t, err)
+	require.Equal(t, "testuser", sub)
 }
