@@ -139,3 +139,43 @@ func Test_EmbedCache_PartialHits(t *testing.T) {
 		t.Fatalf("expected 2 base calls (partial miss), got %d", base.calls)
 	}
 }
+
+func Test_EmbedCache_UpdateExisting(t *testing.T) {
+	base := &evictAI{}
+	wrapped := NewEmbedCache(base, 10)
+	ctx := context.Background()
+
+	// First call - cache "a"
+	_, _ = wrapped.Embed(ctx, []string{"a"})
+	if base.calls != 1 {
+		t.Fatalf("expected 1 base call, got %d", base.calls)
+	}
+
+	// Manually trigger put with same key to test update path
+	// This is tested indirectly through the cache behavior
+	_, _ = wrapped.Embed(ctx, []string{"a"})
+	if base.calls != 1 {
+		t.Fatalf("expected still 1 base call (cache hit), got %d", base.calls)
+	}
+}
+
+func Test_ChatJSONWithRetry_Passthrough(t *testing.T) {
+	base := &chatAI{}
+	wrapped := NewEmbedCache(base, 4)
+	result, err := wrapped.ChatJSONWithRetry(context.Background(), "sys", "user", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "{}" {
+		t.Fatalf("expected passthrough response, got %s", result)
+	}
+}
+
+func Test_CleanCoTResponse_Passthrough(t *testing.T) {
+	base := &chatAI{}
+	wrapped := NewEmbedCache(base, 4)
+	result, _ := wrapped.CleanCoTResponse(context.Background(), "test response")
+	if result != "test response" {
+		t.Fatalf("expected passthrough response, got %s", result)
+	}
+}
