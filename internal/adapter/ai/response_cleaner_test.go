@@ -540,3 +540,55 @@ func TestResponseCleaner_CleanAndValidateJSON_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, cleaner.IsValidJSON(result))
 }
+
+func TestResponseCleaner_CleanAndValidateJSON_AlreadyValid(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	// Already valid JSON
+	input := `{"name": "test", "value": 123}`
+
+	result, err := cleaner.CleanAndValidateJSON(input)
+	assert.NoError(t, err)
+	assert.Equal(t, input, result)
+}
+
+func TestResponseCleaner_CleanAndValidateJSON_ArrayJSON(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	// Valid JSON array
+	input := `[1, 2, 3, "test"]`
+
+	result, err := cleaner.CleanAndValidateJSON(input)
+	assert.NoError(t, err)
+	assert.True(t, cleaner.IsValidJSON(result))
+}
+
+func TestResponseCleaner_CleanAndValidateJSON_NestedJSON(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	// Nested JSON with markdown
+	input := "```json\n{\"outer\": {\"inner\": {\"deep\": true}}}\n```"
+
+	result, err := cleaner.CleanAndValidateJSON(input)
+	assert.NoError(t, err)
+	assert.True(t, cleaner.IsValidJSON(result))
+}
+
+func TestResponseCleaner_CleanAndValidateJSON_WithWhitespace(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	// JSON with extra whitespace
+	input := "   \n\n{\"key\": \"value\"}\n\n   "
+
+	result, err := cleaner.CleanAndValidateJSON(input)
+	assert.NoError(t, err)
+	assert.True(t, cleaner.IsValidJSON(result))
+}
