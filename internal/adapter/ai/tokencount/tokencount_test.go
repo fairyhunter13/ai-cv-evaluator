@@ -458,3 +458,139 @@ func TestNormalizeModelName_AllVariants(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateUsage_AllScenarios(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	tests := []struct {
+		name         string
+		systemPrompt string
+		userPrompt   string
+		completion   string
+		model        string
+		provider     string
+	}{
+		{
+			name:         "standard_usage",
+			systemPrompt: "You are a helpful assistant.",
+			userPrompt:   "What is the capital of France?",
+			completion:   "The capital of France is Paris.",
+			model:        "gpt-4",
+			provider:     "openai",
+		},
+		{
+			name:         "empty_system_prompt",
+			systemPrompt: "",
+			userPrompt:   "Hello world",
+			completion:   "Hi there!",
+			model:        "gpt-3.5-turbo",
+			provider:     "openai",
+		},
+		{
+			name:         "empty_completion",
+			systemPrompt: "You are a bot.",
+			userPrompt:   "Say nothing",
+			completion:   "",
+			model:        "gpt-4",
+			provider:     "openai",
+		},
+		{
+			name:         "all_empty",
+			systemPrompt: "",
+			userPrompt:   "",
+			completion:   "",
+			model:        "gpt-4",
+			provider:     "openai",
+		},
+		{
+			name:         "openrouter_model",
+			systemPrompt: "You are a code reviewer.",
+			userPrompt:   "Review this code.",
+			completion:   "The code looks good.",
+			model:        "meta-llama/llama-3.1-8b-instruct:free",
+			provider:     "openrouter",
+		},
+		{
+			name:         "groq_model",
+			systemPrompt: "You are a translator.",
+			userPrompt:   "Translate hello to Spanish.",
+			completion:   "Hola",
+			model:        "llama-3.1-8b-instant",
+			provider:     "groq",
+		},
+		{
+			name:         "long_prompts",
+			systemPrompt: "You are an expert in software development with deep knowledge of Go, Python, JavaScript, and many other programming languages. Your task is to provide detailed code reviews.",
+			userPrompt:   "Please review the following code and provide feedback on best practices, potential bugs, and performance improvements. The code is a REST API handler that processes user requests.",
+			completion:   "I've reviewed the code and found several areas for improvement. First, the error handling could be more robust. Second, consider adding input validation. Third, the database queries could be optimized using prepared statements.",
+			model:        "gpt-4",
+			provider:     "openai",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usage, err := counter.CalculateUsage(tt.systemPrompt, tt.userPrompt, tt.completion, tt.model, tt.provider)
+			require.NoError(t, err)
+			assert.NotNil(t, usage)
+			assert.GreaterOrEqual(t, usage.PromptTokens, 0)
+			assert.GreaterOrEqual(t, usage.CompletionTokens, 0)
+			assert.Equal(t, usage.PromptTokens+usage.CompletionTokens, usage.TotalTokens)
+			assert.Equal(t, tt.model, usage.Model)
+			assert.Equal(t, tt.provider, usage.Provider)
+		})
+	}
+}
+
+func TestCountTokensDefault_Extended(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		text  string
+		model string
+	}{
+		{"simple_text", "Hello world", "gpt-4"},
+		{"empty_text", "", "gpt-4"},
+		{"long_text", "This is a longer text that should have more tokens than a simple hello world.", "gpt-4"},
+		{"special_chars", "Hello! @#$%^&*() World", "gpt-4"},
+		{"unicode", "Hello 世界 🌍", "gpt-4"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := CountTokensDefault(tt.text, tt.model)
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, count, 0)
+		})
+	}
+}
+
+func TestCalculateUsageDefault_Extended(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		systemPrompt string
+		userPrompt   string
+		completion   string
+		model        string
+		provider     string
+	}{
+		{"basic", "You are a bot.", "Hello", "Hi there!", "gpt-4", "openai"},
+		{"empty_system", "", "Hello", "Hi!", "gpt-4", "openai"},
+		{"empty_all", "", "", "", "gpt-4", "openai"},
+		{"different_provider", "Bot", "Hi", "Hello!", "llama-3.1-8b", "groq"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			usage, err := CalculateUsageDefault(tt.systemPrompt, tt.userPrompt, tt.completion, tt.model, tt.provider)
+			require.NoError(t, err)
+			assert.NotNil(t, usage)
+			assert.GreaterOrEqual(t, usage.TotalTokens, 0)
+		})
+	}
+}
