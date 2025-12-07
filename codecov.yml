@@ -38,22 +38,19 @@ ignore:
   - "**/mocks/**"
   - "cmd/**"  # Entry points typically have low coverage
   - "internal/adapter/httpserver/static/**"  # Static files
-  # Queue/Kafka infrastructure (requires external services)
+  # Queue/Kafka integration code (requires running Kafka/Redpanda)
   - "internal/adapter/queue/redpanda/dlq_consumer.go"
   - "internal/adapter/queue/redpanda/retry_manager.go"
   - "internal/adapter/queue/redpanda/consumer.go"
   - "internal/adapter/queue/redpanda/producer.go"
-  - "internal/adapter/queue/redpanda/topic.go"
   - "internal/adapter/queue/redpanda/evaluation_handler.go"
   - "internal/adapter/queue/redpanda/integrated_evaluation_handler.go"
-  # App setup/infrastructure code
+  # App initialization code (integration/wiring)
   - "internal/app/qdrant.go"
   - "internal/app/router.go"
   # AI client real implementations (require external API calls)
   - "internal/adapter/ai/real/client.go"
   - "internal/adapter/ai/freemodels/wrapper.go"
-  # Rate limiter postgres integration
-  - "internal/service/ratelimiter/redis_lua_limiter.go"
 
 # Flag management
 flags:
