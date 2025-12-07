@@ -46,3 +46,161 @@ func TestResponseValidator_PerformResponseCleaning_FallbackPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, res.CleanedResponse)
 }
+
+func TestResponseValidator_ValidateResponse_AllPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		response      string
+		mockSetup     func(*domainmocks.MockAIClient)
+		expectValid   bool
+		expectRefusal bool
+		expectIssues  bool
+	}{
+		{
+			name:     "valid_json_response",
+			response: `{"name": "test", "value": 123}`,
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+					Return(`{"is_refusal": false, "confidence": 0.1}`, nil).Maybe()
+			},
+			expectValid:   true,
+			expectRefusal: false,
+			expectIssues:  false,
+		},
+		{
+			name:     "empty_response",
+			response: "",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+					Return(`{"is_refusal": false}`, nil).Maybe()
+			},
+			expectValid:   false,
+			expectRefusal: false,
+			expectIssues:  true,
+		},
+		{
+			name:     "refusal_response",
+			response: "I cannot help with that request.",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+					Return(`{"is_refusal": true, "confidence": 0.95, "refusal_type": "policy", "reason": "policy violation"}`, nil).Maybe()
+			},
+			expectValid:   false,
+			expectRefusal: true,
+			expectIssues:  true,
+		},
+		{
+			name:     "malformed_json_response",
+			response: `{"name": "test", "value": }`,
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+					Return(`{"is_refusal": false}`, nil).Maybe()
+			},
+			expectValid:  false,
+			expectIssues: true,
+		},
+		{
+			name:     "json_with_markdown",
+			response: "```json\n{\"name\": \"test\"}\n```",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+					Return(`{"is_refusal": false}`, nil).Maybe()
+			},
+			expectValid:  true,
+			expectIssues: false,
+		},
+		{
+			name:     "ai_error_in_refusal_detection",
+			response: `{"valid": true}`,
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+					Return("", assert.AnError).Maybe()
+			},
+			expectValid:  true,
+			expectIssues: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockAI := domainmocks.NewMockAIClient(t)
+			tt.mockSetup(mockAI)
+
+			v := NewResponseValidator(mockAI)
+			ctx := context.Background()
+
+			result, err := v.ValidateResponse(ctx, tt.response)
+			require.NoError(t, err)
+			assert.NotNil(t, result)
+
+			if tt.expectRefusal {
+				assert.True(t, result.IsRefusal)
+			}
+			if tt.expectIssues {
+				assert.Greater(t, len(result.Issues), 0)
+			}
+		})
+	}
+}
+
+func TestResponseValidator_PerformBasicChecks(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	v := NewResponseValidator(mockAI)
+
+	tests := []struct {
+		name         string
+		response     string
+		expectIssues bool
+	}{
+		{"empty", "", true},
+		{"whitespace_only", "   \n\t  ", true},
+		{"valid_short", "OK", false},
+		{"valid_long", "This is a valid response with enough content.", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := &ValidationResult{Issues: []ValidationIssue{}}
+			err := v.performBasicChecks(tt.response, res)
+			require.NoError(t, err)
+			if tt.expectIssues {
+				assert.Greater(t, len(res.Issues), 0)
+			}
+		})
+	}
+}
+
+func TestResponseValidator_PerformJSONValidation(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	v := NewResponseValidator(mockAI)
+
+	tests := []struct {
+		name        string
+		response    string
+		expectError bool
+	}{
+		{"valid_object", `{"key": "value"}`, false},
+		{"valid_array", `[1, 2, 3]`, false},
+		{"invalid_json", `{invalid}`, true},
+		{"empty_object", `{}`, false},
+		{"nested_object", `{"a": {"b": {"c": 1}}}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := &ValidationResult{Issues: []ValidationIssue{}}
+			err := v.performJSONValidation(tt.response, res)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}

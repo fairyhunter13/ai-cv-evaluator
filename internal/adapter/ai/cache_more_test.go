@@ -71,3 +71,71 @@ func Test_EmbedCache_EvictionFIFO(t *testing.T) {
 		t.Fatalf("expected >=3 base embeds due to eviction, got %d", base.calls)
 	}
 }
+
+func Test_NewEmbedCache_ZeroCapacity(t *testing.T) {
+	base := &evictAI{}
+	// Zero capacity should return base unmodified
+	wrapped := NewEmbedCache(base, 0)
+	if wrapped != base {
+		t.Fatalf("expected base to be returned for zero capacity")
+	}
+}
+
+func Test_NewEmbedCache_NegativeCapacity(t *testing.T) {
+	base := &evictAI{}
+	// Negative capacity should return base unmodified
+	wrapped := NewEmbedCache(base, -1)
+	if wrapped != base {
+		t.Fatalf("expected base to be returned for negative capacity")
+	}
+}
+
+func Test_NewEmbedCache_NilBase(t *testing.T) {
+	// Nil base should return nil
+	wrapped := NewEmbedCache(nil, 10)
+	if wrapped != nil {
+		t.Fatalf("expected nil to be returned for nil base")
+	}
+}
+
+func Test_EmbedCache_MultipleMisses(t *testing.T) {
+	base := &evictAI{}
+	wrapped := NewEmbedCache(base, 10)
+	ctx := context.Background()
+
+	// Multiple texts in one call - all misses
+	_, err := wrapped.Embed(ctx, []string{"a", "b", "c"})
+	if err != nil {
+		t.Fatalf("embed failed: %v", err)
+	}
+	if base.calls != 1 {
+		t.Fatalf("expected 1 base call, got %d", base.calls)
+	}
+
+	// Same texts again - all hits
+	_, err = wrapped.Embed(ctx, []string{"a", "b", "c"})
+	if err != nil {
+		t.Fatalf("embed failed: %v", err)
+	}
+	if base.calls != 1 {
+		t.Fatalf("expected still 1 base call (cache hit), got %d", base.calls)
+	}
+}
+
+func Test_EmbedCache_PartialHits(t *testing.T) {
+	base := &evictAI{}
+	wrapped := NewEmbedCache(base, 10)
+	ctx := context.Background()
+
+	// First call - all misses
+	_, _ = wrapped.Embed(ctx, []string{"a", "b"})
+	if base.calls != 1 {
+		t.Fatalf("expected 1 base call, got %d", base.calls)
+	}
+
+	// Second call - partial hits (a, b are cached, c is miss)
+	_, _ = wrapped.Embed(ctx, []string{"a", "c", "b"})
+	if base.calls != 2 {
+		t.Fatalf("expected 2 base calls (partial miss), got %d", base.calls)
+	}
+}
