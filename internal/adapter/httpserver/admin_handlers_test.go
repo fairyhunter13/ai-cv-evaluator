@@ -347,3 +347,32 @@ func TestAdminJobsHandler_InvalidPagination(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestAdminStatsHandler_UnauthorizedNoHeader(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+	server := &httpserver.Server{Cfg: cfg}
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
+	w := httptest.NewRecorder()
+
+	adminServer.AdminStatsHandler()(w, req)
+
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAdminStatsHandler_InvalidBearerToken(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+	server := &httpserver.Server{Cfg: cfg}
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	w := httptest.NewRecorder()
+
+	adminServer.AdminStatsHandler()(w, req)
+
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
