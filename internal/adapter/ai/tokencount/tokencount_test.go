@@ -594,3 +594,85 @@ func TestCalculateUsageDefault_Extended(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEncodingForModel_AllPaths(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{"gpt4", "gpt-4"},
+		{"gpt35", "gpt-3.5-turbo"},
+		{"unknown_model", "totally-unknown-model-xyz"},
+		{"openrouter_format", "meta-llama/llama-3.1-8b-instruct:free"},
+		{"claude", "claude-3-opus-20240229"},
+		{"gemini", "gemini-1.5-pro-latest"},
+		{"mistral", "mistral-large-latest"},
+		{"deepseek", "deepseek/deepseek-chat"},
+		{"qwen", "qwen/qwen-2-7b-instruct:free"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// First call - should create encoding
+			count1, err := counter.CountTokens("Hello world", tt.model)
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, count1, 0)
+
+			// Second call - should use cached encoding
+			count2, err := counter.CountTokens("Hello world", tt.model)
+			require.NoError(t, err)
+			assert.Equal(t, count1, count2)
+		})
+	}
+}
+
+func TestCounter_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+	models := []string{"gpt-4", "gpt-3.5-turbo", "claude-3-opus", "unknown-model"}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		for _, model := range models {
+			wg.Add(1)
+			go func(m string) {
+				defer wg.Done()
+				_, err := counter.CountTokens("Hello world", m)
+				assert.NoError(t, err)
+			}(model)
+		}
+	}
+	wg.Wait()
+}
+
+func TestCountChatTokens_AllModels(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	tests := []struct {
+		name         string
+		systemPrompt string
+		userPrompt   string
+		model        string
+	}{
+		{"gpt4_with_system", "You are a helpful assistant.", "Hello", "gpt-4"},
+		{"gpt4_no_system", "", "Hello", "gpt-4"},
+		{"gpt35_with_system", "You are a bot.", "Hi there", "gpt-3.5-turbo"},
+		{"unknown_model", "System", "User", "unknown-model-xyz"},
+		{"openrouter_model", "System", "User", "meta-llama/llama-3.1-8b:free"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := counter.CountChatTokens(tt.systemPrompt, tt.userPrompt, tt.model)
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, count, 0)
+		})
+	}
+}
