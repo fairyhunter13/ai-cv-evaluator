@@ -109,3 +109,45 @@ func TestEffectivePrice_FallsBackToPromptAndCompletion(t *testing.T) {
 
 	require.InDelta(t, 0.03, effectivePrice(p), 1e-9)
 }
+
+func TestParsePriceField_ValidFloat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected float64
+	}{
+		{"zero", "0", 0},
+		{"positive", "0.001", 0.001},
+		{"integer", "1", 1},
+		{"scientific", "1e-6", 1e-6},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parsePriceField(tt.input)
+			require.InDelta(t, tt.expected, result, 1e-12)
+		})
+	}
+}
+
+func TestParsePriceField_InvalidReturnsZero(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"empty", ""},
+		{"invalid_string", "not_a_number"},
+		{"special_chars", "$0.01"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parsePriceField(tt.input)
+			require.Equal(t, 0.0, result)
+		})
+	}
+}
