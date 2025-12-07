@@ -328,3 +328,57 @@ func TestCircuitBreaker_ConcurrentAccess(t *testing.T) {
 		state == observability.StateOpen ||
 		state == observability.StateHalfOpen)
 }
+
+func TestCircuitBreaker_StateString(t *testing.T) {
+	t.Parallel()
+
+	// Test closed state
+	cb := observability.NewCircuitBreaker("test-state", 2, 100*time.Millisecond)
+	assert.Equal(t, observability.StateClosed, cb.GetState())
+
+	// Test open state
+	_ = cb.Call(func() error { return errors.New("fail1") })
+	_ = cb.Call(func() error { return errors.New("fail2") })
+	assert.Equal(t, observability.StateOpen, cb.GetState())
+
+	// Test half-open state
+	time.Sleep(150 * time.Millisecond)
+	_ = cb.Call(func() error { return nil })
+	assert.Equal(t, observability.StateHalfOpen, cb.GetState())
+}
+
+func TestCircuitBreaker_GetFailures(t *testing.T) {
+	t.Parallel()
+
+	cb := observability.NewCircuitBreaker("test-failures", 5, 1*time.Second)
+
+	assert.Equal(t, 0, cb.GetFailures())
+
+	_ = cb.Call(func() error { return errors.New("fail1") })
+	assert.Equal(t, 1, cb.GetFailures())
+
+	_ = cb.Call(func() error { return errors.New("fail2") })
+	assert.Equal(t, 2, cb.GetFailures())
+
+	// Success resets failures in closed state
+	_ = cb.Call(func() error { return nil })
+	assert.Equal(t, 0, cb.GetFailures())
+}
+
+func TestCircuitBreaker_MultipleResets(t *testing.T) {
+	t.Parallel()
+
+	cb := observability.NewCircuitBreaker("test-multi-reset", 1, 1*time.Second)
+
+	// Open the circuit
+	_ = cb.Call(func() error { return errors.New("fail") })
+	assert.True(t, cb.IsOpen())
+
+	// Reset multiple times should be safe
+	cb.Reset()
+	cb.Reset()
+	cb.Reset()
+
+	assert.True(t, cb.IsClosed())
+	assert.Equal(t, 0, cb.GetFailures())
+}
