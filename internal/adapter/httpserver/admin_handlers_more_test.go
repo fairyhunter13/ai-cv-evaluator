@@ -67,3 +67,64 @@ func Test_Admin_API_Endpoints(t *testing.T) {
 		t.Fatalf("/admin/api/status: %d", rw.Result().StatusCode)
 	}
 }
+
+func Test_AdminJobsHandler_Unauthorized(t *testing.T) {
+	admin, r := newAdminSrv(t)
+	r.Get("/admin/api/jobs", admin.AdminJobsHandler())
+
+	// No auth header
+	rw := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/api/jobs", nil)
+	r.ServeHTTP(rw, req)
+	if rw.Result().StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rw.Result().StatusCode)
+	}
+
+	// Invalid bearer token
+	rw = httptest.NewRecorder()
+	req = httptest.NewRequest("GET", "/admin/api/jobs", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	r.ServeHTTP(rw, req)
+	if rw.Result().StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rw.Result().StatusCode)
+	}
+}
+
+func Test_AdminJobsHandler_InvalidPagination(t *testing.T) {
+	admin, r := newAdminSrv(t)
+	r.Get("/admin/api/jobs", admin.AdminJobsHandler())
+	token := loginAndGetToken(t, r)
+
+	// Invalid page
+	rw := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/api/jobs?page=-1", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(rw, req)
+	if rw.Result().StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rw.Result().StatusCode)
+	}
+
+	// Invalid limit
+	rw = httptest.NewRecorder()
+	req = httptest.NewRequest("GET", "/admin/api/jobs?limit=abc", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(rw, req)
+	if rw.Result().StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rw.Result().StatusCode)
+	}
+}
+
+func Test_AdminJobsHandler_InvalidStatus(t *testing.T) {
+	admin, r := newAdminSrv(t)
+	r.Get("/admin/api/jobs", admin.AdminJobsHandler())
+	token := loginAndGetToken(t, r)
+
+	// Invalid status - should return 400 before hitting the repo
+	rw := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/api/jobs?status=invalid-status", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(rw, req)
+	if rw.Result().StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rw.Result().StatusCode)
+	}
+}
