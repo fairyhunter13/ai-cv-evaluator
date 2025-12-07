@@ -246,3 +246,96 @@ func TestRateLimitChecker_HasSufficientQuota_WithLimit(t *testing.T) {
 	require.False(t, hasQuota2)
 	require.NotNil(t, resp2)
 }
+
+func TestRateLimitChecker_CheckRateLimit_ErrorCases(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invalid_url", func(t *testing.T) {
+		checker := NewRateLimitChecker("test-api-key", "http://[::1]:namedport")
+		ctx := context.Background()
+		_, err := checker.CheckRateLimit(ctx)
+		require.Error(t, err)
+	})
+
+	t.Run("server_error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer server.Close()
+
+		checker := NewRateLimitChecker("test-api-key", server.URL)
+		ctx := context.Background()
+		_, err := checker.CheckRateLimit(ctx)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "status 500")
+	})
+
+	t.Run("invalid_json", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("invalid json"))
+		}))
+		defer server.Close()
+
+		checker := NewRateLimitChecker("test-api-key", server.URL)
+		ctx := context.Background()
+		_, err := checker.CheckRateLimit(ctx)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "decode")
+	})
+}
+
+func TestRateLimitChecker_HasSufficientQuota_Unlimited(t *testing.T) {
+	mockResponse := map[string]any{
+		"data": map[string]any{
+			"label":               "Unlimited API Key",
+			"usage":               1000.0,
+			"limit":               nil,
+			"is_free_tier":        false,
+			"limit_remaining":     nil,
+			"is_provisioning_key": false,
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(mockResponse))
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	// Unlimited account should always have sufficient quota
+	hasQuota, resp, err := checker.HasSufficientQuota(ctx, 999999.0)
+	require.NoError(t, err)
+	require.True(t, hasQuota)
+	require.NotNil(t, resp)
+}
+
+func TestRateLimitChecker_WaitForQuota_TimeoutNoQuota(t *testing.T) {
+	mockResponse := map[string]any{
+		"data": map[string]any{
+			"label":               "Test API Key",
+			"usage":               100.0,
+			"limit":               100.0,
+			"is_free_tier":        false,
+			"limit_remaining":     0.0, // No quota remaining
+			"is_provisioning_key": false,
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(mockResponse))
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	// Should timeout waiting for quota
+	_, err := checker.WaitForQuota(ctx, 10.0, 1*time.Millisecond)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "insufficient quota")
+}
