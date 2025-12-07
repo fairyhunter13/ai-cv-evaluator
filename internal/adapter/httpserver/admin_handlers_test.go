@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -42,22 +43,22 @@ func TestAdminStatsHandler_Authorized(t *testing.T) {
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
 	require.NoError(t, err)
 
-    // Obtain JWT
-    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
-    tokenReq.Form = map[string][]string{
-        "username": {"admin"},
-        "password": {"password"},
-    }
-    tokenW := httptest.NewRecorder()
-    adminServer.AdminTokenHandler()(tokenW, tokenReq)
-    require.Equal(t, http.StatusOK, tokenW.Code)
-    var tb map[string]any
-    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
-    tok := tb["token"].(string)
+	// Obtain JWT
+	tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+	tokenReq.Form = map[string][]string{
+		"username": {"admin"},
+		"password": {"password"},
+	}
+	tokenW := httptest.NewRecorder()
+	adminServer.AdminTokenHandler()(tokenW, tokenReq)
+	require.Equal(t, http.StatusOK, tokenW.Code)
+	var tb map[string]any
+	require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+	tok := tb["token"].(string)
 
-    // Now test stats endpoint with bearer
-    req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
-    req.Header.Set("Authorization", "Bearer "+tok)
+	// Now test stats endpoint with bearer
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 
 	adminServer.AdminStatsHandler()(w, req)
@@ -100,22 +101,22 @@ func TestAdminJobsHandler_Authorized(t *testing.T) {
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
 	require.NoError(t, err)
 
-    // Obtain JWT
-    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
-    tokenReq.Form = map[string][]string{
-        "username": {"admin"},
-        "password": {"password"},
-    }
-    tokenW := httptest.NewRecorder()
-    adminServer.AdminTokenHandler()(tokenW, tokenReq)
-    require.Equal(t, http.StatusOK, tokenW.Code)
-    var tb map[string]any
-    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
-    tok := tb["token"].(string)
+	// Obtain JWT
+	tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+	tokenReq.Form = map[string][]string{
+		"username": {"admin"},
+		"password": {"password"},
+	}
+	tokenW := httptest.NewRecorder()
+	adminServer.AdminTokenHandler()(tokenW, tokenReq)
+	require.Equal(t, http.StatusOK, tokenW.Code)
+	var tb map[string]any
+	require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+	tok := tb["token"].(string)
 
-    // Test jobs endpoint with bearer
-    req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs?page=1&limit=10", nil)
-    req.Header.Set("Authorization", "Bearer "+tok)
+	// Test jobs endpoint with bearer
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs?page=1&limit=10", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
 	w := httptest.NewRecorder()
 
 	adminServer.AdminJobsHandler()(w, req)
@@ -146,18 +147,18 @@ func TestAdminJobsHandler_Pagination(t *testing.T) {
 	adminServer, err := httpserver.NewAdminServer(cfg, server)
 	require.NoError(t, err)
 
-    // Obtain JWT
-    tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
-    tokenReq.Form = map[string][]string{
-        "username": {"admin"},
-        "password": {"password"},
-    }
-    tokenW := httptest.NewRecorder()
-    adminServer.AdminTokenHandler()(tokenW, tokenReq)
-    require.Equal(t, http.StatusOK, tokenW.Code)
-    var tb map[string]any
-    require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
-    tok := tb["token"].(string)
+	// Obtain JWT
+	tokenReq := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+	tokenReq.Form = map[string][]string{
+		"username": {"admin"},
+		"password": {"password"},
+	}
+	tokenW := httptest.NewRecorder()
+	adminServer.AdminTokenHandler()(tokenW, tokenReq)
+	require.Equal(t, http.StatusOK, tokenW.Code)
+	var tb map[string]any
+	require.NoError(t, json.Unmarshal(tokenW.Body.Bytes(), &tb))
+	tok := tb["token"].(string)
 
 	// Test with different pagination parameters
 	testCases := []struct {
@@ -171,11 +172,11 @@ func TestAdminJobsHandler_Pagination(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-        req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs", nil)
+		req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs", nil)
 		if tc.page != "" {
 			req.URL.RawQuery = "page=" + tc.page + "&limit=" + tc.limit
 		}
-        req.Header.Set("Authorization", "Bearer "+tok)
+		req.Header.Set("Authorization", "Bearer "+tok)
 		w := httptest.NewRecorder()
 
 		adminServer.AdminJobsHandler()(w, req)
@@ -239,4 +240,80 @@ func createMockResultRepoForAdmin(t *testing.T) *mocks.MockResultRepository {
 	mockRepo.EXPECT().Upsert(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockRepo.EXPECT().GetByJobID(mock.Anything, mock.Anything).Return(domain.Result{}, domain.ErrNotFound).Maybe()
 	return mockRepo
+}
+
+func TestAdminTokenHandler_JSONPayload(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+	server := &httpserver.Server{Cfg: cfg}
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	// Test with JSON payload
+	body := `{"username": "admin", "password": "password"}`
+	req := httptest.NewRequest(http.MethodPost, "/admin/token", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	adminServer.AdminTokenHandler()(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotEmpty(t, resp["token"])
+}
+
+func TestAdminTokenHandler_InvalidCredentials_FormPayload(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+	server := &httpserver.Server{Cfg: cfg}
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	// Test with wrong credentials
+	req := httptest.NewRequest(http.MethodPost, "/admin/token", nil)
+	req.Form = map[string][]string{
+		"username": {"admin"},
+		"password": {"wrong"},
+	}
+	w := httptest.NewRecorder()
+
+	adminServer.AdminTokenHandler()(w, req)
+
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAdminStatusHandler_InvalidToken(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+	server := &httpserver.Server{Cfg: cfg}
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	w := httptest.NewRecorder()
+
+	adminServer.AdminStatusHandler()(w, req)
+
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAdminStatusHandler_SSO(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+
+	// Create a proper server with repositories
+	upRepo := createMockUploadRepoForAdmin(t)
+	jobRepo := createMockJobRepoForAdmin(t)
+	resRepo := createMockResultRepoForAdmin(t)
+	server := httpserver.NewServer(cfg, usecase.NewUploadService(upRepo), usecase.NewEvaluateService(jobRepo, nil, upRepo), usecase.NewResultService(jobRepo, resRepo), nil, nil, nil, nil)
+
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	// Test with SSO header
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/stats", nil)
+	req.Header.Set("X-Forwarded-User", "sso-user")
+	w := httptest.NewRecorder()
+
+	adminServer.AdminStatusHandler()(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
 }
