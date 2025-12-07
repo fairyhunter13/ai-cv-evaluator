@@ -450,3 +450,169 @@ func TestService_TimeoutHandling(t *testing.T) {
 		assert.True(t, containsTimeoutError(err), "expected timeout-related error, got: %v", err)
 	}
 }
+
+func TestService_FilterFreeModels_AllScenarios(t *testing.T) {
+	t.Parallel()
+
+	service := NewService("test-key", "http://unused", 1*time.Hour)
+
+	tests := []struct {
+		name     string
+		models   []Model
+		expected int
+	}{
+		{
+			name:     "empty_list",
+			models:   []Model{},
+			expected: 0,
+		},
+		{
+			name: "all_free",
+			models: []Model{
+				{ID: "model1", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"}},
+				{ID: "model2", Pricing: Pricing{Prompt: "", Completion: "", Request: "", Image: ""}},
+			},
+			expected: 2,
+		},
+		{
+			name: "all_paid",
+			models: []Model{
+				{ID: "model1", Pricing: Pricing{Prompt: "0.001", Completion: "0.002", Request: "0", Image: "0"}},
+				{ID: "model2", Pricing: Pricing{Prompt: "0.0001", Completion: "0.0002", Request: "0", Image: "0"}},
+			},
+			expected: 0,
+		},
+		{
+			name: "mixed",
+			models: []Model{
+				{ID: "free1", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"}},
+				{ID: "paid1", Pricing: Pricing{Prompt: "0.001", Completion: "0.002", Request: "0", Image: "0"}},
+				{ID: "free2", Pricing: Pricing{Prompt: "0.0", Completion: "0.0", Request: "0.0", Image: "0.0"}},
+			},
+			expected: 2,
+		},
+		{
+			name: "banned_openrouter_auto",
+			models: []Model{
+				{ID: "openrouter/auto", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"}},
+			},
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := service.filterFreeModels(tt.models)
+			assert.Equal(t, tt.expected, len(result))
+		})
+	}
+}
+
+func TestService_IsFreeModel_AllPricingVariants(t *testing.T) {
+	t.Parallel()
+
+	service := NewService("test-key", "http://unused", 1*time.Hour)
+
+	tests := []struct {
+		name     string
+		model    Model
+		expected bool
+	}{
+		{
+			name:     "all_zero_strings",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"}},
+			expected: true,
+		},
+		{
+			name:     "all_empty_strings",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "", Completion: "", Request: "", Image: ""}},
+			expected: true,
+		},
+		{
+			name:     "all_zero_point_zero",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "0.0", Completion: "0.0", Request: "0.0", Image: "0.0"}},
+			expected: true,
+		},
+		{
+			name:     "mixed_free_formats",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "0", Completion: "", Request: "0.0", Image: "0"}},
+			expected: true,
+		},
+		{
+			name:     "prompt_not_free",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "0.001", Completion: "0", Request: "0", Image: "0"}},
+			expected: false,
+		},
+		{
+			name:     "completion_not_free",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "0", Completion: "0.001", Request: "0", Image: "0"}},
+			expected: false,
+		},
+		{
+			name:     "request_not_free",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0.001", Image: "0"}},
+			expected: false,
+		},
+		{
+			name:     "image_not_free",
+			model:    Model{ID: "test", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0.001"}},
+			expected: false,
+		},
+		{
+			name:     "banned_openrouter_auto",
+			model:    Model{ID: "openrouter/auto", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"}},
+			expected: false,
+		},
+		{
+			name:     "banned_openrouter_auto_uppercase",
+			model:    Model{ID: "OPENROUTER/AUTO", Pricing: Pricing{Prompt: "0", Completion: "0", Request: "0", Image: "0"}},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := service.isFreeModel(tt.model)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestService_GetFreeModels_CacheFallback(t *testing.T) {
+	t.Parallel()
+
+	// Server that fails after first request
+	callCount := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		callCount++
+		if callCount == 1 {
+			// First call succeeds
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "model1", "pricing": map[string]any{"prompt": "0", "completion": "0", "request": "0", "image": "0"}},
+				},
+			})
+			return
+		}
+		// Subsequent calls fail
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	service := NewService("test-key", ts.URL, 1*time.Millisecond) // Very short refresh
+	ctx := context.Background()
+
+	// First call - should succeed
+	models, err := service.GetFreeModels(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, models, 1)
+
+	// Wait for cache to expire
+	time.Sleep(5 * time.Millisecond)
+
+	// Second call - API fails but should return cached models
+	models, err = service.GetFreeModels(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, models, 1) // Should still have cached models
+}
