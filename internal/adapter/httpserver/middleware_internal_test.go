@@ -85,3 +85,33 @@ func Test_OpenAPIServe_200(t *testing.T) {
 		t.Fatalf("want 200, got %d", rw.Result().StatusCode)
 	}
 }
+
+func Test_newReqID(t *testing.T) {
+	t.Parallel()
+
+	// Test that newReqID generates unique IDs
+	ids := make(map[string]bool)
+	for i := 0; i < 100; i++ {
+		id := newReqID()
+		if id == "" {
+			t.Fatal("newReqID returned empty string")
+		}
+		if ids[id] {
+			t.Fatalf("duplicate ID generated: %s", id)
+		}
+		ids[id] = true
+	}
+}
+
+func Test_newReqID_Format(t *testing.T) {
+	t.Parallel()
+
+	id := newReqID()
+	// ULID is 26 characters
+	if len(id) != 26 {
+		// If not ULID, it should be timestamp format
+		if len(id) < 20 {
+			t.Fatalf("unexpected ID format: %s (len=%d)", id, len(id))
+		}
+	}
+}
