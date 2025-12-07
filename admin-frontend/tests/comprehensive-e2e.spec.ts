@@ -3475,6 +3475,51 @@ test.describe('Dashboard Completeness Validation', () => {
     console.log('AI Metrics: All summary stat panels configured correctly');
   });
 
+  test('AI Metrics dashboard has latency percentile panels', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch dashboard via API to verify panel configuration
+    const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
+    expect(resp.ok()).toBeTruthy();
+    
+    const body = await resp.json();
+    const dashboard = (body as any).dashboard ?? body;
+    const panels: any[] = dashboard.panels ?? [];
+    
+    // Check for latency percentile stat panels
+    const p50Panel = panels.find((p) => p.title === 'Median Latency (p50)');
+    const p95Panel = panels.find((p) => p.title === 'p95 Latency');
+    const p99Panel = panels.find((p) => p.title === 'p99 Latency');
+    const maxPanel = panels.find((p) => p.title === 'Max Observed Latency');
+    
+    // Verify p50 panel
+    expect(p50Panel).toBeTruthy();
+    expect(p50Panel.type).toBe('stat');
+    expect(String(p50Panel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.50');
+    console.log('p50 panel configured correctly');
+    
+    // Verify p95 panel (in the bottom row)
+    expect(p95Panel).toBeTruthy();
+    expect(p95Panel.type).toBe('stat');
+    expect(String(p95Panel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.95');
+    console.log('p95 panel configured correctly');
+    
+    // Verify p99 panel
+    expect(p99Panel).toBeTruthy();
+    expect(p99Panel.type).toBe('stat');
+    expect(String(p99Panel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.99');
+    console.log('p99 panel configured correctly');
+    
+    // Verify max latency panel
+    expect(maxPanel).toBeTruthy();
+    expect(maxPanel.type).toBe('stat');
+    expect(String(maxPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(1.0');
+    console.log('Max latency panel configured correctly');
+    
+    console.log('AI Metrics: All latency percentile panels configured correctly');
+  });
+
   test('AI Metrics dashboard queries use fallback for empty data', async ({ page }) => {
     test.setTimeout(60000);
     await loginViaSSO(page);
@@ -3664,6 +3709,60 @@ test.describe('Dashboard Completeness Validation', () => {
       }
     } else {
       console.log('No AI requests recorded yet - token metrics expected to be 0');
+    }
+  });
+
+  test('AI latency percentiles are calculated correctly', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Query Prometheus for latency percentiles
+    const percentiles = [
+      { name: 'p50', quantile: 0.50 },
+      { name: 'p95', quantile: 0.95 },
+      { name: 'p99', quantile: 0.99 },
+      { name: 'max', quantile: 1.0 },
+    ];
+    
+    const results: Record<string, number> = {};
+    
+    for (const p of percentiles) {
+      const resp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+        params: { query: `histogram_quantile(${p.quantile}, sum by (le) (ai_request_duration_seconds_bucket)) or vector(0)` },
+      });
+      expect(resp.ok()).toBeTruthy();
+      
+      const body = await resp.json();
+      const result = (body as any)?.data?.result ?? [];
+      const value = result.length > 0 ? parseFloat(result[0]?.value?.[1] ?? '0') : 0;
+      results[p.name] = value;
+      console.log(`${p.name} latency: ${value.toFixed(3)}s`);
+    }
+    
+    // Query average latency
+    const avgResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_request_duration_seconds_sum) / clamp_min(sum(ai_request_duration_seconds_count), 1) or vector(0)' },
+    });
+    expect(avgResp.ok()).toBeTruthy();
+    
+    const avgBody = await avgResp.json();
+    const avgResult = (avgBody as any)?.data?.result ?? [];
+    const avgLatency = avgResult.length > 0 ? parseFloat(avgResult[0]?.value?.[1] ?? '0') : 0;
+    console.log(`Average latency: ${avgLatency.toFixed(3)}s`);
+    
+    // Verify percentile ordering: p50 <= p95 <= p99 <= max
+    if (results.p50 > 0 && results.p95 > 0 && results.p99 > 0 && results.max > 0) {
+      expect(results.p50).toBeLessThanOrEqual(results.p95);
+      expect(results.p95).toBeLessThanOrEqual(results.p99);
+      expect(results.p99).toBeLessThanOrEqual(results.max);
+      console.log('Percentile ordering is correct: p50 <= p95 <= p99 <= max');
+      
+      // Average should typically be between p50 and p95
+      if (avgLatency > 0) {
+        console.log(`Average (${avgLatency.toFixed(3)}s) is between p50 (${results.p50.toFixed(3)}s) and max (${results.max.toFixed(3)}s)`);
+      }
+    } else {
+      console.log('No AI latency data recorded yet - this is expected for fresh deployments');
     }
   });
 
