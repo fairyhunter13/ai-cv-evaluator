@@ -17,11 +17,18 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 - **Grafana Dashboards**: https://ai-cv-evaluator.web.id/grafana/
   - HTTP Metrics (RED method)
   - Job Queue Metrics
-  - AI Provider Metrics
+  - AI Provider Metrics (latency percentiles p50/p95/p99/max, token usage, request rates)
   - Request Drilldown (traces + logs)
 - **Prometheus**: https://ai-cv-evaluator.web.id/prometheus/
 - **Jaeger Traces**: https://ai-cv-evaluator.web.id/jaeger/
 - **Mailpit (Email Testing)**: https://ai-cv-evaluator.web.id/mailpit/
+
+### AI Metrics Features
+
+- **Token Counting**: Accurate LLM token counting using `tiktoken-go` (Go port of OpenAI's tiktoken)
+- **Latency Percentiles**: p50, p95, p99, and max latency tracking for AI provider calls
+- **Provider Metrics**: Request rates and response times by provider (Groq, OpenRouter, OpenAI)
+- **Prometheus Metrics**: `ai_tokens_total`, `ai_requests_total`, `ai_request_duration_seconds`
 
 ### Local Development
 
@@ -43,8 +50,11 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 - **Security Scans**
   [![Security Scans](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml)
 
-- **Production Validation (prod health + Playwright)**
-  [![Production Validation](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/production-validate.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/production-validate.yml)
+- **Docker Publish**
+  [![Docker Publish](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/docker-publish.yml)
+
+- **Secrets Healthcheck**
+  [![Secrets Healthcheck](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/secrets-healthcheck.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/secrets-healthcheck.yml)
 
 - **Deploy (strict semantic versioning required)**
   [![Deploy](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/deploy.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/deploy.yml)
