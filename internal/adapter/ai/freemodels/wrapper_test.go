@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	domainmocks "github.com/fairyhunter13/ai-cv-evaluator/internal/domain/mocks"
 )
 
@@ -61,4 +62,51 @@ func TestFreeModelWrapper_CleanCoTResponseDelegates(t *testing.T) {
 	out, err := w.CleanCoTResponse(ctx, "raw")
 	assert.NoError(t, err)
 	assert.Equal(t, "clean", out)
+}
+
+func TestFreeModelWrapper_ChatJSON_Error(t *testing.T) {
+	mockAI := domainmocks.NewMockAIClient(t)
+	w := &FreeModelWrapper{client: mockAI}
+
+	mockAI.On("ChatJSON", mock.Anything, "sys", "user", 42).
+		Return("", assert.AnError).Once()
+
+	ctx := context.Background()
+	out, err := w.ChatJSON(ctx, "sys", "user", 42)
+	assert.Error(t, err)
+	assert.Empty(t, out)
+}
+
+func TestFreeModelWrapper_ChatJSONWithRetry_Error(t *testing.T) {
+	mockAI := domainmocks.NewMockAIClient(t)
+	w := &FreeModelWrapper{client: mockAI}
+
+	mockAI.On("ChatJSONWithRetry", mock.Anything, "sys", "user", 21).
+		Return("", assert.AnError).Once()
+
+	ctx := context.Background()
+	out, err := w.ChatJSONWithRetry(ctx, "sys", "user", 21)
+	assert.Error(t, err)
+	assert.Empty(t, out)
+}
+
+func TestNewFreeModelWrapper(t *testing.T) {
+	cfg := config.Config{
+		OpenRouterAPIKey:  "test-key",
+		OpenRouterBaseURL: "http://test",
+	}
+
+	wrapper := NewFreeModelWrapper(cfg)
+	assert.NotNil(t, wrapper)
+}
+
+func TestNewFreeModelWrapper_FallbackKey(t *testing.T) {
+	cfg := config.Config{
+		OpenRouterAPIKey:  "",
+		OpenRouterAPIKey2: "fallback-key",
+		OpenRouterBaseURL: "http://test",
+	}
+
+	wrapper := NewFreeModelWrapper(cfg)
+	assert.NotNil(t, wrapper)
 }
