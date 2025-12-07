@@ -1,6 +1,7 @@
 package tokencount
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -352,4 +353,108 @@ func TestCountCompletionTokensWithUnknownModel(t *testing.T) {
 	count, err := counter.CountCompletionTokens("This is a completion", "unknown-model-xyz")
 	require.NoError(t, err)
 	assert.Greater(t, count, 0)
+}
+
+func TestGetEncodingForModel_CacheHit(t *testing.T) {
+	counter := NewCounter()
+
+	// First call - cache miss
+	count1, err := counter.CountTokens("Hello", "gpt-4")
+	require.NoError(t, err)
+
+	// Second call - cache hit
+	count2, err := counter.CountTokens("Hello", "gpt-4")
+	require.NoError(t, err)
+
+	// Should get same result
+	assert.Equal(t, count1, count2)
+}
+
+func TestGetEncodingForModel_ConcurrentAccess(t *testing.T) {
+	counter := NewCounter()
+	var wg sync.WaitGroup
+	errors := make(chan error, 10)
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := counter.CountTokens("Hello world", "gpt-4")
+			if err != nil {
+				errors <- err
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errors)
+
+	for err := range errors {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestCalculateUsage_AllModels(t *testing.T) {
+	counter := NewCounter()
+
+	models := []string{
+		"gpt-4",
+		"gpt-4-turbo",
+		"gpt-3.5-turbo",
+		"claude-3-opus",
+		"claude-3-sonnet",
+		"gemini-pro",
+		"llama-3-70b",
+		"mistral-large",
+	}
+
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			usage, err := counter.CalculateUsage(
+				"You are a helpful assistant.",
+				"What is 2+2?",
+				"The answer is 4.",
+				model,
+				"test-provider",
+			)
+			require.NoError(t, err)
+			assert.NotNil(t, usage)
+			assert.Greater(t, usage.PromptTokens, 0)
+			assert.Greater(t, usage.CompletionTokens, 0)
+			assert.Equal(t, usage.TotalTokens, usage.PromptTokens+usage.CompletionTokens)
+			assert.Equal(t, model, usage.Model)
+			assert.Equal(t, "test-provider", usage.Provider)
+		})
+	}
+}
+
+func TestNormalizeModelName_AllVariants(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"GPT-4", "gpt-4"},
+		{"GPT-4-TURBO", "gpt-4"},
+		{"gpt-4-0125-preview", "gpt-4"},
+		{"gpt-4-turbo-2024-04-09", "gpt-4"},
+		{"gpt-3.5-turbo-0125", "gpt-3.5-turbo"},
+		{"claude-3-opus-20240229", "gpt-4"},                // Claude maps to gpt-4 for tokenization
+		{"claude-3-sonnet-20240229", "gpt-4"},              // Claude maps to gpt-4 for tokenization
+		{"claude-3-haiku-20240307", "gpt-4"},               // Claude maps to gpt-4 for tokenization
+		{"gemini-1.5-pro-latest", "gpt-4"},                 // Gemini maps to gpt-4 for tokenization
+		{"llama-3-70b-instruct", "gpt-4"},                  // Llama maps to gpt-4 for tokenization
+		{"mistral-large-latest", "gpt-4"},                  // Mistral maps to gpt-4 for tokenization
+		{"unknown-model", "gpt-4"},                         // Unknown models default to gpt-4
+		{"meta-llama/llama-3.1-8b-instruct:free", "gpt-4"}, // OpenRouter format
+		{"deepseek/deepseek-chat", "gpt-4"},                // DeepSeek
+		{"google/gemma-2-9b-it:free", "gpt-4"},             // Gemma
+		{"qwen/qwen-2-7b-instruct:free", "gpt-4"},          // Qwen
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := normalizeModelName(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
