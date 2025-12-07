@@ -299,3 +299,34 @@ func TestGenerateCSRFCookieValue_Length(t *testing.T) {
 	// 32 bytes in base64 raw URL encoding = 43 characters
 	require.GreaterOrEqual(t, len(value), 40)
 }
+
+func TestParseUint32_Valid(t *testing.T) {
+	t.Parallel()
+
+	val, err := parseUint32("12345")
+	require.NoError(t, err)
+	require.Equal(t, uint32(12345), val)
+}
+
+func TestParseUint32_Invalid(t *testing.T) {
+	t.Parallel()
+
+	_, err := parseUint32("not-a-number")
+	require.Error(t, err)
+}
+
+func TestParseUint32_Zero(t *testing.T) {
+	t.Parallel()
+
+	val, err := parseUint32("0")
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), val)
+}
+
+func TestParseUint32_MaxValue(t *testing.T) {
+	t.Parallel()
+
+	val, err := parseUint32("4294967295")
+	require.NoError(t, err)
+	require.Equal(t, uint32(4294967295), val)
+}
