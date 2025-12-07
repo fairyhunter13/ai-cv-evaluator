@@ -382,3 +382,42 @@ func TestCircuitBreaker_MultipleResets(t *testing.T) {
 	assert.True(t, cb.IsClosed())
 	assert.Equal(t, 0, cb.GetFailures())
 }
+
+func TestCircuitBreaker_HalfOpenStateSuccess(t *testing.T) {
+	t.Parallel()
+
+	cb := observability.NewCircuitBreaker("test-half-open-success", 1, 50*time.Millisecond)
+
+	// Open the circuit
+	_ = cb.Call(func() error { return errors.New("fail") })
+	assert.True(t, cb.IsOpen())
+
+	// Wait for recovery timeout
+	time.Sleep(60 * time.Millisecond)
+
+	// Next call should transition to half-open then closed on success
+	err := cb.Call(func() error { return nil })
+	assert.NoError(t, err)
+	// After successful call in half-open, circuit should be closed
+	// The circuit goes to half-open first, then closed on success
+	// But since the call succeeded, it should be closed now
+	assert.False(t, cb.IsOpen())
+}
+
+func TestCircuitBreaker_HalfOpenFailure(t *testing.T) {
+	t.Parallel()
+
+	cb := observability.NewCircuitBreaker("test-half-open-fail", 1, 50*time.Millisecond)
+
+	// Open the circuit
+	_ = cb.Call(func() error { return errors.New("fail") })
+	assert.True(t, cb.IsOpen())
+
+	// Wait for recovery timeout
+	time.Sleep(60 * time.Millisecond)
+
+	// Next call fails - should go back to open
+	err := cb.Call(func() error { return errors.New("fail again") })
+	assert.Error(t, err)
+	assert.True(t, cb.IsOpen())
+}
