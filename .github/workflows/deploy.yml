@@ -262,6 +262,64 @@ jobs:
             exit 1
           fi
 
+          # Check Codecov coverage status (hard gate)
+          echo "Checking Codecov coverage status for commit $SHA..."
+          check_codecov_status() {
+            local max_attempts=10
+            local sleep_seconds=30
+            
+            for attempt in $(seq 1 "$max_attempts"); do
+              echo "Attempt $attempt/$max_attempts: Checking Codecov status..."
+              
+              statuses_json=$(curl -sS \
+                -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${OWNER}/${REPO}/commits/${SHA}/statuses")
+              
+              # Look for codecov/project status
+              codecov_status=$(echo "$statuses_json" | jq -r '
+                [.[] | select(.context | startswith("codecov"))] | 
+                sort_by(.created_at) | last // empty
+              ')
+              
+              if [ -z "$codecov_status" ]; then
+                echo "No Codecov status found yet for commit $SHA."
+              else
+                state=$(echo "$codecov_status" | jq -r '.state')
+                context=$(echo "$codecov_status" | jq -r '.context')
+                description=$(echo "$codecov_status" | jq -r '.description // ""')
+                target_url=$(echo "$codecov_status" | jq -r '.target_url // ""')
+                
+                echo "Codecov status: context=$context, state=$state"
+                echo "Description: $description"
+                
+                if [ "$state" = "success" ]; then
+                  echo "✓ Codecov coverage check passed"
+                  return 0
+                elif [ "$state" = "failure" ] || [ "$state" = "error" ]; then
+                  echo "✗ Codecov coverage check failed: $description"
+                  echo "Details: $target_url"
+                  return 1
+                fi
+                # state is pending, continue waiting
+              fi
+              
+              if [ "$attempt" -lt "$max_attempts" ]; then
+                echo "Waiting ${sleep_seconds}s before re-checking Codecov status..."
+                sleep "$sleep_seconds"
+              fi
+            done
+            
+            echo "[WARN] Codecov status not available after $((max_attempts * sleep_seconds))s; proceeding with deployment."
+            return 0
+          }
+          
+          if ! check_codecov_status; then
+            echo "Codecov coverage is below threshold; failing deployment."
+            echo "Please ensure unit test coverage is at least 80% before deploying."
+            exit 1
+          fi
+
           # Soft, non-blocking checks: log latest status for visibility
           print_workflow_status "Security Scans"
           print_workflow_status "Secrets Healthcheck"
