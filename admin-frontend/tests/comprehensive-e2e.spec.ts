@@ -3520,6 +3520,53 @@ test.describe('Dashboard Completeness Validation', () => {
     console.log('AI Metrics: All latency percentile panels configured correctly');
   });
 
+  test('AI Metrics dashboard has no overlapping panels', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Fetch dashboard via API to verify panel layout
+    const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
+    expect(resp.ok()).toBeTruthy();
+    
+    const body = await resp.json();
+    const dashboard = (body as any).dashboard ?? body;
+    const panels: any[] = dashboard.panels ?? [];
+    
+    // Check for overlapping panels
+    const overlaps: string[] = [];
+    
+    for (let i = 0; i < panels.length; i++) {
+      for (let j = i + 1; j < panels.length; j++) {
+        const p1 = panels[i];
+        const p2 = panels[j];
+        
+        const p1x = p1.gridPos?.x ?? 0;
+        const p1y = p1.gridPos?.y ?? 0;
+        const p1w = p1.gridPos?.w ?? 1;
+        const p1h = p1.gridPos?.h ?? 1;
+        
+        const p2x = p2.gridPos?.x ?? 0;
+        const p2y = p2.gridPos?.y ?? 0;
+        const p2w = p2.gridPos?.w ?? 1;
+        const p2h = p2.gridPos?.h ?? 1;
+        
+        // Check if panels overlap
+        const xOverlap = p1x < p2x + p2w && p1x + p1w > p2x;
+        const yOverlap = p1y < p2y + p2h && p1y + p1h > p2y;
+        
+        if (xOverlap && yOverlap) {
+          overlaps.push(`"${p1.title}" and "${p2.title}" overlap at (${p1x},${p1y}) and (${p2x},${p2y})`);
+        }
+      }
+    }
+    
+    if (overlaps.length > 0) {
+      console.log('Overlapping panels found:', overlaps);
+    }
+    expect(overlaps).toHaveLength(0);
+    console.log('AI Metrics: No overlapping panels found');
+  });
+
   test('AI Metrics dashboard queries use fallback for empty data', async ({ page }) => {
     test.setTimeout(60000);
     await loginViaSSO(page);
