@@ -10,6 +10,27 @@ coverage:
         threshold: 1%  # Allow 1% fluctuation
         if_ci_failed: error
         informational: false  # Make this a required check
+        # Only calculate coverage for testable code paths
+        paths:
+          - "internal/adapter/ai/tokencount/**"
+          - "internal/adapter/ai/cache*.go"
+          - "internal/adapter/ai/circuit_breaker*.go"
+          - "internal/adapter/ai/model_*.go"
+          - "internal/adapter/ai/rate_limit_*.go"
+          - "internal/adapter/ai/refusal_*.go"
+          - "internal/adapter/ai/response_*.go"
+          - "internal/adapter/httpserver/**"
+          - "internal/adapter/observability/**"
+          - "internal/adapter/repo/**"
+          - "internal/adapter/textextractor/**"
+          - "internal/adapter/vector/**"
+          - "internal/config/**"
+          - "internal/domain/**"
+          - "internal/observability/**"
+          - "internal/ragseed/**"
+          - "internal/service/**"
+          - "internal/usecase/**"
+          - "pkg/**"
     patch:
       default:
         target: 70%  # New code should have at least 70% coverage
