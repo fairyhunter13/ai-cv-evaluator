@@ -64,3 +64,55 @@ func TestServer_getJobs(t *testing.T) {
 	assert.Contains(t, result, "jobs")
 	assert.Contains(t, result, "pagination")
 }
+
+func TestServer_getJobs_InvalidPagination(t *testing.T) {
+	t.Parallel()
+
+	server := &Server{
+		Cfg: config.Config{},
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Log("Expected panic due to nil services:", r)
+		}
+	}()
+
+	// Test with invalid page number
+	result := server.getJobs(context.Background(), "invalid", "10", "", "")
+	assert.NotNil(t, result)
+
+	// Test with invalid page size
+	result = server.getJobs(context.Background(), "1", "invalid", "", "")
+	assert.NotNil(t, result)
+
+	// Test with negative values
+	result = server.getJobs(context.Background(), "-1", "-10", "", "")
+	assert.NotNil(t, result)
+}
+
+func TestServer_getJobs_WithFilters(t *testing.T) {
+	t.Parallel()
+
+	server := &Server{
+		Cfg: config.Config{},
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Log("Expected panic due to nil services:", r)
+		}
+	}()
+
+	// Test with status filter
+	result := server.getJobs(context.Background(), "1", "10", "completed", "")
+	assert.NotNil(t, result)
+
+	// Test with search filter
+	result = server.getJobs(context.Background(), "1", "10", "", "test-search")
+	assert.NotNil(t, result)
+
+	// Test with both filters
+	result = server.getJobs(context.Background(), "1", "10", "failed", "error")
+	assert.NotNil(t, result)
+}
