@@ -204,3 +204,123 @@ func TestResponseValidator_PerformJSONValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestResponseValidator_ValidateResponse_EmptyResponse(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Mock refusal detection call
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return(`{"is_refusal": false, "confidence": 0.1, "refusal_type": "", "reason": "", "suggestions": []}`, nil).Once()
+
+	v := NewResponseValidator(mockAI)
+
+	result, err := v.ValidateResponse(context.Background(), "")
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Greater(t, len(result.Issues), 0) // Should have issues for empty response
+}
+
+func TestResponseValidator_ValidateResponse_RefusalDetectionError(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Refusal detection fails but validation continues
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return("", assert.AnError).Once()
+
+	v := NewResponseValidator(mockAI)
+	result, err := v.ValidateResponse(context.Background(), `{"valid": "json"}`)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestResponseValidator_ContentQualityAssessment(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	v := NewResponseValidator(mockAI)
+
+	tests := []struct {
+		name         string
+		response     string
+		expectIssues bool
+	}{
+		{"short_response", "OK", true},
+		{"repetitive", "test test test test test test test test test test", true},
+		{"incomplete_ellipsis", `{"data": "incomplete..."}`, true},
+		{"good_response", `{"name": "John", "age": 30, "city": "New York"}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := &ValidationResult{Issues: []ValidationIssue{}, CleanedResponse: tt.response}
+			v.performContentQualityAssessment(tt.response, res)
+			if tt.expectIssues {
+				assert.Greater(t, len(res.Issues), 0)
+			}
+		})
+	}
+}
+
+func TestResponseValidator_DetermineOverallValidity_AllCases(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	v := NewResponseValidator(mockAI)
+
+	tests := []struct {
+		name        string
+		result      *ValidationResult
+		expectValid bool
+	}{
+		{
+			name:        "no_issues",
+			result:      &ValidationResult{Issues: []ValidationIssue{}},
+			expectValid: true,
+		},
+		{
+			name: "low_severity_issue",
+			result: &ValidationResult{Issues: []ValidationIssue{
+				{Type: "test", Severity: "low"},
+			}},
+			expectValid: true,
+		},
+		{
+			name: "critical_issue",
+			result: &ValidationResult{Issues: []ValidationIssue{
+				{Type: "test", Severity: "critical"},
+			}},
+			expectValid: false,
+		},
+		{
+			name: "single_high_severity_issue",
+			result: &ValidationResult{Issues: []ValidationIssue{
+				{Type: "test", Severity: "high"},
+			}},
+			expectValid: true, // Only >2 high severity issues invalidate
+		},
+		{
+			name: "multiple_high_severity_issues",
+			result: &ValidationResult{Issues: []ValidationIssue{
+				{Type: "test1", Severity: "high"},
+				{Type: "test2", Severity: "high"},
+				{Type: "test3", Severity: "high"},
+			}},
+			expectValid: false, // >2 high severity issues invalidate
+		},
+		{
+			name:        "is_refusal",
+			result:      &ValidationResult{Issues: []ValidationIssue{}, IsRefusal: true},
+			expectValid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.result.IsValid = true // Reset
+			v.determineOverallValidity(tt.result)
+			assert.Equal(t, tt.expectValid, tt.result.IsValid)
+		})
+	}
+}
