@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -504,4 +505,38 @@ func TestResponseCleaner_ValidateAndFixJSON(t *testing.T) {
 			assert.NotEmpty(t, result)
 		})
 	}
+}
+
+func TestResponseCleaner_CleanAndValidateJSON_InvalidAfterCleaning(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	// Input that can't be fixed to valid JSON
+	input := "This is not JSON at all and cannot be fixed"
+
+	_, err := cleaner.CleanAndValidateJSON(input)
+	assert.Error(t, err)
+
+	// Check if it's a JSONValidationError
+	var jsonErr *JSONValidationError
+	if errors.As(err, &jsonErr) {
+		assert.NotEmpty(t, jsonErr.Original)
+		assert.NotEmpty(t, jsonErr.Cleaned)
+		assert.NotEmpty(t, jsonErr.Message)
+		assert.NotEmpty(t, jsonErr.Error())
+	}
+}
+
+func TestResponseCleaner_CleanAndValidateJSON_Success(t *testing.T) {
+	t.Parallel()
+
+	cleaner := NewResponseCleaner()
+
+	// Valid JSON with markdown wrapper
+	input := "```json\n{\"key\": \"value\"}\n```"
+
+	result, err := cleaner.CleanAndValidateJSON(input)
+	assert.NoError(t, err)
+	assert.True(t, cleaner.IsValidJSON(result))
 }
