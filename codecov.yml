@@ -32,6 +32,10 @@ ignore:
   - "**/mocks/**"
   - "cmd/**"  # Entry points typically have low coverage
   - "internal/adapter/httpserver/static/**"  # Static files
+  - "internal/adapter/queue/redpanda/dlq_consumer.go"  # DLQ consumer requires Kafka integration
+  - "internal/adapter/queue/redpanda/retry_manager.go"  # Retry manager requires Kafka integration
+  - "internal/app/qdrant.go"  # Qdrant setup requires external service
+  - "internal/app/router.go"  # Router setup is integration code
 
 # Flag management
 flags:
