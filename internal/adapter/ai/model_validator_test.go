@@ -319,3 +319,158 @@ func TestModelValidator_TimeoutBehavior(t *testing.T) {
 
 	mockAI.AssertExpectations(t)
 }
+
+func TestModelValidator_ValidateJSONResponse_AllPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		mockSetup     func(*domainmocks.MockAIClient)
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "success_with_all_fields",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"name": "test", "value": 123, "active": true}`, nil).Once()
+			},
+			expectedError: false,
+		},
+		{
+			name: "ai_error",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return("", assert.AnError).Once()
+			},
+			expectedError: true,
+			errorContains: "JSON validation failed",
+		},
+		{
+			name: "invalid_json",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return("not json", nil).Once()
+			},
+			expectedError: true,
+			errorContains: "invalid JSON",
+		},
+		{
+			name: "missing_name_field",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"value": 123, "active": true}`, nil).Once()
+			},
+			expectedError: true,
+			errorContains: "missing required field: name",
+		},
+		{
+			name: "missing_value_field",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"name": "test", "active": true}`, nil).Once()
+			},
+			expectedError: true,
+			errorContains: "missing required field: value",
+		},
+		{
+			name: "missing_active_field",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"name": "test", "value": 123}`, nil).Once()
+			},
+			expectedError: true,
+			errorContains: "missing required field: active",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockAI := domainmocks.NewMockAIClient(t)
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockAI)
+			}
+
+			validator := NewModelValidator(mockAI)
+			err := validator.ValidateJSONResponse(context.Background())
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockAI.AssertExpectations(t)
+		})
+	}
+}
+
+func TestModelValidator_ValidateModelComprehensive_AllPaths(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		mockSetup     func(*domainmocks.MockAIClient)
+		expectedError bool
+		errorContains string
+	}{
+		{
+			name: "health_check_fails",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return("", assert.AnError).Once()
+			},
+			expectedError: true,
+			errorContains: "model health validation failed",
+		},
+		{
+			name: "json_response_fails",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				// Health check passes
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return(`{"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}`, nil).Once()
+				// JSON response fails
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return("", assert.AnError).Once()
+			},
+			expectedError: true,
+			errorContains: "JSON response validation failed",
+		},
+		{
+			name: "stability_fails",
+			mockSetup: func(ai *domainmocks.MockAIClient) {
+				// Health check passes
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 100).Return(`{"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}`, nil).Once()
+				// JSON response passes
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return(`{"name": "test", "value": 123, "active": true}`, nil).Once()
+				// Stability fails on first attempt
+				ai.On("ChatJSON", mock.Anything, "", mock.Anything, 200).Return("", assert.AnError).Once()
+			},
+			expectedError: true,
+			errorContains: "stability validation failed",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mockAI := domainmocks.NewMockAIClient(t)
+			if tt.mockSetup != nil {
+				tt.mockSetup(mockAI)
+			}
+
+			validator := NewModelValidator(mockAI)
+			err := validator.ValidateModelComprehensive(context.Background())
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				if tt.errorContains != "" {
+					assert.Contains(t, err.Error(), tt.errorContains)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockAI.AssertExpectations(t)
+		})
+	}
+}
