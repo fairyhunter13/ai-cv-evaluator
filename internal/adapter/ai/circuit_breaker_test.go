@@ -277,3 +277,49 @@ func TestCircuitBreaker_ConcurrentAccess(t *testing.T) {
 	// Should not panic or have data races
 	assert.True(t, true)
 }
+
+func TestCircuitBreaker_ShouldAttempt_DefaultCase(t *testing.T) {
+	t.Parallel()
+
+	cb := NewCircuitBreaker("test-model")
+	// Set an invalid state to test the default case
+	cb.state = CircuitState(99)
+
+	assert.False(t, cb.ShouldAttempt())
+}
+
+func TestCircuitBreaker_RecordFailure_TransitionsToOpen(t *testing.T) {
+	t.Parallel()
+
+	cb := NewCircuitBreaker("test-model")
+	cb.failureThreshold = 2
+
+	// First failure
+	cb.RecordFailure()
+	assert.Equal(t, CircuitClosed, cb.state)
+
+	// Second failure should open the circuit
+	cb.RecordFailure()
+	assert.Equal(t, CircuitOpen, cb.state)
+}
+
+func TestCircuitBreaker_RecordSuccess_TransitionsFromHalfOpen(t *testing.T) {
+	t.Parallel()
+
+	cb := NewCircuitBreaker("test-model")
+	cb.state = CircuitHalfOpen
+
+	cb.RecordSuccess()
+	assert.Equal(t, CircuitClosed, cb.state)
+}
+
+func TestCircuitBreaker_RecordFailure_TransitionsFromHalfOpen(t *testing.T) {
+	t.Parallel()
+
+	cb := NewCircuitBreaker("test-model")
+	cb.state = CircuitHalfOpen
+	cb.failureThreshold = 1 // Set threshold to 1 so first failure opens circuit
+
+	cb.RecordFailure()
+	assert.Equal(t, CircuitOpen, cb.state)
+}
