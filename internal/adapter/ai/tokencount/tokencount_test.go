@@ -299,3 +299,57 @@ func TestSpecialCharacters(t *testing.T) {
 		})
 	}
 }
+
+func TestCountTokensDefault(t *testing.T) {
+	count, err := CountTokensDefault("Hello, world!", "gpt-4")
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
+}
+
+func TestCalculateUsageDefault(t *testing.T) {
+	usage, err := CalculateUsageDefault("You are a helpful assistant.", "Hello!", "Hi there!", "gpt-4", "openai")
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	assert.Greater(t, usage.PromptTokens, 0)
+	assert.Greater(t, usage.CompletionTokens, 0)
+	assert.Equal(t, usage.TotalTokens, usage.PromptTokens+usage.CompletionTokens)
+	assert.Equal(t, "gpt-4", usage.Model)
+	assert.Equal(t, "openai", usage.Provider)
+}
+
+func TestCalculateUsageWithUnknownModel(t *testing.T) {
+	counter := NewCounter()
+
+	// Test with a completely unknown model that will trigger fallback estimation
+	usage, err := counter.CalculateUsage(
+		"System prompt for testing",
+		"User prompt for testing",
+		"Completion text for testing",
+		"unknown-model-xyz-123",
+		"unknown-provider",
+	)
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	// Even with unknown model, should still return reasonable estimates
+	assert.GreaterOrEqual(t, usage.PromptTokens, 0)
+	assert.GreaterOrEqual(t, usage.CompletionTokens, 0)
+	assert.Equal(t, usage.TotalTokens, usage.PromptTokens+usage.CompletionTokens)
+}
+
+func TestCountChatTokensWithUnknownModel(t *testing.T) {
+	counter := NewCounter()
+
+	// Test with unknown model - should fall back to cl100k_base
+	count, err := counter.CountChatTokens("System", "User message", "unknown-model-xyz")
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
+}
+
+func TestCountCompletionTokensWithUnknownModel(t *testing.T) {
+	counter := NewCounter()
+
+	// Test with unknown model - should fall back to cl100k_base
+	count, err := counter.CountCompletionTokens("This is a completion", "unknown-model-xyz")
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
+}
