@@ -734,3 +734,59 @@ func TestCalculateUsageDefault_WithProvider(t *testing.T) {
 	assert.NotNil(t, usage)
 	assert.Equal(t, "openai", usage.Provider)
 }
+
+func TestCalculateUsage_AllFields(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+	usage, err := counter.CalculateUsage(
+		"You are a helpful assistant.",
+		"Hello, how are you?",
+		"I'm doing great, thank you for asking!",
+		"gpt-4",
+		"openrouter",
+	)
+
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	assert.Greater(t, usage.PromptTokens, 0)
+	assert.Greater(t, usage.CompletionTokens, 0)
+	assert.Equal(t, usage.PromptTokens+usage.CompletionTokens, usage.TotalTokens)
+	assert.Equal(t, "gpt-4", usage.Model)
+	assert.Equal(t, "openrouter", usage.Provider)
+}
+
+func TestCalculateUsage_EmptyStrings(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+	usage, err := counter.CalculateUsage(
+		"",
+		"",
+		"",
+		"gpt-4",
+		"openai",
+	)
+
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	assert.GreaterOrEqual(t, usage.PromptTokens, 0)
+	assert.GreaterOrEqual(t, usage.CompletionTokens, 0)
+}
+
+func TestCountTokensDefault_Success(t *testing.T) {
+	t.Parallel()
+
+	count, err := CountTokensDefault("Hello, world!", "gpt-4")
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
+}
+
+func TestCountCompletionTokens_Success(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+	count, err := counter.CountCompletionTokens("This is a test completion.", "gpt-4")
+	require.NoError(t, err)
+	assert.Greater(t, count, 0)
+}
