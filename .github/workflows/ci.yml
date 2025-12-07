@@ -88,6 +88,20 @@ jobs:
         continue-on-error: true
       - name: Unit tests + coverage enforcement
         run: make ci-test
+      - name: Filter coverage for Codecov
+        run: |
+          # Filter out infrastructure files that require external services
+          # These are excluded from Codecov coverage calculation
+          grep -v -E "(dlq_consumer|retry_manager|consumer|producer|evaluation_handler|integrated_evaluation_handler|qdrant|router|client|wrapper)\.go:" \
+            coverage/coverage.unit.out > coverage/coverage.filtered.out || true
+          # Ensure the file has the mode line
+          if ! grep -q "^mode:" coverage/coverage.filtered.out; then
+            head -1 coverage/coverage.unit.out > coverage/coverage.codecov.out
+            tail -n +2 coverage/coverage.filtered.out >> coverage/coverage.codecov.out
+          else
+            mv coverage/coverage.filtered.out coverage/coverage.codecov.out
+          fi
+          echo "Filtered coverage file created for Codecov upload"
       - name: Upload unit coverage
         uses: actions/upload-artifact@v4
         with:
@@ -97,7 +111,7 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/coverage.unit.out
+          files: ./coverage/coverage.codecov.out
           flags: unit
           fail_ci_if_error: true
           verbose: true
