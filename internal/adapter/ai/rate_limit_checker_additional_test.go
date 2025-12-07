@@ -409,3 +409,73 @@ func TestRateLimitChecker_CheckAccountStatus_Error(t *testing.T) {
 	require.False(t, isActive)
 	require.False(t, hasCredits)
 }
+
+func TestRateLimitChecker_CheckFreeModelLimits_FreeTierExtended(t *testing.T) {
+	mockResponse := map[string]any{
+		"data": map[string]any{
+			"label":               "Free Tier API Key",
+			"usage":               0.0,
+			"limit":               nil,
+			"is_free_tier":        true,
+			"limit_remaining":     nil,
+			"is_provisioning_key": false,
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(mockResponse))
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	canUse, dailyLimit, err := checker.CheckFreeModelLimits(ctx)
+	require.NoError(t, err)
+	require.True(t, canUse)
+	require.Equal(t, 50, dailyLimit) // Free tier limit
+}
+
+func TestRateLimitChecker_CheckFreeModelLimits_PaidTierExtended(t *testing.T) {
+	limitRemaining := 50.0
+	mockResponse := map[string]any{
+		"data": map[string]any{
+			"label":               "Paid API Key",
+			"usage":               50.0,
+			"limit":               100.0,
+			"is_free_tier":        false,
+			"limit_remaining":     limitRemaining,
+			"is_provisioning_key": false,
+		},
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(mockResponse))
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	canUse, dailyLimit, err := checker.CheckFreeModelLimits(ctx)
+	require.NoError(t, err)
+	require.True(t, canUse)
+	require.Equal(t, 1000, dailyLimit) // Paid tier limit
+}
+
+func TestRateLimitChecker_CheckFreeModelLimits_APIError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	checker := NewRateLimitChecker("test-api-key", server.URL)
+	ctx := context.Background()
+
+	canUse, dailyLimit, err := checker.CheckFreeModelLimits(ctx)
+	require.Error(t, err)
+	require.False(t, canUse)
+	require.Equal(t, 0, dailyLimit)
+}
