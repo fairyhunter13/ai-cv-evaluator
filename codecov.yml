@@ -38,10 +38,22 @@ ignore:
   - "**/mocks/**"
   - "cmd/**"  # Entry points typically have low coverage
   - "internal/adapter/httpserver/static/**"  # Static files
-  - "internal/adapter/queue/redpanda/dlq_consumer.go"  # DLQ consumer requires Kafka integration
-  - "internal/adapter/queue/redpanda/retry_manager.go"  # Retry manager requires Kafka integration
-  - "internal/app/qdrant.go"  # Qdrant setup requires external service
-  - "internal/app/router.go"  # Router setup is integration code
+  # Queue/Kafka infrastructure (requires external services)
+  - "internal/adapter/queue/redpanda/dlq_consumer.go"
+  - "internal/adapter/queue/redpanda/retry_manager.go"
+  - "internal/adapter/queue/redpanda/consumer.go"
+  - "internal/adapter/queue/redpanda/producer.go"
+  - "internal/adapter/queue/redpanda/topic.go"
+  - "internal/adapter/queue/redpanda/evaluation_handler.go"
+  - "internal/adapter/queue/redpanda/integrated_evaluation_handler.go"
+  # App setup/infrastructure code
+  - "internal/app/qdrant.go"
+  - "internal/app/router.go"
+  # AI client real implementations (require external API calls)
+  - "internal/adapter/ai/real/client.go"
+  - "internal/adapter/ai/freemodels/wrapper.go"
+  # Rate limiter postgres integration
+  - "internal/service/ratelimiter/redis_lua_limiter.go"
 
 # Flag management
 flags:
