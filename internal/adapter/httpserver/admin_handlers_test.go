@@ -317,3 +317,33 @@ func TestAdminStatusHandler_SSO(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 }
+
+func TestAdminJobsHandler_InvalidToken(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+	server := &httpserver.Server{Cfg: cfg}
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	w := httptest.NewRecorder()
+
+	adminServer.AdminJobsHandler()(w, req)
+
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestAdminJobsHandler_InvalidPagination(t *testing.T) {
+	cfg := config.Config{AdminUsername: "admin", AdminPassword: "password", AdminSessionSecret: "secret"}
+	server := &httpserver.Server{Cfg: cfg}
+	adminServer, err := httpserver.NewAdminServer(cfg, server)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/jobs?page=-1&limit=abc", nil)
+	req.Header.Set("X-Forwarded-User", "sso-user")
+	w := httptest.NewRecorder()
+
+	adminServer.AdminJobsHandler()(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
