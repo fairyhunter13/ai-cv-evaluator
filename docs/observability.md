@@ -28,14 +28,21 @@ All observability UIs are protected by SSO. After authenticating via Keycloak:
 - **Purpose**: Monitor AI provider performance, rate limits, and costs
 - **Key Panels**:
   - **Total AI Requests** - Cumulative count of all AI provider API calls
-  - **Median AI Latency (p50)** - 50th percentile response time
+  - **Average AI Latency** - Mean response time for AI provider calls
   - **95th Percentile Latency** - p95 response time for SLA monitoring
-  - **Total Tokens Used** - Cumulative token consumption across providers
+  - **Total Tokens Used** - Cumulative token consumption across providers (uses `tiktoken-go` for accurate counting)
   - **AI Request Rate** - Requests per second by provider and operation
   - **AI Request Latency Percentiles** - p95/p99 latency timeseries
   - **Median Project Score** - Average project evaluation scores
   - **Median CV Match Rate** - Average CV-to-job matching scores
   - **Total AI Requests by Provider** - Breakdown by Groq, OpenRouter, OpenAI
+  - **AI Provider Request Rate** - Rate of AI provider calls by provider
+  - **AI Provider Response Time** - Latency percentiles by provider
+  - **Median Latency (p50)** - 50th percentile response time
+  - **p95 Latency** - 95th percentile response time
+  - **p99 Latency** - 99th percentile response time (worst case for 99% of requests)
+  - **Max Observed Latency** - Maximum observed AI request duration
+- **Token Counting**: Uses `tiktoken-go` (Go port of OpenAI's tiktoken) for accurate token counting across GPT-4, GPT-3.5, Llama, Mistral, Gemma, Qwen, DeepSeek, and Claude models.
 - **Note**: AI metrics are recorded by the worker process when evaluations call AI providers. Metrics will show 0 if no evaluations have been triggered recently.
 
 ### 2. HTTP Metrics Dashboard
