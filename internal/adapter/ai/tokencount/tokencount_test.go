@@ -148,3 +148,154 @@ func TestEncodingCache(t *testing.T) {
 
 	assert.Equal(t, count1, count2, "cached encoding should produce same result")
 }
+
+func TestCalculateUsageWithFallback(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	// Test with a model that might trigger fallback estimation
+	systemPrompt := "You are a helpful assistant that provides detailed answers."
+	userPrompt := "Please explain the concept of machine learning in simple terms."
+	completion := "Machine learning is a type of artificial intelligence that allows computers to learn from data without being explicitly programmed."
+
+	usage, err := counter.CalculateUsage(systemPrompt, userPrompt, completion, "unknown-model-xyz", "custom-provider")
+	require.NoError(t, err)
+
+	// Even with unknown model, should still produce reasonable estimates
+	assert.Greater(t, usage.PromptTokens, 0, "prompt tokens should be positive")
+	assert.Greater(t, usage.CompletionTokens, 0, "completion tokens should be positive")
+	assert.Equal(t, usage.TotalTokens, usage.PromptTokens+usage.CompletionTokens)
+	assert.Equal(t, "unknown-model-xyz", usage.Model)
+	assert.Equal(t, "custom-provider", usage.Provider)
+}
+
+func TestCountCompletionTokens(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	tests := []struct {
+		name       string
+		completion string
+		model      string
+		minCount   int
+		maxCount   int
+	}{
+		{
+			name:       "short completion",
+			completion: "Paris",
+			model:      "gpt-4",
+			minCount:   1,
+			maxCount:   3,
+		},
+		{
+			name:       "medium completion",
+			completion: "The capital of France is Paris, which is known for the Eiffel Tower.",
+			model:      "gpt-3.5-turbo",
+			minCount:   10,
+			maxCount:   20,
+		},
+		{
+			name:       "completion with llama model",
+			completion: "Machine learning is a subset of artificial intelligence.",
+			model:      "llama-3.1-8b-instant",
+			minCount:   8,
+			maxCount:   15,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := counter.CountCompletionTokens(tt.completion, tt.model)
+			require.NoError(t, err)
+			assert.GreaterOrEqual(t, count, tt.minCount)
+			assert.LessOrEqual(t, count, tt.maxCount)
+		})
+	}
+}
+
+func TestCountChatTokensWithDifferentModels(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	systemPrompt := "You are a code review assistant."
+	userPrompt := "Review this Go function for best practices."
+
+	models := []string{
+		"gpt-4",
+		"gpt-3.5-turbo",
+		"meta-llama/llama-3.1-8b-instruct:free",
+		"mistralai/mistral-7b-instruct:free",
+		"google/gemma-7b-it:free",
+		"qwen/qwen-2-7b-instruct:free",
+		"deepseek/deepseek-chat",
+		"anthropic/claude-3-haiku",
+	}
+
+	for _, model := range models {
+		t.Run(model, func(t *testing.T) {
+			count, err := counter.CountChatTokens(systemPrompt, userPrompt, model)
+			require.NoError(t, err)
+			assert.Greater(t, count, 0, "token count should be positive for model %s", model)
+		})
+	}
+}
+
+func TestEmptyInputs(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	// Empty text should return 0 tokens
+	count, err := counter.CountTokens("", "gpt-4")
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+
+	// Empty prompts in chat should still have overhead tokens
+	chatCount, err := counter.CountChatTokens("", "", "gpt-4")
+	require.NoError(t, err)
+	assert.Greater(t, chatCount, 0, "chat tokens should include message overhead even with empty prompts")
+}
+
+func TestLongText(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	// Generate a long text
+	longText := ""
+	for i := 0; i < 100; i++ {
+		longText += "This is a test sentence to check token counting for longer texts. "
+	}
+
+	count, err := counter.CountTokens(longText, "gpt-4")
+	require.NoError(t, err)
+	assert.Greater(t, count, 1000, "long text should have many tokens")
+}
+
+func TestSpecialCharacters(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	tests := []struct {
+		name string
+		text string
+	}{
+		{"unicode", "Hello 世界 🌍"},
+		{"code", "func main() { fmt.Println(\"Hello\") }"},
+		{"json", `{"key": "value", "number": 123}`},
+		{"markdown", "# Header\n\n- Item 1\n- Item 2"},
+		{"newlines", "Line 1\nLine 2\nLine 3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := counter.CountTokens(tt.text, "gpt-4")
+			require.NoError(t, err)
+			assert.Greater(t, count, 0, "should count tokens for %s", tt.name)
+		})
+	}
+}
