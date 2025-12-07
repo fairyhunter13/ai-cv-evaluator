@@ -130,3 +130,36 @@ func TestResponseValidator_ValidateResponse_Integration(t *testing.T) {
 		assert.False(t, out.IsRefusal)
 	}
 }
+
+func TestResponseValidator_PerformJSONValidation_InvalidButParseable(t *testing.T) {
+	mockAI := domainmocks.NewMockAIClient(t)
+	validator := NewResponseValidator(mockAI)
+
+	// Test with valid JSON that can be parsed
+	res := &ValidationResult{}
+	err := validator.performJSONValidation(`{"key": "value", "number": 123}`, res)
+	assert.NoError(t, err)
+	assert.Empty(t, res.Issues)
+}
+
+func TestResponseValidator_PerformJSONValidation_ArrayJSON(t *testing.T) {
+	mockAI := domainmocks.NewMockAIClient(t)
+	validator := NewResponseValidator(mockAI)
+
+	// Test with JSON array
+	res := &ValidationResult{}
+	err := validator.performJSONValidation(`[1, 2, 3, "test"]`, res)
+	assert.NoError(t, err)
+	assert.Empty(t, res.Issues)
+}
+
+func TestResponseValidator_PerformJSONValidation_NestedJSON(t *testing.T) {
+	mockAI := domainmocks.NewMockAIClient(t)
+	validator := NewResponseValidator(mockAI)
+
+	// Test with nested JSON
+	res := &ValidationResult{}
+	err := validator.performJSONValidation(`{"outer": {"inner": {"deep": true}}}`, res)
+	assert.NoError(t, err)
+	assert.Empty(t, res.Issues)
+}
