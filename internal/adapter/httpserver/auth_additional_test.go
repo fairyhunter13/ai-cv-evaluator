@@ -263,3 +263,39 @@ func TestValidateJWT_ValidToken(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "testuser", sub)
 }
+
+func TestSetSessionCookie_NoOp(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+
+	rec := httptest.NewRecorder()
+	sm.SetSessionCookie(rec, "test-value")
+
+	// Should be a no-op, no cookies set
+	cookies := rec.Result().Cookies()
+	require.Empty(t, cookies)
+}
+
+func TestClearSessionCookie_NoOp(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{AdminSessionSecret: "secret"}
+	sm := NewSessionManager(cfg)
+
+	rec := httptest.NewRecorder()
+	sm.ClearSessionCookie(rec)
+
+	// Should be a no-op, no cookies set
+	cookies := rec.Result().Cookies()
+	require.Empty(t, cookies)
+}
+
+func TestGenerateCSRFCookieValue_Length(t *testing.T) {
+	t.Parallel()
+
+	value := GenerateCSRFCookieValue()
+	// 32 bytes in base64 raw URL encoding = 43 characters
+	require.GreaterOrEqual(t, len(value), 40)
+}
