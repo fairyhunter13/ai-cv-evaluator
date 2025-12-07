@@ -676,3 +676,61 @@ func TestCountChatTokens_AllModels(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateUsage_Success(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	usage, err := counter.CalculateUsage(
+		"You are a helpful assistant.",
+		"Hello, how are you?",
+		"I'm doing well, thank you for asking!",
+		"gpt-4",
+		"openai",
+	)
+
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	assert.Greater(t, usage.PromptTokens, 0)
+	assert.Greater(t, usage.CompletionTokens, 0)
+	assert.Equal(t, usage.PromptTokens+usage.CompletionTokens, usage.TotalTokens)
+	assert.Equal(t, "gpt-4", usage.Model)
+	assert.Equal(t, "openai", usage.Provider)
+}
+
+func TestCalculateUsage_UnknownModel(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+
+	// Unknown model should still work with fallback
+	usage, err := counter.CalculateUsage(
+		"System prompt",
+		"User prompt",
+		"Completion",
+		"unknown-model-xyz",
+		"unknown-provider",
+	)
+
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	assert.GreaterOrEqual(t, usage.PromptTokens, 0)
+	assert.GreaterOrEqual(t, usage.CompletionTokens, 0)
+}
+
+func TestCalculateUsageDefault_WithProvider(t *testing.T) {
+	t.Parallel()
+
+	usage, err := CalculateUsageDefault(
+		"System",
+		"User",
+		"Completion",
+		"gpt-4",
+		"openai",
+	)
+
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	assert.Equal(t, "openai", usage.Provider)
+}
