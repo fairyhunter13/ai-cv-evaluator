@@ -9,14 +9,20 @@ coverage:
         target: 80%
         threshold: 1%  # Allow 1% fluctuation
         if_ci_failed: error
+        informational: false  # Make this a required check
     patch:
       default:
         target: 70%  # New code should have at least 70% coverage
         threshold: 5%
+        informational: true  # Patch coverage is informational only
 
-  # Precision of coverage percentage
-  precision: 2
-  round: down
+# GitHub integration settings
+github_checks:
+  annotations: true
+
+# Precision of coverage percentage
+precision: 2
+round: down
 
 # Comment configuration for PRs
 comment:
