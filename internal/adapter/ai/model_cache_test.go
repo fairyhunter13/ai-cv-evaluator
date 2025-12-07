@@ -312,3 +312,58 @@ func TestModelCache_AccessCountTracking(t *testing.T) {
 	// Initial set count (1) + 5 gets = 6
 	assert.Equal(t, 6, cached.AccessCount)
 }
+
+func TestModelCache_SetWithTTL_Eviction(t *testing.T) {
+	// Create a cache with max size of 2
+	mc := NewModelCache(2, 5*time.Minute)
+
+	// Fill the cache
+	mc.SetWithTTL("sys1", "user1", "response1", "model1", time.Minute)
+	mc.SetWithTTL("sys2", "user2", "response2", "model2", time.Minute)
+
+	// Add a third entry, should trigger eviction
+	mc.SetWithTTL("sys3", "user3", "response3", "model3", time.Minute)
+
+	// Cache should still have max 2 entries
+	stats := mc.GetStats()
+	assert.LessOrEqual(t, stats["cache_size"].(int), 2)
+}
+
+func TestModelCache_EvictLeastUsed_EmptyCache(t *testing.T) {
+	mc := NewModelCache(100, 5*time.Minute)
+
+	// Calling evictLeastUsed on empty cache should not panic
+	mc.mu.Lock()
+	mc.evictLeastUsed()
+	mc.mu.Unlock()
+
+	// Cache should still be empty
+	stats := mc.GetStats()
+	assert.Equal(t, 0, stats["cache_size"].(int))
+}
+
+func TestModelCache_EvictLeastUsed_ByAccessCount(t *testing.T) {
+	mc := NewModelCache(2, 5*time.Minute)
+
+	// Add two entries
+	mc.Set("sys1", "user1", "response1", "model1")
+	mc.Set("sys2", "user2", "response2", "model2")
+
+	// Access the first one multiple times to increase its access count
+	for i := 0; i < 5; i++ {
+		mc.Get("sys1", "user1")
+	}
+
+	// Add a third entry, should evict the one with lower access count (sys2)
+	mc.Set("sys3", "user3", "response3", "model3")
+
+	// sys1 should still be in cache (higher access count)
+	resp, found := mc.Get("sys1", "user1")
+	assert.True(t, found)
+	assert.Equal(t, "response1", resp)
+
+	// sys3 should be in cache (just added)
+	resp, found = mc.Get("sys3", "user3")
+	assert.True(t, found)
+	assert.Equal(t, "response3", resp)
+}
