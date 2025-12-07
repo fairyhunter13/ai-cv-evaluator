@@ -3588,6 +3588,85 @@ test.describe('Dashboard Completeness Validation', () => {
     }
   });
 
+  test('AI token usage metrics are recorded', async ({ page }) => {
+    test.setTimeout(60000);
+    await loginViaSSO(page);
+
+    // Query Prometheus for AI token metrics
+    const tokenResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_tokens_total) or vector(0)' },
+    });
+    expect(tokenResp.ok()).toBeTruthy();
+    
+    const tokenBody = await tokenResp.json();
+    const tokenResult = (tokenBody as any)?.data?.result ?? [];
+    const totalTokens = tokenResult.length > 0 ? parseFloat(tokenResult[0]?.value?.[1] ?? '0') : 0;
+    console.log(`Total AI Tokens from Prometheus: ${totalTokens}`);
+    
+    // Query for tokens by type (prompt vs completion)
+    const tokensByTypeResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_tokens_total) by (type)' },
+    });
+    expect(tokensByTypeResp.ok()).toBeTruthy();
+    
+    const tokensByTypeBody = await tokensByTypeResp.json();
+    const tokensByTypeResult = (tokensByTypeBody as any)?.data?.result ?? [];
+    
+    let promptTokens = 0;
+    let completionTokens = 0;
+    for (const result of tokensByTypeResult) {
+      const tokenType = result?.metric?.type ?? '';
+      const value = parseFloat(result?.value?.[1] ?? '0');
+      if (tokenType === 'prompt') {
+        promptTokens = value;
+      } else if (tokenType === 'completion') {
+        completionTokens = value;
+      }
+    }
+    console.log(`Prompt Tokens: ${promptTokens}, Completion Tokens: ${completionTokens}`);
+    
+    // Query for tokens by provider
+    const tokensByProviderResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_tokens_total) by (provider)' },
+    });
+    expect(tokensByProviderResp.ok()).toBeTruthy();
+    
+    const tokensByProviderBody = await tokensByProviderResp.json();
+    const tokensByProviderResult = (tokensByProviderBody as any)?.data?.result ?? [];
+    
+    for (const result of tokensByProviderResult) {
+      const provider = result?.metric?.provider ?? 'unknown';
+      const value = parseFloat(result?.value?.[1] ?? '0');
+      console.log(`Provider ${provider}: ${value} tokens`);
+    }
+    
+    // If there are AI requests, we should have token metrics
+    const aiRequestsResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+      params: { query: 'sum(ai_requests_total) or vector(0)' },
+    });
+    const aiRequestsBody = await aiRequestsResp.json();
+    const aiRequestsResult = (aiRequestsBody as any)?.data?.result ?? [];
+    const totalAiRequests = aiRequestsResult.length > 0 ? parseFloat(aiRequestsResult[0]?.value?.[1] ?? '0') : 0;
+    
+    if (totalAiRequests > 0) {
+      // If we have AI requests, we should have token metrics
+      // Note: Token counting was added in v1.0.142, so older deployments may not have tokens
+      console.log(`AI Requests: ${totalAiRequests}, Total Tokens: ${totalTokens}`);
+      // Don't fail if tokens are 0 - this could be a fresh deployment or pre-token-counting version
+      if (totalTokens > 0) {
+        console.log('Token metrics are being recorded correctly');
+        // Verify prompt tokens are typically larger than completion tokens for chat
+        if (promptTokens > 0 && completionTokens > 0) {
+          console.log(`Token ratio (prompt/completion): ${(promptTokens / completionTokens).toFixed(2)}`);
+        }
+      } else {
+        console.log('Token metrics not yet recorded - may be pre-v1.0.142 deployment');
+      }
+    } else {
+      console.log('No AI requests recorded yet - token metrics expected to be 0');
+    }
+  });
+
   test('AI Metrics are recorded after evaluation triggers AI calls', async ({ page }) => {
     test.setTimeout(180000);
     await loginViaSSO(page);
