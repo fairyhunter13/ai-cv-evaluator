@@ -87,7 +87,7 @@ func Test_OpenAPIServe_200(t *testing.T) {
 }
 
 func Test_newReqID(t *testing.T) {
-	t.Parallel()
+	// Not parallel due to shared ulidEntropy
 
 	// Test that newReqID generates unique IDs
 	ids := make(map[string]bool)
@@ -104,7 +104,7 @@ func Test_newReqID(t *testing.T) {
 }
 
 func Test_newReqID_Format(t *testing.T) {
-	t.Parallel()
+	// Not parallel due to shared ulidEntropy
 
 	id := newReqID()
 	// ULID is 26 characters
