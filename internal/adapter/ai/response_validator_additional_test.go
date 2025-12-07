@@ -324,3 +324,58 @@ func TestResponseValidator_DetermineOverallValidity_AllCases(t *testing.T) {
 		})
 	}
 }
+
+func TestResponseValidator_PerformResponseCleaning_Fallback(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	v := NewResponseValidator(mockAI)
+
+	tests := []struct {
+		name        string
+		response    string
+		expectError bool
+	}{
+		{"valid_json", `{"key": "value"}`, false},
+		{"json_with_markdown", "```json\n{\"key\": \"value\"}\n```", false},
+		{"invalid_json_fixable", `{key: "value"}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := &ValidationResult{}
+			err := v.performResponseCleaning(tt.response, res)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, res.CleanedResponse)
+			}
+		})
+	}
+}
+
+func TestResponseValidator_HasRepetitiveContent(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	v := NewResponseValidator(mockAI)
+
+	tests := []struct {
+		name       string
+		response   string
+		repetitive bool
+	}{
+		{"no_repetition", "This is a normal response with varied content.", false},
+		{"word_repetition", "test test test test test test test test test test", true},
+		{"short_response", "OK", false}, // Too short to detect
+		{"json_no_repetition", `{"name": "John", "age": 30}`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := v.hasRepetitiveContent(tt.response)
+			assert.Equal(t, tt.repetitive, result)
+		})
+	}
+}
