@@ -177,7 +177,7 @@ services:
     image: jaegertracing/all-in-one:1.57
     environment:
       - QUERY_BASE_PATH=/jaeger
-      - MEMORY_MAX_TRACES=10000
+      - MEMORY_MAX_TRACES=5000
       - SPAN_STORAGE_TYPE=memory
     deploy:
       resources:
