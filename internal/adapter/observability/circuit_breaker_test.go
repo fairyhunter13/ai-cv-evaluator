@@ -421,3 +421,66 @@ func TestCircuitBreaker_HalfOpenFailure(t *testing.T) {
 	assert.Error(t, err)
 	assert.True(t, cb.IsOpen())
 }
+
+func TestCircuitBreaker_AllStates(t *testing.T) {
+	t.Parallel()
+
+	cb := observability.NewCircuitBreaker("test-all-states", 1, 50*time.Millisecond)
+
+	// Initially closed
+	assert.True(t, cb.IsClosed())
+	assert.False(t, cb.IsOpen())
+	assert.False(t, cb.IsHalfOpen())
+	assert.Equal(t, observability.StateClosed, cb.GetState())
+
+	// Open the circuit
+	_ = cb.Call(func() error { return errors.New("fail") })
+	assert.True(t, cb.IsOpen())
+	assert.False(t, cb.IsClosed())
+	assert.False(t, cb.IsHalfOpen())
+	assert.Equal(t, observability.StateOpen, cb.GetState())
+
+	// Wait for recovery timeout to transition to half-open
+	time.Sleep(60 * time.Millisecond)
+
+	// Next call should transition to half-open then closed on success
+	_ = cb.Call(func() error { return nil })
+	// After success in half-open, circuit should not be open
+	assert.False(t, cb.IsOpen())
+}
+
+func TestCircuitBreakerManager_GetAllExtended(t *testing.T) {
+	t.Parallel()
+
+	mgr := observability.NewCircuitBreakerManager()
+
+	// Create multiple breakers
+	_ = mgr.GetOrCreate("breaker1", 3, 1*time.Second)
+	_ = mgr.GetOrCreate("breaker2", 3, 1*time.Second)
+	_ = mgr.GetOrCreate("breaker3", 3, 1*time.Second)
+
+	all := mgr.GetAll()
+	assert.Len(t, all, 3)
+}
+
+func TestCircuitBreakerManager_ResetAllExtended(t *testing.T) {
+	t.Parallel()
+
+	mgr := observability.NewCircuitBreakerManager()
+
+	// Create and open breakers
+	cb1 := mgr.GetOrCreate("breaker1", 1, 1*time.Second)
+	cb2 := mgr.GetOrCreate("breaker2", 1, 1*time.Second)
+
+	_ = cb1.Call(func() error { return errors.New("fail") })
+	_ = cb2.Call(func() error { return errors.New("fail") })
+
+	assert.True(t, cb1.IsOpen())
+	assert.True(t, cb2.IsOpen())
+
+	// Reset all
+	mgr.ResetAll()
+
+	assert.True(t, cb1.IsClosed())
+	assert.True(t, cb2.IsClosed())
+}
