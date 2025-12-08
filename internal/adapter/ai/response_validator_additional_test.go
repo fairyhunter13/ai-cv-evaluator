@@ -2,6 +2,8 @@ package ai
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -422,4 +424,82 @@ func TestResponseValidator_ValidateResponse_RefusalDetected(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.True(t, result.IsRefusal)
 	assert.False(t, result.IsValid)
+}
+
+func TestResponseValidator_ValidateResponse_EmptyResponseExtended(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Mock refusal detection - it will still be called even for empty responses
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return(`{"is_refusal": false, "confidence": 0.1, "refusal_type": "", "reason": "", "suggestions":[]}`, nil).Maybe()
+
+	v := NewResponseValidator(mockAI)
+
+	result, err := v.ValidateResponse(context.Background(), "")
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.IsValid)
+	// Should have an issue for empty response
+	hasEmptyIssue := false
+	for _, issue := range result.Issues {
+		if issue.Type == "empty_response" {
+			hasEmptyIssue = true
+			break
+		}
+	}
+	assert.True(t, hasEmptyIssue)
+}
+
+func TestResponseValidator_ValidateResponse_ValidJSONExtended(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Mock refusal detection to return no refusal
+	resp := `{"is_refusal": false, "confidence": 0.1, "refusal_type": "", "reason": "", "suggestions":[]}`
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return(resp, nil).Once()
+
+	v := NewResponseValidator(mockAI)
+
+	result, err := v.ValidateResponse(context.Background(), `{"key": "value", "number": 123}`)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.True(t, result.IsValid)
+	assert.False(t, result.IsRefusal)
+}
+
+func TestResponseValidator_ValidateResponse_RefusalDetectionErrorExtended(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Mock refusal detection to return an error
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return("", errors.New("AI error")).Once()
+
+	v := NewResponseValidator(mockAI)
+
+	// Should still work even if refusal detection fails
+	result, err := v.ValidateResponse(context.Background(), `{"key": "value"}`)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+}
+
+func TestResponseValidator_ValidateResponse_RepetitiveContent(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	// Mock refusal detection to return no refusal
+	resp := `{"is_refusal": false, "confidence": 0.1, "refusal_type": "", "reason": "", "suggestions":[]}`
+	mockAI.On("ChatJSON", mock.Anything, "", mock.Anything, 500).
+		Return(resp, nil).Once()
+
+	v := NewResponseValidator(mockAI)
+
+	// Create repetitive content
+	repetitive := `{"text": "` + strings.Repeat("hello ", 100) + `"}`
+
+	result, err := v.ValidateResponse(context.Background(), repetitive)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
 }
