@@ -177,6 +177,16 @@ services:
     image: jaegertracing/all-in-one:1.57
     environment:
       - QUERY_BASE_PATH=/jaeger
+      - MEMORY_MAX_TRACES=10000
+      - SPAN_STORAGE_TYPE=memory
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
     restart: unless-stopped
 
   mailpit:
