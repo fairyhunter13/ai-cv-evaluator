@@ -301,3 +301,18 @@ texts:
 	require.NoError(t, err)
 	assert.Equal(t, "Test content for relative path", text)
 }
+
+func TestGetDefaultJobDescription_ReturnsValue(t *testing.T) {
+	result := GetDefaultJobDescription()
+	assert.NotEmpty(t, result)
+}
+
+func TestGetDefaultStudyCaseBrief_ReturnsValue(t *testing.T) {
+	result := GetDefaultStudyCaseBrief()
+	assert.NotEmpty(t, result)
+}
+
+func TestGetDefaultScoringRubric_ReturnsValue(t *testing.T) {
+	result := GetDefaultScoringRubric()
+	assert.NotEmpty(t, result)
+}
