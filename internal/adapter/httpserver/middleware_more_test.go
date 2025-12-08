@@ -60,3 +60,35 @@ func Test_TraceMiddleware_PassesThrough(t *testing.T) {
 		t.Fatalf("want 204")
 	}
 }
+
+func Test_newReqID_ReturnsNonEmpty(t *testing.T) {
+	id := newReqID()
+	if id == "" {
+		t.Fatalf("expected non-empty request ID")
+	}
+}
+
+func Test_newReqID_UniqueIDs(t *testing.T) {
+	id1 := newReqID()
+	id2 := newReqID()
+	if id1 == id2 {
+		t.Fatalf("expected unique request IDs, got %s and %s", id1, id2)
+	}
+}
+
+func Test_AccessLog_SetsLogger(t *testing.T) {
+	rec := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/test", nil)
+	AccessLog()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(200) })).ServeHTTP(rec, r)
+	if rec.Result().StatusCode != 200 {
+		t.Fatalf("want 200, got %d", rec.Result().StatusCode)
+	}
+}
+
+func Test_LoggerFrom_ReturnsDefault(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/test", nil)
+	lg := LoggerFrom(r)
+	if lg == nil {
+		t.Fatalf("expected non-nil logger")
+	}
+}
