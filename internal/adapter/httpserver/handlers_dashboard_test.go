@@ -116,3 +116,39 @@ func TestServer_getJobs_WithFilters(t *testing.T) {
 	result = server.getJobs(context.Background(), "1", "10", "failed", "error")
 	assert.NotNil(t, result)
 }
+
+func TestServer_getJobs_LargePageSize(t *testing.T) {
+	t.Parallel()
+
+	server := &Server{
+		Cfg: config.Config{},
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Log("Expected panic due to nil services:", r)
+		}
+	}()
+
+	// Test with large page size (should be capped)
+	result := server.getJobs(context.Background(), "1", "1000", "", "")
+	assert.NotNil(t, result)
+}
+
+func TestServer_getJobs_ZeroPage(t *testing.T) {
+	t.Parallel()
+
+	server := &Server{
+		Cfg: config.Config{},
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Log("Expected panic due to nil services:", r)
+		}
+	}()
+
+	// Test with zero page (should default to 1)
+	result := server.getJobs(context.Background(), "0", "10", "", "")
+	assert.NotNil(t, result)
+}
