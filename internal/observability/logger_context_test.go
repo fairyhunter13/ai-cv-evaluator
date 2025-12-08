@@ -51,3 +51,24 @@ func TestContextWithRequestIDAndRequestIDFromContext(t *testing.T) {
 		t.Fatalf("expected empty string when no request ID present, got %q", got)
 	}
 }
+
+func TestContextWithRequestID_EmptyRequestID(t *testing.T) {
+	ctx := context.Background()
+	// Empty request ID should return original context
+	result := ContextWithRequestID(ctx, "")
+	if result != ctx {
+		t.Fatal("expected original context when request ID is empty")
+	}
+}
+
+func TestContextWithRequestID_ValidRequestID(t *testing.T) {
+	ctx := context.Background()
+	// Valid request ID should return new context
+	result := ContextWithRequestID(ctx, "req-456")
+	if result == ctx {
+		t.Fatal("expected new context when request ID is valid")
+	}
+	if got := RequestIDFromContext(result); got != "req-456" {
+		t.Fatalf("expected req-456, got %q", got)
+	}
+}
