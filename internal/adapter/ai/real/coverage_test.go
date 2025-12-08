@@ -550,3 +550,44 @@ func TestReadSSEChatStream_IdleTimeout(t *testing.T) {
 		t.Fatalf("idle timeout triggered too early: %v", time.Since(start))
 	}
 }
+
+func TestTestClient_GetBackoffConfig(t *testing.T) {
+	cfg := config.Config{
+		OpenRouterAPIKey: "test-key",
+	}
+
+	// Test default backoff config
+	client := NewTestClient(cfg)
+	if client == nil {
+		t.Fatal("Expected client to be non-nil")
+	}
+
+	backoffCfg := client.getBackoffConfig()
+	if backoffCfg == nil {
+		t.Fatal("Expected backoff config to be non-nil")
+	}
+
+	// Test with custom backoff using NewTestClientWithCustomBackoff
+	customBackoff := backoff.NewExponentialBackOff()
+	customBackoff.MaxElapsedTime = 1 * time.Second
+	testClient := NewTestClientWithCustomBackoff(cfg, customBackoff)
+
+	backoffCfg = testClient.getBackoffConfig()
+	if backoffCfg != customBackoff {
+		t.Error("Expected custom backoff to be returned")
+	}
+}
+
+func TestTestClient_GetBackoffConfig_NilCustom(t *testing.T) {
+	cfg := config.Config{
+		OpenRouterAPIKey: "test-key",
+	}
+
+	// Test with nil custom backoff - should fall back to client's backoff
+	testClient := NewTestClientWithCustomBackoff(cfg, nil)
+
+	backoffCfg := testClient.getBackoffConfig()
+	if backoffCfg == nil {
+		t.Fatal("Expected backoff config to be non-nil")
+	}
+}
