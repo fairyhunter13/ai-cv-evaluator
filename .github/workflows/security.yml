@@ -72,9 +72,10 @@ jobs:
       # Git secrets scan
       - name: Git Secrets Scan
         run: |
-          git clone https://github.com/awslabs/git-secrets.git
-          cd git-secrets && make install PREFIX=~/.local
+          git clone https://github.com/awslabs/git-secrets.git /tmp/git-secrets
+          cd /tmp/git-secrets && make install PREFIX=~/.local
           export PATH=$PATH:~/.local/bin
+          cd ${{ github.workspace }}
           git secrets --register-aws --global
           git secrets --install
           git secrets --scan-history
