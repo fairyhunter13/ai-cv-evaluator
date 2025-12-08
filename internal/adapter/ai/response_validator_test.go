@@ -163,3 +163,41 @@ func TestResponseValidator_PerformJSONValidation_NestedJSON(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, res.Issues)
 }
+
+func TestPerformJSONValidation_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	validator := NewResponseValidator(mockAI)
+
+	res := &ValidationResult{}
+	err := validator.performJSONValidation(`{invalid json`, res)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not valid JSON")
+	assert.Len(t, res.Issues, 1)
+	assert.Equal(t, "invalid_json", res.Issues[0].Type)
+}
+
+func TestPerformJSONValidation_EmptyObject(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	validator := NewResponseValidator(mockAI)
+
+	res := &ValidationResult{}
+	err := validator.performJSONValidation(`{}`, res)
+	assert.NoError(t, err)
+	assert.Empty(t, res.Issues)
+}
+
+func TestPerformJSONValidation_EmptyArray(t *testing.T) {
+	t.Parallel()
+
+	mockAI := domainmocks.NewMockAIClient(t)
+	validator := NewResponseValidator(mockAI)
+
+	res := &ValidationResult{}
+	err := validator.performJSONValidation(`[]`, res)
+	assert.NoError(t, err)
+	assert.Empty(t, res.Issues)
+}
