@@ -48,3 +48,19 @@ func TestEnsureDefaultCollections_NoPanic(t *testing.T) {
 	q := qdrantcli.New(ts.URL, "")
 	EnsureDefaultCollections(context.Background(), q, nil)
 }
+
+func TestEnsureDefaultCollections_NilClient(_ *testing.T) {
+	// Should not panic with nil client
+	EnsureDefaultCollections(context.Background(), nil, nil)
+}
+
+func TestEnsureDefaultCollections_WithError(_ *testing.T) {
+	// Server that returns errors
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+	q := qdrantcli.New(ts.URL, "")
+	// Should not panic even with errors
+	EnsureDefaultCollections(context.Background(), q, nil)
+}
