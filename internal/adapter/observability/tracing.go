@@ -36,9 +36,22 @@ func SetupTracing(cfg config.Config) (func(context.Context) error, error) {
 		return nil, err
 	}
 
+	// Use a sampling ratio to reduce trace volume and prevent memory exhaustion.
+	// Production: 10% sampling (0.1) for cost-effectiveness.
+	// Development: 100% sampling (1.0) for debugging.
+	samplingRatio := 1.0
+	if cfg.AppEnv == "prod" {
+		samplingRatio = 0.1
+	}
+	sampler := trace.ParentBased(trace.TraceIDRatioBased(samplingRatio))
+	slog.Info("tracing configured",
+		slog.String("endpoint", cfg.OTLPEndpoint),
+		slog.Float64("sampling_ratio", samplingRatio))
+
 	tp := trace.NewTracerProvider(
 		trace.WithBatcher(exporter),
 		trace.WithResource(res),
+		trace.WithSampler(sampler),
 	)
 	otel.SetTracerProvider(tp)
 	return tp.Shutdown, nil
