@@ -132,7 +132,8 @@ func (cb *CircuitBreaker) RecordFailure() {
 	cb.failureCount++
 	cb.lastFailureTime = time.Now()
 
-	if cb.state == StateClosed {
+	switch cb.state {
+	case StateClosed:
 		// Check if we should open the circuit
 		if cb.failureCount >= cb.maxFailures {
 			cb.state = StateOpen
@@ -142,7 +143,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 				slog.Int("failure_count", cb.failureCount),
 				slog.Int("max_failures", cb.maxFailures))
 		}
-	} else if cb.state == StateHalfOpen {
+	case StateHalfOpen:
 		// Any failure in half-open state opens the circuit
 		cb.state = StateOpen
 		cb.stateChanges++

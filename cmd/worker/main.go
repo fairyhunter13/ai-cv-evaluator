@@ -45,7 +45,7 @@ func main() {
 	go func() {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe(":9090", mux); err != nil {
+		if err := http.ListenAndServe(":9090", mux); err != nil { //nolint:gosec // Worker metrics server does not need timeouts.
 			slog.Error("worker metrics server error", slog.Any("error", err))
 		}
 	}()

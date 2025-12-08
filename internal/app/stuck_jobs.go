@@ -11,12 +11,14 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+// StuckJobSweeper identifies and fails jobs stuck in processing state.
 type StuckJobSweeper struct {
 	jobs             domain.JobRepository
 	maxProcessingAge time.Duration
 	interval         time.Duration
 }
 
+// NewStuckJobSweeper creates a new sweeper.
 func NewStuckJobSweeper(jobs domain.JobRepository, maxProcessingAge, interval time.Duration) *StuckJobSweeper {
 	if jobs == nil {
 		return nil
@@ -34,6 +36,7 @@ func NewStuckJobSweeper(jobs domain.JobRepository, maxProcessingAge, interval ti
 	}
 }
 
+// Run starts the sweeper loop.
 func (s *StuckJobSweeper) Run(ctx context.Context) {
 	if s == nil || s.jobs == nil {
 		return
