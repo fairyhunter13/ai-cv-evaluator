@@ -875,3 +875,60 @@ func TestCountTokens_VariousModels(t *testing.T) {
 		assert.Greater(t, count, 0, "model: %s", model)
 	}
 }
+
+func TestCalculateUsage_WithDifferentProviders(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+	providers := []string{"openai", "openrouter", "anthropic", "groq"}
+
+	for _, provider := range providers {
+		usage, err := counter.CalculateUsage(
+			"System prompt",
+			"User prompt",
+			"Completion",
+			"gpt-4",
+			provider,
+		)
+		require.NoError(t, err, "provider: %s", provider)
+		assert.Equal(t, provider, usage.Provider)
+	}
+}
+
+func TestCalculateUsage_TokenUsageFields(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+	usage, err := counter.CalculateUsage(
+		"You are a helpful assistant.",
+		"What is the capital of France?",
+		"The capital of France is Paris.",
+		"gpt-4",
+		"openai",
+	)
+
+	require.NoError(t, err)
+	assert.NotNil(t, usage)
+	assert.Greater(t, usage.PromptTokens, 0)
+	assert.Greater(t, usage.CompletionTokens, 0)
+	assert.Equal(t, usage.PromptTokens+usage.CompletionTokens, usage.TotalTokens)
+	assert.Equal(t, "gpt-4", usage.Model)
+	assert.Equal(t, "openai", usage.Provider)
+}
+
+func TestCountChatTokens_MultipleModels(t *testing.T) {
+	t.Parallel()
+
+	counter := NewCounter()
+	models := []string{
+		"gpt-4",
+		"gpt-3.5-turbo",
+		"text-davinci-003",
+	}
+
+	for _, model := range models {
+		count, err := counter.CountChatTokens("System", "User", model)
+		require.NoError(t, err, "model: %s", model)
+		assert.Greater(t, count, 0, "model: %s", model)
+	}
+}
