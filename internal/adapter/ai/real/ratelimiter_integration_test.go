@@ -38,7 +38,7 @@ func TestUpdateGroqLimiterFromHeaders_ConfiguresBucket(t *testing.T) {
 	h := http.Header{}
 	h.Set("x-ratelimit-limit-requests", "2")
 
-	apiKey := "test-groq-key"
+	apiKey := "test-groq-key" //nolint:gosec // Test credential.
 	c.updateGroqLimiterFromHeaders(apiKey, h)
 
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestUpdateOpenRouterLimiterFromRetryAfter_ConfiguresBucket(t *testing.T) {
 
 	c := &Client{limiter: limiter}
 
-	apiKey := "test-openrouter-key"
+	apiKey := "test-openrouter-key" //nolint:gosec // Test credential.
 	d := 10 * time.Second
 	c.updateOpenRouterLimiterFromRetryAfter(apiKey, d)
 

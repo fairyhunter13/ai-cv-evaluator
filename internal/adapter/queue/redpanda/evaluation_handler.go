@@ -23,6 +23,8 @@ import (
 
 // HandleEvaluate processes an evaluation task with the given dependencies.
 // This is the evaluation logic that uses the enhanced AI evaluation system by default.
+//
+//nolint:gocyclo // Function orchestrates complex evaluation process.
 func HandleEvaluate(
 	ctx context.Context,
 	jobs domain.JobRepository,

@@ -1,3 +1,4 @@
+// Package ratelimiter provides distributed rate limiting via Redis and Lua.
 package ratelimiter
 
 import (
@@ -11,15 +12,18 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Limiter defines the interface for rate limiting.
 type Limiter interface {
 	Allow(ctx context.Context, key string, cost int64) (allowed bool, retryAfter time.Duration, err error)
 }
 
+// BucketConfig defines the capacity and refill rate for a token bucket.
 type BucketConfig struct {
 	Capacity   int64
 	RefillRate float64
 }
 
+// NewBucketConfigFromPerMinute creates a BucketConfig from a per-minute rate.
 func NewBucketConfigFromPerMinute(perMinute int) BucketConfig {
 	if perMinute <= 0 {
 		return BucketConfig{}
@@ -30,6 +34,7 @@ func NewBucketConfigFromPerMinute(perMinute int) BucketConfig {
 	}
 }
 
+// RedisLuaLimiter implements Limiter using Redis Lua scripts.
 type RedisLuaLimiter struct {
 	redis   *redis.Client
 	pool    *pgxpool.Pool
@@ -38,6 +43,7 @@ type RedisLuaLimiter struct {
 	mu      sync.RWMutex
 }
 
+// NewRedisLuaLimiter creates a new RedisLuaLimiter.
 func NewRedisLuaLimiter(rdb *redis.Client, pool *pgxpool.Pool, buckets map[string]BucketConfig) *RedisLuaLimiter {
 	if rdb == nil {
 		return nil
@@ -53,6 +59,7 @@ func NewRedisLuaLimiter(rdb *redis.Client, pool *pgxpool.Pool, buckets map[strin
 	}
 }
 
+//nolint:gosec // Lua script variable names (key, tokens) trigger false positive credentials check.
 const luaTokenBucketScript = `
 local key = KEYS[1]
 local capacity = tonumber(ARGV[1])
@@ -103,6 +110,7 @@ redis.call("HMSET", key, "tokens", tokens, "last_refill", last_refill)
 return { allowed, tokens, last_refill, retry_after }
 `
 
+// Allow checks if the request is allowed and returns retry duration if not.
 func (l *RedisLuaLimiter) Allow(ctx context.Context, key string, cost int64) (bool, time.Duration, error) {
 	if l == nil || l.redis == nil {
 		return true, 0, nil
@@ -174,6 +182,7 @@ func (l *RedisLuaLimiter) mirrorToPostgres(ctx context.Context, key string, cfg 
 	}
 }
 
+// WarmFromPostgres initializes Redis buckets from Postgres.
 func (l *RedisLuaLimiter) WarmFromPostgres(ctx context.Context) error {
 	if l == nil || l.pool == nil || l.redis == nil {
 		return nil

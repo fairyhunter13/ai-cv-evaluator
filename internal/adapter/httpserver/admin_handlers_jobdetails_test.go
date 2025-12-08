@@ -49,7 +49,7 @@ func getAdminToken(t *testing.T, admin *httpserver.AdminServer) string {
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var body map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
@@ -74,7 +74,7 @@ func TestAdminJobDetailsHandler_Authorized_Success(t *testing.T) {
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
