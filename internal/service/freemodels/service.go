@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Model represents a model from OpenRouter API
@@ -131,6 +134,14 @@ func (s *Service) GetFreeModels(ctx context.Context) ([]Model, error) {
 
 // fetchModelsFromAPI fetches all models from OpenRouter API and filters free ones
 func (s *Service) fetchModelsFromAPI(ctx context.Context) ([]Model, error) {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	ctx, span := tracer.Start(ctx, "freemodels.fetchModelsFromAPI",
+		trace.WithAttributes(
+			attribute.String("http.url", s.baseURL+"/models"),
+			attribute.String("http.method", "GET"),
+		))
+	defer span.End()
+
 	url := s.baseURL + "/models"
 	slog.Debug("creating HTTP request to OpenRouter API",
 		slog.String("url", url),
@@ -212,6 +223,11 @@ func (s *Service) fetchModelsFromAPI(ctx context.Context) ([]Model, error) {
 		slog.Int("total_models", len(apiResp.Data)),
 		slog.Int("free_models", len(freeModels)),
 		slog.Duration("duration", duration))
+
+	span.SetAttributes(
+		attribute.Int("models.total", len(apiResp.Data)),
+		attribute.Int("models.free", len(freeModels)),
+	)
 
 	return freeModels, nil
 }

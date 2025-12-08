@@ -20,6 +20,9 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/pkg/textx"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Client is a minimal Apache Tika HTTP client implementing domain.TextExtractor.
@@ -61,6 +64,14 @@ func New(baseURL string) *Client {
 
 // ExtractPath uploads the file at path to the Tika server and returns plain text.
 func (c *Client) ExtractPath(ctx context.Context, fileName, path string) (string, error) {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	ctx, span := tracer.Start(ctx, "tika.ExtractPath",
+		trace.WithAttributes(
+			attribute.String("file.name", fileName),
+			attribute.String("file.ext", filepath.Ext(fileName)),
+		))
+	defer span.End()
+
 	// Mitigate file inclusion via variable by constraining allowed paths.
 	// In production, uploaded files are written to the system temp dir.
 	// Allow absolute paths during tests only when explicitly enabled via env.
