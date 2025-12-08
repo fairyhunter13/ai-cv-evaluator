@@ -21,6 +21,9 @@ import (
 
 	backoff "github.com/cenkalti/backoff/v4"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"log/slog"
 
@@ -1153,6 +1156,14 @@ func (c *Client) callOpenRouterWithModel(ctx domain.Context, model, systemPrompt
 // callOpenRouterWithModelForKey makes a single call to OpenRouter with a specific model and API key.
 // This is used by enhanced switching to target a specific OpenRouter account.
 func (c *Client) callOpenRouterWithModelForKey(ctx domain.Context, apiKey, model, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	ctx, span := tracer.Start(ctx, "ai.real.callOpenRouterWithModelForKey",
+		trace.WithAttributes(
+			attribute.String("ai.model", model),
+			attribute.String("ai.provider", "openrouter"),
+			attribute.Int("ai.max_tokens", maxTokens),
+		))
+	defer span.End()
 	body := map[string]any{
 		"model":       model,
 		"temperature": 0.2,
@@ -1415,6 +1426,15 @@ func (c *Client) callGroqChat(ctx domain.Context, apiKey, systemPrompt, userProm
 // callGroqChatWithModel performs the actual Groq API call for a specific model with
 // existing backoff and rate-limit handling.
 func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, systemPrompt, userPrompt string, maxTokens int) (string, error) {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	ctx, span := tracer.Start(ctx, "ai.real.callGroqChatWithModel",
+		trace.WithAttributes(
+			attribute.String("ai.model", model),
+			attribute.String("ai.provider", "groq"),
+			attribute.Int("ai.max_tokens", maxTokens),
+		))
+	defer span.End()
+
 	lg := intobs.LoggerFromContext(ctx)
 
 	// Enforce minimum interval between Groq calls to avoid rate limiting
@@ -1607,6 +1627,10 @@ func recordTokenUsage(provider, model, systemPrompt, userPrompt, completion stri
 
 // waitOpenRouterMinInterval enforces a minimal spacing between OpenRouter calls across this client instance.
 func (c *Client) waitOpenRouterMinInterval() {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	_, span := tracer.Start(context.Background(), "ai.real.waitOpenRouterMinInterval")
+	defer span.End()
+
 	minGap := c.cfg.OpenRouterMinInterval
 	// If multiple worker processes are issuing OpenRouter requests, scale the
 	// per-process gap so that aggregate QPS across all workers still respects
@@ -1711,6 +1735,10 @@ func (c *Client) blockOpenRouterAccount(apiKey string, d time.Duration) {
 
 // waitGroqMinInterval enforces a minimal spacing between Groq calls to avoid rate limiting.
 func (c *Client) waitGroqMinInterval() {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	_, span := tracer.Start(context.Background(), "ai.real.waitGroqMinInterval")
+	defer span.End()
+
 	// Groq has aggressive rate limits (e.g., 30 requests per minute on free tier).
 	// Enforce a conservative minimal gap between calls per process and scale by
 	// the approximate number of worker processes so aggregate QPS stays within
@@ -1934,6 +1962,13 @@ func (c *Client) getGroqModels(ctx domain.Context, apiKey string) []string {
 }
 
 func (c *Client) fetchGroqModelsFromAPI(ctx domain.Context, apiKey string) ([]string, error) {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	ctx, span := tracer.Start(ctx, "ai.real.fetchGroqModelsFromAPI",
+		trace.WithAttributes(
+			attribute.String("ai.provider", "groq"),
+		))
+	defer span.End()
+
 	trimmedKey := strings.TrimSpace(apiKey)
 	baseURL := strings.TrimSpace(c.cfg.GroqBaseURL)
 	if baseURL == "" {
@@ -1994,8 +2029,20 @@ func (c *Client) fetchGroqModelsFromAPI(ctx domain.Context, apiKey string) ([]st
 	return models, nil
 }
 
-// Embed calls OpenAI embeddings endpoint and returns vectors.
+// Embed calls OpenAI embeddings API to convert texts into vectors.
 func (c *Client) Embed(ctx domain.Context, texts []string) ([][]float32, error) {
+	tracer := otel.Tracer("ai-cv-evaluator")
+	ctx, span := tracer.Start(ctx, "ai.real.Embed",
+		trace.WithAttributes(
+			attribute.String("ai.provider", "openai"),
+			attribute.String("ai.model", "text-embedding-3-small"),
+			attribute.Int("ai.texts_count", len(texts)),
+		))
+	defer span.End()
+
+	if len(texts) == 0 {
+		return nil, nil
+	}
 	if c.cfg.OpenAIAPIKey == "" || c.cfg.EmbeddingsModel == "" {
 		// Do not log secrets; only indicate presence
 		slog.Error("OpenAI API key or model missing", slog.String("provider", "openai"), slog.Bool("has_api_key", c.cfg.OpenAIAPIKey != ""), slog.String("model", c.cfg.EmbeddingsModel))
