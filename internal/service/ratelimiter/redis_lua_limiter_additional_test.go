@@ -141,3 +141,79 @@ func TestAllow_NonPositiveCostNormalizesToOne(t *testing.T) {
 		t.Fatalf("expected tokens=0 after non-positive cost normalized to 1, got %v", tokens)
 	}
 }
+
+func TestWarmFromPostgres_NilLimiter(t *testing.T) {
+	var limiter *RedisLuaLimiter
+	err := limiter.WarmFromPostgres(context.Background())
+	if err != nil {
+		t.Fatalf("expected nil error for nil limiter, got %v", err)
+	}
+}
+
+func TestWarmFromPostgres_NilPool(t *testing.T) {
+	limiter := &RedisLuaLimiter{}
+	err := limiter.WarmFromPostgres(context.Background())
+	if err != nil {
+		t.Fatalf("expected nil error for nil pool, got %v", err)
+	}
+}
+
+func TestSetBucketConfig_InitializesMap(t *testing.T) {
+	limiter := &RedisLuaLimiter{}
+	limiter.SetBucketConfig("test-key", BucketConfig{Capacity: 10, RefillRate: 1.0})
+
+	if limiter.buckets == nil {
+		t.Fatal("expected buckets map to be initialized")
+	}
+	cfg, ok := limiter.buckets["test-key"]
+	if !ok {
+		t.Fatal("expected bucket config to be set")
+	}
+	if cfg.Capacity != 10 {
+		t.Fatalf("expected capacity 10, got %d", cfg.Capacity)
+	}
+}
+
+func TestToInt64_AllTypes(t *testing.T) {
+	tests := []struct {
+		input    interface{}
+		expected int64
+	}{
+		{int64(100), 100},
+		{int(50), 50},
+		{float64(75.9), 75},
+		{"string", 0},
+		{nil, 0},
+	}
+
+	for _, tt := range tests {
+		result := toInt64(tt.input)
+		if result != tt.expected {
+			t.Errorf("toInt64(%v) = %d, want %d", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestToFloat64_AllTypes(t *testing.T) {
+	tests := []struct {
+		input    interface{}
+		expected float64
+		isNaN    bool
+	}{
+		{float64(1.5), 1.5, false},
+		{int64(2), 2.0, false},
+		{int(3), 3.0, false},
+		{"string", 0, true},
+	}
+
+	for _, tt := range tests {
+		result := toFloat64(tt.input)
+		if tt.isNaN {
+			if !isNaN(result) {
+				t.Errorf("toFloat64(%v) should be NaN, got %v", tt.input, result)
+			}
+		} else if result != tt.expected {
+			t.Errorf("toFloat64(%v) = %v, want %v", tt.input, result, tt.expected)
+		}
+	}
+}
