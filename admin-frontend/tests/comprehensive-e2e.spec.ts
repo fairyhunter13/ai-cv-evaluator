@@ -87,7 +87,7 @@ const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
     } catch (err) {
       const message = String(err);
       const isRetryable = message.includes('net::ERR_CONNECTION_REFUSED') ||
-                          message.includes('net::ERR_TOO_MANY_REDIRECTS');
+        message.includes('net::ERR_TOO_MANY_REDIRECTS');
       if (!isRetryable || attempt === maxAttempts) {
         throw err;
       }
@@ -108,17 +108,17 @@ const loginViaSSO = async (page: Page): Promise<void> => {
     try {
       await gotoWithRetry(page, PORTAL_PATH);
       if (!isSSOLoginUrl(page.url())) return;
-      
+
       const usernameInput = page.locator('input#username');
       const passwordInput = page.locator('input#password');
-      
+
       await usernameInput.waitFor({ state: 'visible', timeout: 10000 });
       await usernameInput.fill(SSO_USERNAME);
       await passwordInput.fill(SSO_PASSWORD);
-      
+
       const submitButton = page.locator('button[type="submit"], input[type="submit"]');
       await submitButton.first().click();
-      
+
       await completeKeycloakProfileUpdate(page);
       await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
       return;
@@ -436,7 +436,7 @@ test.describe('Alerting Flow', () => {
 
     // Verify not redirected to SSO
     expect(isSSOLoginUrl(page.url())).toBeFalsy();
-    
+
     // Page should have loaded (may be very minimal in some environments)
     const pageContent = await page.locator('body').textContent();
     expect(pageContent).toBeTruthy();
@@ -474,10 +474,10 @@ test.describe('Alerting Flow', () => {
     // Verify Grafana alerting UI is accessible
     await gotoWithRetry(page, '/grafana/alerting/list');
     await page.waitForLoadState('networkidle');
-    
+
     // Should not be redirected to SSO
     expect(isSSOLoginUrl(page.url())).toBeFalsy();
-    
+
     // Grafana should be loaded
     const title = await page.title();
     expect(title.toLowerCase()).toContain('grafana');
@@ -804,6 +804,115 @@ test.describe('Observability Dashboards', () => {
     console.log('Jaeger page content preview:', body?.substring(0, 500));
     expect(body).toBeTruthy();
     expect(jaegerLoaded).toBeTruthy();
+  });
+
+  test('complete trace spans for evaluation job', async ({ page }) => {
+    test.setTimeout(180000);
+    await loginViaSSO(page);
+
+    // Navigate to frontend and upload files
+    await page.goto('/frontend');
+    await page.waitForLoadState('networkidle');
+
+    // Check if we need to click "Upload Files" or if we are already there
+    const uploadLink = page.getByRole('link', { name: /Upload Files/i });
+    if (await uploadLink.count() > 0 && await uploadLink.isVisible()) {
+      await uploadLink.click();
+    }
+
+    // Upload test files
+    const fileInputs = page.locator('input[type="file"]');
+    // Ensure we have inputs
+    await expect(fileInputs.first()).toBeVisible({ timeout: 10000 });
+
+    // Note: The file paths are relative to the project root or where playwright is run
+    // Assuming running from admin-frontend directory or similar
+    // We use absolute paths to be safe if possible, or relative to the test file
+    const fixturesDir = path.join(__dirname, 'fixtures');
+    await fileInputs.nth(0).setInputFiles(path.join(fixturesDir, 'cv.txt'));
+    await fileInputs.nth(1).setInputFiles(path.join(fixturesDir, 'project.txt'));
+
+    await page.getByRole('button', { name: /^Upload Files$/i }).click();
+
+    // Wait for upload completion message
+    await expect(page.locator('text=/uploaded successfully/i').first()).toBeVisible({ timeout: 30000 });
+
+    // Start evaluation
+    await page.getByRole('link', { name: /Start Evaluation/i }).click();
+    // Click the actual start button if there is one on the evaluation page
+    // Assuming the link takes us to a page where we can see the job or start it
+    // If there's a "Start" button on the evaluation page:
+    const startButton = page.getByRole('button', { name: /Start Evaluation/i });
+    if (await startButton.count() > 0 && await startButton.isVisible()) {
+      await startButton.click();
+    }
+
+    // Wait for job completion (up to 2 minutes)
+    // We look for a completion indicator or just wait a safe buffer since we are checking traces
+    console.log('Waiting for evaluation to process...');
+    await page.waitForTimeout(60000);
+
+    // Navigate to Jaeger and verify trace completeness
+    await page.goto('/jaeger/search');
+    await page.waitForLoadState('networkidle');
+
+    // Search for recent traces with service "ai-cv-evaluator"
+    // Note: Jaeger UI interactions can be tricky, ensuring elements are ready
+    const serviceSelect = page.getByLabel(/Service/i);
+    await expect(serviceSelect).toBeVisible();
+    await serviceSelect.selectOption('ai-cv-evaluator');
+
+    const operationSelect = page.getByLabel(/Operation/i);
+    await operationSelect.click(); // sometimes needed to populate
+    await page.waitForTimeout(1000);
+    await operationSelect.selectOption('ProcessEvaluateJob');
+
+    await page.getByRole('button', { name: /Find Traces/i }).click();
+
+    // Wait for results
+    await page.waitForTimeout(5000);
+
+    // Click on the most recent trace
+    const recentTrace = page.locator('.trace-result').first();
+    await expect(recentTrace).toBeVisible();
+    await recentTrace.click();
+
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000); // Wait for trace detail to render
+
+    // Verify critical spans exist in the DOM
+    // Jaeger renders spans as rows
+    const traceContentText = await page.locator('.trace-detail').textContent();
+    const traceContent = traceContentText || '';
+
+    // Check for the new spans we added
+    const expectedSpans = [
+      'ai.real.callOpenRouterWithModelForKey',
+      'ai.real.callGroqChatWithModel',
+      // 'freemodels.fetchModelsFromAPI', // This might happen periodically or during job, maybe not always in this specific job flow if cached
+      'tika.ExtractPath', // Should definitely happen during file processing
+      'ai.real.waitOpenRouterMinInterval', // Likely to be hit
+      // 'ai.real.Embed' // If embedding is part of the flow
+    ];
+
+    let foundCount = 0;
+    for (const spanName of expectedSpans) {
+      if (traceContent.includes(spanName)) {
+        console.log(`Found span: ${spanName}`);
+        foundCount++;
+      } else {
+        console.log(`Missing span: ${spanName}`);
+      }
+    }
+
+    // We expect at least Tika and AI calls to be present
+    expect(traceContent).toContain('ai.real.callOpenRouterWithModelForKey');
+    expect(traceContent).toContain('tika.ExtractPath');
+    expect(traceContent).toContain('ai.real.waitOpenRouterMinInterval');
+
+    // Check if attributes are arguably there (searching text content for keys)
+    expect(traceContent).toContain('ai.model');
+    expect(traceContent).toContain('ai.provider');
   });
 
   test('Jaeger API is accessible', async ({ page }) => {
@@ -1199,7 +1308,7 @@ test.describe('Alerting + Mailpit Flow', () => {
     expect(existingResp.status()).toBe(200);
     const existingData = await existingResp.json();
     const existingMessages = (existingData as any).messages ?? [];
-    const existingAlertEmails = existingMessages.filter((m: any) => 
+    const existingAlertEmails = existingMessages.filter((m: any) =>
       m.Subject?.toLowerCase().includes('alert') || m.Subject?.toLowerCase().includes('ai-cv-evaluator')
     );
 
@@ -1213,7 +1322,7 @@ test.describe('Alerting + Mailpit Flow', () => {
 
     // No existing emails, need to trigger new alerts and wait for email
     console.log('No existing alert emails found. Triggering new alerts...');
-    
+
     // Clear Mailpit messages first
     await clearMailpitMessages(page);
 
@@ -1228,7 +1337,7 @@ test.describe('Alerting + Mailpit Flow', () => {
     // group_wait is 30s, repeat_interval is 5m
     // We need to wait long enough for the notification to be sent
     console.log('Waiting for alert processing and email delivery (up to 5 minutes)...');
-    
+
     // Check for new emails (poll for up to 5 minutes)
     let emailReceived = false;
     let emailSubjects: string[] = [];
@@ -1241,7 +1350,7 @@ test.describe('Alerting + Mailpit Flow', () => {
         const messages = (mailpitBody as any).messages ?? [];
 
         if (currentCount > 0) {
-          const alertEmails = messages.filter((m: any) => 
+          const alertEmails = messages.filter((m: any) =>
             m.Subject?.toLowerCase().includes('alert') || m.Subject?.toLowerCase().includes('ai-cv-evaluator')
           );
           if (alertEmails.length > 0) {
@@ -1260,13 +1369,13 @@ test.describe('Alerting + Mailpit Flow', () => {
     }
 
     console.log(`Email delivery result: ${emailReceived ? 'SUCCESS' : 'FAILED'}`);
-    
+
     // Email must be received for the alerting pipeline to be considered working
     expect(emailReceived).toBeTruthy();
-    
+
     // Verify email subject contains alert information
     if (emailReceived && emailSubjects.length > 0) {
-      const hasAlertSubject = emailSubjects.some(s => 
+      const hasAlertSubject = emailSubjects.some(s =>
         s.toLowerCase().includes('alert') || s.toLowerCase().includes('ai-cv-evaluator')
       );
       expect(hasAlertSubject).toBeTruthy();
@@ -1289,7 +1398,7 @@ test.describe('Logout Flow Comprehensive', () => {
     // Find logout button - it should be visible after login
     const logoutButton = page.getByRole('link', { name: /logout/i });
     const isVisible = await logoutButton.isVisible().catch(() => false);
-    
+
     // Logout button should be visible on the portal
     expect(isVisible).toBeTruthy();
   });
@@ -1492,16 +1601,16 @@ test.describe('Grafana Dashboard Data Validation', () => {
     // Check if dashboard loaded - look for any content indicating the dashboard
     const body = await page.locator('body').textContent();
     expect(body).toBeTruthy();
-    
+
     // Dashboard should not show "not found" error
     expect(body?.toLowerCase()).not.toContain('dashboard not found');
-    
+
     // Should have some dashboard content
-    const hasJobContent = body?.toLowerCase().includes('job') || 
-                          body?.toLowerCase().includes('processing') ||
-                          body?.toLowerCase().includes('throughput');
+    const hasJobContent = body?.toLowerCase().includes('job') ||
+      body?.toLowerCase().includes('processing') ||
+      body?.toLowerCase().includes('throughput');
     console.log(`Dashboard has job-related content: ${hasJobContent}`);
-    
+
     // Log page content for debugging
     console.log('Dashboard content preview:', body?.substring(0, 500));
   });
@@ -1647,7 +1756,7 @@ test.describe('Admin Frontend Dashboard - Functional Tests', () => {
     const hasAvgTimeText = body?.includes('Avg Time') || body?.includes('Average');
 
     console.log(`Dashboard stats visible: Uploads=${hasUploadsText}, Evaluations=${hasEvaluationsText}, Completed=${hasCompletedText}, AvgTime=${hasAvgTimeText}`);
-    
+
     // At least some stats should be displayed
     expect(hasUploadsText || hasEvaluationsText || hasCompletedText).toBeTruthy();
 
@@ -1675,7 +1784,7 @@ test.describe('Admin Frontend Dashboard - Functional Tests', () => {
       const url = page.url();
       console.log(`Quick action: Upload navigates to: ${url}`);
       expect(url).toContain('/upload');
-      
+
       // Go back to dashboard
       await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
       await page.waitForLoadState('domcontentloaded');
@@ -1693,7 +1802,7 @@ test.describe('Admin Frontend Dashboard - Functional Tests', () => {
       const url = page.url();
       console.log(`Quick action: Evaluation navigates to: ${url}`);
       expect(url).toContain('/evaluate');
-      
+
       await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
@@ -1723,7 +1832,7 @@ test.describe('Admin Frontend Dashboard - Functional Tests', () => {
     await page.waitForTimeout(2000);
 
     const body = await page.locator('body').textContent();
-    
+
     // Check for system status indicators
     const hasApiServer = body?.includes('API Server');
     const hasWorkerQueue = body?.includes('Worker Queue');
@@ -1731,7 +1840,7 @@ test.describe('Admin Frontend Dashboard - Functional Tests', () => {
     const hasOnlineStatus = body?.includes('Online') || body?.includes('Active') || body?.includes('Healthy');
 
     console.log(`System status: API=${hasApiServer}, Worker=${hasWorkerQueue}, DB=${hasDatabase}, Online=${hasOnlineStatus}`);
-    
+
     expect(hasApiServer || hasWorkerQueue || hasDatabase).toBeTruthy();
   });
 
@@ -1752,7 +1861,7 @@ test.describe('Admin Frontend Dashboard - Functional Tests', () => {
       const signOutButton = page.getByRole('button', { name: /Sign out/i });
       const signOutVisible = await signOutButton.isVisible().catch(() => false);
       console.log(`Sign out button visible in dropdown: ${signOutVisible}`);
-      
+
       if (signOutVisible) {
         await expect(signOutButton).toBeVisible();
       }
@@ -1808,7 +1917,7 @@ test.describe('Admin Frontend Dashboard - Functional Tests', () => {
         await link.click();
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
-        
+
         expect(page.url()).toContain(item.urlPart);
         console.log(`Navigation: ${item.name} -> ${page.url()}`);
       }
@@ -1855,7 +1964,7 @@ test.describe('Upload Page - Functional Tests', () => {
     // After file selection, button should be enabled
     const afterSelectionDisabled = await uploadButton.isDisabled().catch(() => false);
     console.log(`Upload button after file selection disabled state: ${afterSelectionDisabled}`);
-    
+
     // Button should be enabled (not disabled) after files are selected
     expect(afterSelectionDisabled).toBeFalsy();
   });
@@ -1892,7 +2001,7 @@ test.describe('Upload Page - Functional Tests', () => {
     await page.waitForTimeout(1000);
 
     const fileInputs = page.locator('input[type="file"]');
-    
+
     // Create test file content
     const testContent = 'Test CV content for upload functionality test';
 
@@ -1902,14 +2011,14 @@ test.describe('Upload Page - Functional Tests', () => {
       mimeType: 'text/plain',
       buffer: Buffer.from(testContent),
     });
-    
+
     await page.waitForTimeout(500);
 
     // Check if file name is displayed
     const body = await page.locator('body').textContent();
     const hasFileName = body?.includes('test-cv.txt');
     console.log(`File name displayed after selection: ${hasFileName}`);
-    
+
     // Check for file size display (bytes, KB, etc.)
     const hasSizeInfo = body?.match(/\d+\s*(bytes|KB|MB)/i);
     console.log(`File size displayed: ${!!hasSizeInfo}`);
@@ -1925,14 +2034,14 @@ test.describe('Upload Page - Functional Tests', () => {
     await page.waitForTimeout(1000);
 
     const fileInputs = page.locator('input[type="file"]');
-    
+
     // Select a file
     await fileInputs.nth(0).setInputFiles({
       name: 'test-cv.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('Test content'),
     });
-    
+
     await page.waitForTimeout(500);
 
     // Click remove button
@@ -1977,7 +2086,7 @@ Experience: 5 years`;
       mimeType: 'text/plain',
       buffer: Buffer.from(cvContent),
     });
-    
+
     await fileInputs.nth(1).setInputFiles({
       name: 'project.txt',
       mimeType: 'text/plain',
@@ -2025,7 +2134,7 @@ Experience: 5 years`;
       mimeType: 'text/plain',
       buffer: Buffer.from('CV content'),
     });
-    
+
     await fileInputs.nth(1).setInputFiles({
       name: 'project.txt',
       mimeType: 'text/plain',
@@ -2036,7 +2145,7 @@ Experience: 5 years`;
 
     const uploadButton = page.getByRole('button').filter({ hasText: /Upload/i }).first();
     await uploadButton.click();
-    
+
     // Wait for response
     await page.waitForTimeout(3000);
 
@@ -2117,13 +2226,13 @@ test.describe('Evaluate Page - Functional Tests', () => {
     await page.waitForTimeout(1000);
 
     const fileInputs = page.locator('input[type="file"]');
-    
+
     await fileInputs.nth(0).setInputFiles({
       name: 'cv.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('CV content for evaluation test'),
     });
-    
+
     await fileInputs.nth(1).setInputFiles({
       name: 'project.txt',
       mimeType: 'text/plain',
@@ -2204,14 +2313,14 @@ test.describe('Evaluate Page - Functional Tests', () => {
     // Submit and expect error
     const evalButton = page.getByRole('button', { name: /^Start Evaluation$/i });
     await evalButton.click();
-    
+
     await page.waitForTimeout(3000);
 
     // Check for error message
     const body = await page.locator('body').textContent();
-    const hasError = body?.toLowerCase().includes('error') || 
-                     body?.toLowerCase().includes('failed') ||
-                     body?.toLowerCase().includes('not found');
+    const hasError = body?.toLowerCase().includes('error') ||
+      body?.toLowerCase().includes('failed') ||
+      body?.toLowerCase().includes('not found');
     console.log(`Error message displayed: ${hasError}`);
   });
 });
@@ -2246,8 +2355,8 @@ test.describe('Result Page - Functional Tests', () => {
 
     // Should show error or "not found"
     const body = await page.locator('body').textContent();
-    const hasError = body?.toLowerCase().includes('not found') || 
-                     body?.toLowerCase().includes('error');
+    const hasError = body?.toLowerCase().includes('not found') ||
+      body?.toLowerCase().includes('error');
     console.log(`Error for invalid job ID: ${hasError}`);
   });
 
@@ -2257,20 +2366,20 @@ test.describe('Result Page - Functional Tests', () => {
     // First, create a job to test with
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    
+
     // Upload files first
     await page.getByRole('link', { name: 'Upload Files', exact: true }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1000);
 
     const fileInputs = page.locator('input[type="file"]');
-    
+
     await fileInputs.nth(0).setInputFiles({
       name: 'cv.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('CV content'),
     });
-    
+
     await fileInputs.nth(1).setInputFiles({
       name: 'project.txt',
       mimeType: 'text/plain',
@@ -2328,10 +2437,10 @@ test.describe('Result Page - Functional Tests', () => {
 
     // Check for status display
     const body = await page.locator('body').textContent();
-    const hasStatus = body?.includes('Status') || 
-                      body?.includes('queued') || 
-                      body?.includes('processing') ||
-                      body?.includes('completed');
+    const hasStatus = body?.includes('Status') ||
+      body?.includes('queued') ||
+      body?.includes('processing') ||
+      body?.includes('completed');
     console.log(`Result page shows status: ${hasStatus}`);
     expect(hasStatus).toBeTruthy();
   });
@@ -2446,7 +2555,7 @@ test.describe('Jobs Page - Functional Tests', () => {
 
     // Find auto-refresh toggle button (has refresh icon)
     const autoRefreshButton = page.locator('button').filter({ has: page.locator('svg path[d*="M4 4v5"]') }).first();
-    
+
     if (await autoRefreshButton.isVisible().catch(() => false)) {
       // Check initial state (should have green background if enabled)
       const initialClasses = await autoRefreshButton.getAttribute('class');
@@ -2474,7 +2583,7 @@ test.describe('Jobs Page - Functional Tests', () => {
     const tableHeaders = page.locator('th');
     const headerTexts: string[] = [];
     const headerCount = await tableHeaders.count();
-    
+
     for (let i = 0; i < headerCount; i++) {
       const text = await tableHeaders.nth(i).textContent();
       if (text) headerTexts.push(text.trim());
@@ -2484,7 +2593,7 @@ test.describe('Jobs Page - Functional Tests', () => {
 
     // Expected columns
     const expectedColumns = ['Job ID', 'Status', 'CV ID', 'Project ID', 'Created', 'Updated', 'Actions'];
-    const foundColumns = expectedColumns.filter(col => 
+    const foundColumns = expectedColumns.filter(col =>
       headerTexts.some(h => h.toLowerCase().includes(col.toLowerCase()))
     );
 
@@ -2527,7 +2636,7 @@ test.describe('Jobs Page - Functional Tests', () => {
 
     // Find View Details button
     const viewDetailsButton = page.getByRole('button', { name: /View Details/i }).first();
-    
+
     if (await viewDetailsButton.isVisible().catch(() => false)) {
       await viewDetailsButton.click();
       await page.waitForTimeout(1000);
@@ -2538,7 +2647,7 @@ test.describe('Jobs Page - Functional Tests', () => {
 
       if (modalVisible) {
         console.log('Job details modal opened');
-        
+
         // Check for modal content
         const modalBody = await modal.first().textContent();
         const hasJobId = modalBody?.includes('Job ID');
@@ -2570,7 +2679,7 @@ test.describe('Grafana Job Queue Metrics Dashboard', () => {
     await page.waitForTimeout(3000);
 
     const body = await page.locator('body').textContent();
-    
+
     // Check for expected panels from the screenshot
     const hasJobsProcessing = body?.includes('Jobs Currently Processing') || body?.includes('Currently Processing');
     const hasJobThroughput = body?.includes('Job Throughput') || body?.includes('Throughput');
@@ -2595,13 +2704,13 @@ test.describe('Grafana Job Queue Metrics Dashboard', () => {
     await page.waitForTimeout(1000);
 
     const fileInputs = page.locator('input[type="file"]');
-    
+
     await fileInputs.nth(0).setInputFiles({
       name: 'cv.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('CV for metrics test'),
     });
-    
+
     await fileInputs.nth(1).setInputFiles({
       name: 'project.txt',
       mimeType: 'text/plain',
@@ -2658,17 +2767,17 @@ test.describe('Grafana Job Queue Metrics Dashboard', () => {
 
     // Find time range picker
     const timeRangePicker = page.locator('[aria-label="Time picker"]').or(page.locator('button').filter({ hasText: /Last \d+ hours|Last \d+ minutes/i }));
-    
+
     if (await timeRangePicker.first().isVisible().catch(() => false)) {
       await timeRangePicker.first().click();
       await page.waitForTimeout(500);
 
       // Check for time range options
       const body = await page.locator('body').textContent();
-      const hasTimeOptions = body?.includes('Last 5 minutes') || 
-                             body?.includes('Last 15 minutes') ||
-                             body?.includes('Last 1 hour') ||
-                             body?.includes('Last 6 hours');
+      const hasTimeOptions = body?.includes('Last 5 minutes') ||
+        body?.includes('Last 15 minutes') ||
+        body?.includes('Last 1 hour') ||
+        body?.includes('Last 6 hours');
       console.log(`Time range options visible: ${hasTimeOptions}`);
     }
   });
@@ -2692,13 +2801,13 @@ test.describe('Mobile Responsive UI', () => {
 
     // Sidebar should be hidden initially on mobile
     const sidebar = page.locator('nav').first();
-    
+
     // Find mobile menu toggle button (hamburger menu)
     const menuToggle = page.locator('button').filter({ has: page.locator('svg path[d*="M4 6h16M4 12h16M4 18h16"]') }).first();
-    
+
     if (await menuToggle.isVisible().catch(() => false)) {
       console.log('Mobile menu toggle found');
-      
+
       // Click to open sidebar
       await menuToggle.click();
       await page.waitForTimeout(500);
@@ -2728,7 +2837,7 @@ test.describe('Mobile Responsive UI', () => {
 
     // On mobile, jobs should be displayed as cards instead of table
     const body = await page.locator('body').textContent();
-    
+
     // Check for job content (should still show job info)
     const hasJobInfo = body?.includes('Job ID') || body?.includes('Status');
     console.log(`Mobile jobs view has job info: ${hasJobInfo}`);
@@ -2931,7 +3040,7 @@ test.describe('Observability After Dashboard Interactions', () => {
     // Navigate through multiple pages to generate traces
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    
+
     await page.getByRole('link', { name: /Job Management/i }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1000);
@@ -2953,13 +3062,13 @@ test.describe('Observability After Dashboard Interactions', () => {
       const tracesBody = await tracesResp.json().catch(() => ({}));
       const traces = (tracesBody as any)?.data ?? [];
       console.log(`Found ${traces.length} traces in last 5 minutes`);
-      
+
       // Should have some traces from our navigation
       expect(traces.length).toBeGreaterThan(0);
 
       // Check for admin API traces
       const allSpans = traces.flatMap((t: any) => t.spans ?? []);
-      const adminSpans = allSpans.filter((s: any) => 
+      const adminSpans = allSpans.filter((s: any) =>
         String(s.operationName ?? '').includes('admin') ||
         String(s.operationName ?? '').includes('Admin')
       );
@@ -2973,7 +3082,7 @@ test.describe('Observability After Dashboard Interactions', () => {
     // Navigate through pages to generate metrics
     await page.getByRole('link', { name: /Open Frontend/i }).click();
     await page.waitForLoadState('domcontentloaded');
-    
+
     await page.getByRole('link', { name: /Job Management/i }).click();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(1000);
@@ -2989,7 +3098,7 @@ test.describe('Observability After Dashboard Interactions', () => {
       const metricsBody = await metricsResp.json().catch(() => ({}));
       const results = (metricsBody as any)?.data?.result ?? [];
       console.log(`Found ${results.length} HTTP request metric series`);
-      
+
       // Should have some HTTP request metrics
       expect(results.length).toBeGreaterThan(0);
 
@@ -3011,7 +3120,7 @@ test.describe('Observability After Dashboard Interactions', () => {
     const body = await page.locator('body').textContent();
     expect(body).toBeTruthy();
     expect(body?.toLowerCase()).not.toContain('dashboard not found');
-    
+
     console.log('Request Drilldown dashboard loaded successfully');
   });
 });
@@ -3029,12 +3138,12 @@ test.describe('External Service Tracing', () => {
 
     // Query Jaeger for services
     const servicesResp = await page.request.get('/jaeger/api/services');
-    
+
     if (servicesResp.ok()) {
       const servicesBody = await servicesResp.json().catch(() => ({}));
       const services = (servicesBody as any)?.data ?? [];
       console.log('Jaeger services:', services);
-      
+
       // Should have ai-cv-evaluator service
       const hasService = services.includes('ai-cv-evaluator') || services.length > 0;
       expect(hasService).toBeTruthy();
@@ -3073,33 +3182,33 @@ test.describe('External Service Tracing', () => {
         const tracesBody = await tracesResp.json().catch(() => ({}));
         const traces = (tracesBody as any)?.data ?? [];
         const allSpans = traces.flatMap((t: any) => t.spans ?? []);
-        
+
         // Check for repository-level database spans (jobs.Get, uploads.Create, results.Upsert, etc.)
         // These spans have db.system=postgresql attribute set by the repository layer
         const dbSpans = allSpans.filter((s: any) => {
           const opName = String(s.operationName ?? '').toLowerCase();
           const tags = s.tags ?? [];
           const hasDbSystemTag = tags.some((t: any) => t.key === 'db.system' && t.value === 'postgresql');
-          const isRepoSpan = opName.includes('jobs.') || 
-                             opName.includes('uploads.') || 
-                             opName.includes('results.');
+          const isRepoSpan = opName.includes('jobs.') ||
+            opName.includes('uploads.') ||
+            opName.includes('results.');
           return hasDbSystemTag || isRepoSpan;
         });
-        
+
         hasDbSpans = dbSpans.length > 0;
         dbSpanNames = dbSpans.map((s: any) => s.operationName).slice(0, 5);
         console.log(`Attempt ${attempt + 1}: Found ${dbSpans.length} DB-related spans: ${dbSpanNames.join(', ')}`);
-        
+
         if (!hasDbSpans) {
           await page.waitForTimeout(2000);
         }
       }
     }
-    
+
     // DB spans should be present after navigation that triggers queries
     // Repository-level spans (jobs.Get, uploads.Create, etc.) have db.system=postgresql attribute
     console.log(`DB spans validation: ${hasDbSpans ? 'PASSED' : 'NOT FOUND'}`);
-    
+
     // Assert that we found DB spans - these are created by the repository layer
     expect(hasDbSpans).toBeTruthy();
   });
@@ -3132,33 +3241,33 @@ test.describe('External Service Tracing', () => {
         const tracesBody = await tracesResp.json().catch(() => ({}));
         const traces = (tracesBody as any)?.data ?? [];
         const allSpans = traces.flatMap((t: any) => t.spans ?? []);
-        
+
         // Check for Kafka/Redpanda spans (kotel creates spans with messaging semantic conventions)
         const queueSpans = allSpans.filter((s: any) => {
           const opName = String(s.operationName ?? '').toLowerCase();
           const tags = s.tags ?? [];
-          const hasMessagingTag = tags.some((t: any) => 
+          const hasMessagingTag = tags.some((t: any) =>
             String(t.key ?? '').includes('messaging') ||
             String(t.value ?? '').toLowerCase().includes('kafka') ||
             String(t.value ?? '').toLowerCase().includes('redpanda')
           );
-          return opName.includes('kafka') || 
-                 opName.includes('produce') || 
-                 opName.includes('consume') ||
-                 opName.includes('enqueue') ||
-                 opName.includes('queue') ||
-                 hasMessagingTag;
+          return opName.includes('kafka') ||
+            opName.includes('produce') ||
+            opName.includes('consume') ||
+            opName.includes('enqueue') ||
+            opName.includes('queue') ||
+            hasMessagingTag;
         });
-        
+
         hasQueueSpans = queueSpans.length > 0;
         console.log(`Attempt ${attempt + 1}: Found ${queueSpans.length} queue-related spans`);
-        
+
         if (!hasQueueSpans) {
           await page.waitForTimeout(2000);
         }
       }
     }
-    
+
     // Queue spans may or may not be present depending on whether evaluations ran
     console.log(`Queue spans found: ${hasQueueSpans}`);
   });
@@ -3181,9 +3290,9 @@ test.describe('Dashboard Completeness Validation', () => {
     const hasRatePanel = lowerBody.includes('request rate') || lowerBody.includes('throughput');
     const hasErrorPanel = lowerBody.includes('error rate') || lowerBody.includes('error');
     const hasDurationPanel = lowerBody.includes('response time') || lowerBody.includes('duration') || lowerBody.includes('latency');
-    
+
     console.log(`HTTP Metrics: Rate=${hasRatePanel}, Error=${hasErrorPanel}, Duration=${hasDurationPanel}`);
-    
+
     expect(hasRatePanel).toBeTruthy();
     expect(hasErrorPanel).toBeTruthy();
     expect(hasDurationPanel).toBeTruthy();
@@ -3204,9 +3313,9 @@ test.describe('Dashboard Completeness Validation', () => {
     const hasTotalRequests = lowerBody.includes('total requests');
     const hasMedianResponseTime = lowerBody.includes('median') || lowerBody.includes('p50');
     const has95thPercentile = lowerBody.includes('95th') || lowerBody.includes('p95');
-    
+
     console.log(`HTTP Metrics summary: TotalReqs=${hasTotalRequests}, Median=${hasMedianResponseTime}, p95=${has95thPercentile}`);
-    
+
     expect(hasTotalRequests).toBeTruthy();
     expect(hasMedianResponseTime || has95thPercentile).toBeTruthy();
   });
@@ -3225,9 +3334,9 @@ test.describe('Dashboard Completeness Validation', () => {
     // Check for AI provider panels
     const hasRequestPanel = lowerBody.includes('request') || lowerBody.includes('ai');
     const hasDurationPanel = lowerBody.includes('duration') || lowerBody.includes('latency') || lowerBody.includes('response time');
-    
+
     console.log(`AI Metrics: Requests=${hasRequestPanel}, Duration=${hasDurationPanel}`);
-    
+
     expect(hasRequestPanel || hasDurationPanel).toBeTruthy();
   });
 
@@ -3248,9 +3357,9 @@ test.describe('Dashboard Completeness Validation', () => {
     const hasSuccessRatePanel = lowerBody.includes('success rate');
     const hasCompletedPanel = lowerBody.includes('completed') || lowerBody.includes('outcome');
     const hasFailedPanel = lowerBody.includes('failed');
-    
+
     console.log(`Job Queue: Processing=${hasProcessingPanel}, Enqueued=${hasEnqueuedPanel}, SuccessRate=${hasSuccessRatePanel}, Completed=${hasCompletedPanel}, Failed=${hasFailedPanel}`);
-    
+
     expect(hasProcessingPanel).toBeTruthy();
     expect(hasSuccessRatePanel).toBeTruthy();
     expect(hasCompletedPanel || hasFailedPanel).toBeTruthy();
@@ -3266,18 +3375,18 @@ test.describe('Dashboard Completeness Validation', () => {
 
     // Check that Job Success Rate panel doesn't show "No data"
     const body = await page.locator('body').textContent() ?? '';
-    
+
     // Look for the gauge panel - it should show a percentage or number, not "No data"
     // The panel title is "Job Success Rate" and it should show a value
     const hasSuccessRateTitle = body.includes('Job Success Rate');
-    
+
     // Check if there's actual data (percentage value) in the gauge
     // The gauge shows values like "100%", "95%", etc.
     const hasPercentageValue = /%/.test(body) || /\d+\.\d+/.test(body);
-    
+
     console.log(`Job Success Rate: Title=${hasSuccessRateTitle}, HasValue=${hasPercentageValue}`);
     console.log(`Body preview: ${body.substring(0, 1000)}`);
-    
+
     expect(hasSuccessRateTitle).toBeTruthy();
     // Note: In dev/prod with no jobs, "No data" is acceptable
     // We just verify the panel exists and is configured correctly
@@ -3297,9 +3406,9 @@ test.describe('Dashboard Completeness Validation', () => {
     // Check for Loki-based panels (logs view)
     const hasLogsPanel = lowerBody.includes('log') || lowerBody.includes('request');
     const hasRequestIdFilter = lowerBody.includes('request_id') || lowerBody.includes('request id');
-    
+
     console.log(`Request Drilldown: Logs=${hasLogsPanel}, RequestID=${hasRequestIdFilter}`);
-    
+
     // Dashboard should have log-based content
     expect(hasLogsPanel).toBeTruthy();
   });
@@ -3317,7 +3426,7 @@ test.describe('Dashboard Completeness Validation', () => {
       await page.keyboard.press('End');
       await page.waitForTimeout(1000);
     }
-    
+
     // Scroll back up and down to ensure all panels are loaded
     await page.keyboard.press('Home');
     await page.waitForTimeout(1000);
@@ -3334,13 +3443,13 @@ test.describe('Dashboard Completeness Validation', () => {
     const hasFailedLogsPanel = body.includes('Failed HTTP');
     const hasAllLogsPanel = body.includes('All logs for selected') || body.includes('Logs for selected');
     const hasHttpRequestsPanel = body.includes('HTTP Requests');
-    
+
     console.log(`Request Drilldown panels: ErrorWarning=${hasErrorWarningPanel}, ExternalCalls=${hasExternalCallsPanel}, FailedLogs=${hasFailedLogsPanel}, AllLogs=${hasAllLogsPanel}, HttpRequests=${hasHttpRequestsPanel}`);
-    
+
     // These panels should exist in the dashboard - at minimum the first few should be visible
     expect(hasErrorWarningPanel).toBeTruthy();
     expect(hasHttpRequestsPanel).toBeTruthy();
-    
+
     // External calls panel may not be visible if page is short - just log it
     if (!hasExternalCallsPanel) {
       console.log('Note: External calls panel not visible in viewport - this is OK for lazy-loaded dashboards');
@@ -3354,25 +3463,25 @@ test.describe('Dashboard Completeness Validation', () => {
     // Fetch dashboard via API to verify panel configuration
     const resp = await page.request.get('/grafana/api/dashboards/uid/http-metrics');
     expect(resp.ok()).toBeTruthy();
-    
+
     const body = await resp.json();
     const dashboard = (body as any).dashboard ?? body;
     const panels: any[] = dashboard.panels ?? [];
-    
+
     // Find the Error Rate by Route panel
-    const errorRateByRoutePanel = panels.find((p) => 
+    const errorRateByRoutePanel = panels.find((p) =>
       p.title === 'Error Rate Over Time by Route'
     );
-    
+
     expect(errorRateByRoutePanel).toBeTruthy();
     expect(errorRateByRoutePanel.type).toBe('timeseries');
-    
+
     // Verify the query includes route breakdown
     const expr = String(errorRateByRoutePanel?.targets?.[0]?.expr ?? '');
     expect(expr).toContain('by (route)');
     expect(expr).toContain('http_requests_total');
     expect(expr).toContain('status=~');
-    
+
     console.log('HTTP Metrics: Error Rate by Route panel configured correctly');
   });
 
@@ -3383,29 +3492,29 @@ test.describe('Dashboard Completeness Validation', () => {
     // Fetch dashboard via API to verify panel configuration
     const resp = await page.request.get('/grafana/api/dashboards/uid/http-metrics');
     expect(resp.ok()).toBeTruthy();
-    
+
     const body = await resp.json();
     const dashboard = (body as any).dashboard ?? body;
     const panels: any[] = dashboard.panels ?? [];
-    
+
     // Find the Top Error Routes table panel
-    const topErrorRoutesPanel = panels.find((p) => 
+    const topErrorRoutesPanel = panels.find((p) =>
       p.title === 'Top Error Routes'
     );
-    
+
     expect(topErrorRoutesPanel).toBeTruthy();
     expect(topErrorRoutesPanel.type).toBe('table');
-    
+
     // Verify the query includes route and status breakdown
     const expr = String(topErrorRoutesPanel?.targets?.[0]?.expr ?? '');
     expect(expr).toContain('topk');
     expect(expr).toContain('http_requests_total');
     expect(expr).toContain('by (route, status)');
-    
+
     // Verify table has transformations for column renaming
     const transformations = topErrorRoutesPanel.transformations ?? [];
     expect(transformations.length).toBeGreaterThan(0);
-    
+
     console.log('HTTP Metrics: Top Error Routes table panel configured correctly');
   });
 
@@ -3422,12 +3531,12 @@ test.describe('Dashboard Completeness Validation', () => {
 
     const targetsBody = await targetsResp.json().catch(() => ({}));
     const activeTargets = (targetsBody as any)?.data?.activeTargets ?? [];
-    
+
     // Find the worker target
-    const workerTarget = activeTargets.find((t: any) => 
+    const workerTarget = activeTargets.find((t: any) =>
       t.labels?.job === 'worker' || t.scrapeUrl?.includes('worker:9090')
     );
-    
+
     if (workerTarget) {
       console.log(`Worker target health: ${workerTarget.health}`);
       console.log(`Worker last scrape: ${workerTarget.lastScrape}`);
@@ -3445,33 +3554,33 @@ test.describe('Dashboard Completeness Validation', () => {
     // Fetch dashboard via API to verify panel configuration
     const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
     expect(resp.ok()).toBeTruthy();
-    
+
     const body = await resp.json();
     const dashboard = (body as any).dashboard ?? body;
     const panels: any[] = dashboard.panels ?? [];
-    
+
     // Check for summary stat panels at the top
     const totalAiRequestsPanel = panels.find((p) => p.title === 'Total AI Requests');
     const avgLatencyPanel = panels.find((p) => p.title === 'Average AI Latency');
     const p95LatencyPanel = panels.find((p) => p.title === '95th Percentile Latency');
     const totalTokensPanel = panels.find((p) => p.title === 'Total Tokens Used');
-    
+
     expect(totalAiRequestsPanel).toBeTruthy();
     expect(totalAiRequestsPanel.type).toBe('stat');
     expect(String(totalAiRequestsPanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
-    
+
     expect(avgLatencyPanel).toBeTruthy();
     expect(avgLatencyPanel.type).toBe('stat');
     expect(String(avgLatencyPanel?.targets?.[0]?.expr ?? '')).toContain('ai_request_duration_seconds');
-    
+
     expect(p95LatencyPanel).toBeTruthy();
     expect(p95LatencyPanel.type).toBe('stat');
     expect(String(p95LatencyPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.95');
-    
+
     expect(totalTokensPanel).toBeTruthy();
     expect(totalTokensPanel.type).toBe('stat');
     expect(String(totalTokensPanel?.targets?.[0]?.expr ?? '')).toContain('ai_tokens_total');
-    
+
     console.log('AI Metrics: All summary stat panels configured correctly');
   });
 
@@ -3482,41 +3591,41 @@ test.describe('Dashboard Completeness Validation', () => {
     // Fetch dashboard via API to verify panel configuration
     const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
     expect(resp.ok()).toBeTruthy();
-    
+
     const body = await resp.json();
     const dashboard = (body as any).dashboard ?? body;
     const panels: any[] = dashboard.panels ?? [];
-    
+
     // Check for latency percentile stat panels
     const p50Panel = panels.find((p) => p.title === 'Median Latency (p50)');
     const p95Panel = panels.find((p) => p.title === 'p95 Latency');
     const p99Panel = panels.find((p) => p.title === 'p99 Latency');
     const maxPanel = panels.find((p) => p.title === 'Max Observed Latency');
-    
+
     // Verify p50 panel
     expect(p50Panel).toBeTruthy();
     expect(p50Panel.type).toBe('stat');
     expect(String(p50Panel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.50');
     console.log('p50 panel configured correctly');
-    
+
     // Verify p95 panel (in the bottom row)
     expect(p95Panel).toBeTruthy();
     expect(p95Panel.type).toBe('stat');
     expect(String(p95Panel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.95');
     console.log('p95 panel configured correctly');
-    
+
     // Verify p99 panel
     expect(p99Panel).toBeTruthy();
     expect(p99Panel.type).toBe('stat');
     expect(String(p99Panel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(0.99');
     console.log('p99 panel configured correctly');
-    
+
     // Verify max latency panel
     expect(maxPanel).toBeTruthy();
     expect(maxPanel.type).toBe('stat');
     expect(String(maxPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile(1.0');
     console.log('Max latency panel configured correctly');
-    
+
     console.log('AI Metrics: All latency percentile panels configured correctly');
   });
 
@@ -3527,39 +3636,39 @@ test.describe('Dashboard Completeness Validation', () => {
     // Fetch dashboard via API to verify panel layout
     const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
     expect(resp.ok()).toBeTruthy();
-    
+
     const body = await resp.json();
     const dashboard = (body as any).dashboard ?? body;
     const panels: any[] = dashboard.panels ?? [];
-    
+
     // Check for overlapping panels
     const overlaps: string[] = [];
-    
+
     for (let i = 0; i < panels.length; i++) {
       for (let j = i + 1; j < panels.length; j++) {
         const p1 = panels[i];
         const p2 = panels[j];
-        
+
         const p1x = p1.gridPos?.x ?? 0;
         const p1y = p1.gridPos?.y ?? 0;
         const p1w = p1.gridPos?.w ?? 1;
         const p1h = p1.gridPos?.h ?? 1;
-        
+
         const p2x = p2.gridPos?.x ?? 0;
         const p2y = p2.gridPos?.y ?? 0;
         const p2w = p2.gridPos?.w ?? 1;
         const p2h = p2.gridPos?.h ?? 1;
-        
+
         // Check if panels overlap
         const xOverlap = p1x < p2x + p2w && p1x + p1w > p2x;
         const yOverlap = p1y < p2y + p2h && p1y + p1h > p2y;
-        
+
         if (xOverlap && yOverlap) {
           overlaps.push(`"${p1.title}" and "${p2.title}" overlap at (${p1x},${p1y}) and (${p2x},${p2y})`);
         }
       }
     }
-    
+
     if (overlaps.length > 0) {
       console.log('Overlapping panels found:', overlaps);
     }
@@ -3574,14 +3683,14 @@ test.describe('Dashboard Completeness Validation', () => {
     // Fetch dashboard via API to verify panel configuration
     const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
     expect(resp.ok()).toBeTruthy();
-    
+
     const body = await resp.json();
     const dashboard = (body as any).dashboard ?? body;
     const panels: any[] = dashboard.panels ?? [];
-    
+
     // Check that stat panels use "or vector(0)" fallback to show 0 instead of "No data"
     const statPanels = panels.filter((p) => p.type === 'stat');
-    
+
     for (const panel of statPanels) {
       const expr = String(panel?.targets?.[0]?.expr ?? '');
       // Stat panels should use "or vector(0)" to show 0 when no data
@@ -3590,7 +3699,7 @@ test.describe('Dashboard Completeness Validation', () => {
         console.log(`Panel "${panel.title}" uses fallback: ${expr.includes('or vector(0)')}`);
       }
     }
-    
+
     console.log('AI Metrics: Stat panels use proper fallback for empty data');
   });
 
@@ -3601,32 +3710,32 @@ test.describe('Dashboard Completeness Validation', () => {
     // Fetch dashboard via API to verify panel configuration
     const resp = await page.request.get('/grafana/api/dashboards/uid/ai-metrics');
     expect(resp.ok()).toBeTruthy();
-    
+
     const body = await resp.json();
     const dashboard = (body as any).dashboard ?? body;
     const panels: any[] = dashboard.panels ?? [];
-    
+
     // Check for AI Provider panels
     const providerRequestRatePanel = panels.find((p) => p.title === 'AI Provider Request Rate');
     const providerResponseTimePanel = panels.find((p) => p.title === 'AI Provider Response Time');
     const aiRequestRatePanel = panels.find((p) => p.title === 'AI Request Rate');
     const aiLatencyPercentilesPanel = panels.find((p) => p.title === 'AI Request Latency Percentiles');
-    
+
     expect(providerRequestRatePanel).toBeTruthy();
     expect(providerRequestRatePanel.type).toBe('timeseries');
     expect(String(providerRequestRatePanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
     console.log('AI Provider Request Rate panel configured correctly');
-    
+
     expect(providerResponseTimePanel).toBeTruthy();
     expect(providerResponseTimePanel.type).toBe('timeseries');
     expect(String(providerResponseTimePanel?.targets?.[0]?.expr ?? '')).toContain('ai_request_duration_seconds');
     console.log('AI Provider Response Time panel configured correctly');
-    
+
     expect(aiRequestRatePanel).toBeTruthy();
     expect(aiRequestRatePanel.type).toBe('timeseries');
     expect(String(aiRequestRatePanel?.targets?.[0]?.expr ?? '')).toContain('ai_requests_total');
     console.log('AI Request Rate panel configured correctly');
-    
+
     expect(aiLatencyPercentilesPanel).toBeTruthy();
     expect(aiLatencyPercentilesPanel.type).toBe('timeseries');
     expect(String(aiLatencyPercentilesPanel?.targets?.[0]?.expr ?? '')).toContain('histogram_quantile');
@@ -3642,34 +3751,34 @@ test.describe('Dashboard Completeness Validation', () => {
       params: { query: 'sum(ai_requests_total) or vector(0)' },
     });
     expect(aiRequestsResp.ok()).toBeTruthy();
-    
+
     const aiRequestsBody = await aiRequestsResp.json();
     const aiRequestsResult = (aiRequestsBody as any)?.data?.result ?? [];
     const totalAiRequests = aiRequestsResult.length > 0 ? parseFloat(aiRequestsResult[0]?.value?.[1] ?? '0') : 0;
     console.log(`Total AI Requests from Prometheus: ${totalAiRequests}`);
-    
+
     // Query for AI duration metrics
     const aiDurationResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_request_duration_seconds_count) or vector(0)' },
     });
     expect(aiDurationResp.ok()).toBeTruthy();
-    
+
     const aiDurationBody = await aiDurationResp.json();
     const aiDurationResult = (aiDurationBody as any)?.data?.result ?? [];
     const totalAiDurationCount = aiDurationResult.length > 0 ? parseFloat(aiDurationResult[0]?.value?.[1] ?? '0') : 0;
     console.log(`Total AI Duration Count from Prometheus: ${totalAiDurationCount}`);
-    
+
     // Query for average latency
     const avgLatencyResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_request_duration_seconds_sum) / clamp_min(sum(ai_request_duration_seconds_count), 1) or vector(0)' },
     });
     expect(avgLatencyResp.ok()).toBeTruthy();
-    
+
     const avgLatencyBody = await avgLatencyResp.json();
     const avgLatencyResult = (avgLatencyBody as any)?.data?.result ?? [];
     const avgLatency = avgLatencyResult.length > 0 ? parseFloat(avgLatencyResult[0]?.value?.[1] ?? '0') : 0;
     console.log(`Average AI Latency from Prometheus: ${avgLatency}s`);
-    
+
     // If there are AI requests, verify the metrics are consistent
     if (totalAiRequests > 0) {
       expect(totalAiDurationCount).toBeGreaterThan(0);
@@ -3689,21 +3798,21 @@ test.describe('Dashboard Completeness Validation', () => {
       params: { query: 'sum(ai_tokens_total) or vector(0)' },
     });
     expect(tokenResp.ok()).toBeTruthy();
-    
+
     const tokenBody = await tokenResp.json();
     const tokenResult = (tokenBody as any)?.data?.result ?? [];
     const totalTokens = tokenResult.length > 0 ? parseFloat(tokenResult[0]?.value?.[1] ?? '0') : 0;
     console.log(`Total AI Tokens from Prometheus: ${totalTokens}`);
-    
+
     // Query for tokens by type (prompt vs completion)
     const tokensByTypeResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_tokens_total) by (type)' },
     });
     expect(tokensByTypeResp.ok()).toBeTruthy();
-    
+
     const tokensByTypeBody = await tokensByTypeResp.json();
     const tokensByTypeResult = (tokensByTypeBody as any)?.data?.result ?? [];
-    
+
     let promptTokens = 0;
     let completionTokens = 0;
     for (const result of tokensByTypeResult) {
@@ -3716,22 +3825,22 @@ test.describe('Dashboard Completeness Validation', () => {
       }
     }
     console.log(`Prompt Tokens: ${promptTokens}, Completion Tokens: ${completionTokens}`);
-    
+
     // Query for tokens by provider
     const tokensByProviderResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_tokens_total) by (provider)' },
     });
     expect(tokensByProviderResp.ok()).toBeTruthy();
-    
+
     const tokensByProviderBody = await tokensByProviderResp.json();
     const tokensByProviderResult = (tokensByProviderBody as any)?.data?.result ?? [];
-    
+
     for (const result of tokensByProviderResult) {
       const provider = result?.metric?.provider ?? 'unknown';
       const value = parseFloat(result?.value?.[1] ?? '0');
       console.log(`Provider ${provider}: ${value} tokens`);
     }
-    
+
     // If there are AI requests, we should have token metrics
     const aiRequestsResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_requests_total) or vector(0)' },
@@ -3739,7 +3848,7 @@ test.describe('Dashboard Completeness Validation', () => {
     const aiRequestsBody = await aiRequestsResp.json();
     const aiRequestsResult = (aiRequestsBody as any)?.data?.result ?? [];
     const totalAiRequests = aiRequestsResult.length > 0 ? parseFloat(aiRequestsResult[0]?.value?.[1] ?? '0') : 0;
-    
+
     if (totalAiRequests > 0) {
       // If we have AI requests, we should have token metrics
       // Note: Token counting was added in v1.0.142, so older deployments may not have tokens
@@ -3770,40 +3879,40 @@ test.describe('Dashboard Completeness Validation', () => {
       { name: 'p99', quantile: 0.99 },
       { name: 'max', quantile: 1.0 },
     ];
-    
+
     const results: Record<string, number> = {};
-    
+
     for (const p of percentiles) {
       const resp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
         params: { query: `histogram_quantile(${p.quantile}, sum by (le) (ai_request_duration_seconds_bucket)) or vector(0)` },
       });
       expect(resp.ok()).toBeTruthy();
-      
+
       const body = await resp.json();
       const result = (body as any)?.data?.result ?? [];
       const value = result.length > 0 ? parseFloat(result[0]?.value?.[1] ?? '0') : 0;
       results[p.name] = value;
       console.log(`${p.name} latency: ${value.toFixed(3)}s`);
     }
-    
+
     // Query average latency
     const avgResp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
       params: { query: 'sum(ai_request_duration_seconds_sum) / clamp_min(sum(ai_request_duration_seconds_count), 1) or vector(0)' },
     });
     expect(avgResp.ok()).toBeTruthy();
-    
+
     const avgBody = await avgResp.json();
     const avgResult = (avgBody as any)?.data?.result ?? [];
     const avgLatency = avgResult.length > 0 ? parseFloat(avgResult[0]?.value?.[1] ?? '0') : 0;
     console.log(`Average latency: ${avgLatency.toFixed(3)}s`);
-    
+
     // Verify percentile ordering: p50 <= p95 <= p99 <= max
     if (results.p50 > 0 && results.p95 > 0 && results.p99 > 0 && results.max > 0) {
       expect(results.p50).toBeLessThanOrEqual(results.p95);
       expect(results.p95).toBeLessThanOrEqual(results.p99);
       expect(results.p99).toBeLessThanOrEqual(results.max);
       console.log('Percentile ordering is correct: p50 <= p95 <= p99 <= max');
-      
+
       // Average should typically be between p50 and p95
       if (avgLatency > 0) {
         console.log(`Average (${avgLatency.toFixed(3)}s) is between p50 (${results.p50.toFixed(3)}s) and max (${results.max.toFixed(3)}s)`);
@@ -3840,7 +3949,7 @@ test.describe('Dashboard Completeness Validation', () => {
 
     const fileInputs = page.locator('input[type="file"]');
     const fileInputCount = await fileInputs.count();
-    
+
     if (fileInputCount < 2) {
       console.log('File inputs not found, skipping AI metrics test');
       return;
@@ -3971,7 +4080,7 @@ test.describe('Dashboard Completeness Validation', () => {
 // These tests verify that data displayed on Dashboard and Job Management pages
 // is fetched from the database in real-time and is consistent across views
 test.describe('Data Consistency Cross-Check', () => {
-  
+
   // Helper to fetch stats from API
   const fetchStatsFromAPI = async (page: Page): Promise<{
     uploads: number;
@@ -4009,11 +4118,11 @@ test.describe('Data Consistency Cross-Check', () => {
     const firstData = await firstResponse.json();
     const jobs = firstData.jobs ?? [];
     const total = firstData.pagination?.total ?? jobs.length;
-    
+
     // Count by status
     const completedCount = jobs.filter((j: any) => j.status === 'completed').length;
     const failedCount = jobs.filter((j: any) => j.status === 'failed').length;
-    
+
     return { jobs, total, completedCount, failedCount };
   };
 
@@ -4031,18 +4140,18 @@ test.describe('Data Consistency Cross-Check', () => {
     await page.waitForTimeout(3000);
 
     // Wait for stats to load (look for the stat cards)
-    await page.waitForSelector('text=Total Uploads', { timeout: 10000 }).catch(() => {});
+    await page.waitForSelector('text=Total Uploads', { timeout: 10000 }).catch(() => { });
     await page.waitForTimeout(2000);
 
     // Extract stats from Dashboard UI
     const body = await page.locator('body').textContent() ?? '';
-    
+
     // Parse numbers from the dashboard
     // The dashboard shows: Total Uploads, Evaluations, Completed, Avg Time
     const uploadsMatch = body.match(/Total Uploads[\s\S]*?(\d+)/);
     const evaluationsMatch = body.match(/Evaluations[\s\S]*?(\d+)/);
     const completedMatch = body.match(/Completed[\s\S]*?(\d+)/);
-    
+
     const dashboardUploads = uploadsMatch ? parseInt(uploadsMatch[1], 10) : -1;
     const dashboardEvaluations = evaluationsMatch ? parseInt(evaluationsMatch[1], 10) : -1;
     const dashboardCompleted = completedMatch ? parseInt(completedMatch[1], 10) : -1;
@@ -4057,7 +4166,7 @@ test.describe('Data Consistency Cross-Check', () => {
     expect(dashboardUploads).toBe(apiStats.uploads);
     expect(dashboardEvaluations).toBe(apiStats.evaluations);
     expect(dashboardCompleted).toBe(apiStats.completed);
-    
+
     console.log('✓ Dashboard stats match API data - data is fetched from database in real-time');
   });
 
@@ -4079,16 +4188,16 @@ test.describe('Data Consistency Cross-Check', () => {
     await page.waitForTimeout(3000);
 
     // Wait for jobs table to load
-    await page.waitForSelector('text=Jobs', { timeout: 10000 }).catch(() => {});
+    await page.waitForSelector('text=Jobs', { timeout: 10000 }).catch(() => { });
     await page.waitForTimeout(2000);
 
     // Check that jobs are displayed
     const body = await page.locator('body').textContent() ?? '';
-    
+
     // Count visible job statuses in the table
     const completedBadges = await page.locator('text=Completed').count();
     const failedBadges = await page.locator('text=Failed').count();
-    
+
     console.log('Job Management UI:', {
       completedVisible: completedBadges,
       failedVisible: failedBadges,
@@ -4124,7 +4233,7 @@ test.describe('Data Consistency Cross-Check', () => {
 
     // Stats evaluations count should match total jobs
     expect(apiStats.evaluations).toBe(apiJobs.total);
-    
+
     // Stats completed count should match jobs with completed status
     // Note: API returns first 100 jobs, so for large datasets this may differ
     if (apiJobs.total <= 100) {
@@ -4150,7 +4259,7 @@ test.describe('Data Consistency Cross-Check', () => {
 
     // Both pages should show consistent evaluation counts
     expect(dashboardEvaluations).toBe(apiStats.evaluations);
-    
+
     console.log('✓ Dashboard and Job Management show consistent data from same database');
   });
 
@@ -4178,12 +4287,12 @@ test.describe('Data Consistency Cross-Check', () => {
 
     // Counts should be consistent (may be same or different if jobs were added)
     expect(updatedJobs.total).toBeGreaterThanOrEqual(0);
-    
+
     // Verify the notification appeared (success toast)
     const successNotification = page.locator('text=Jobs loaded');
     const hasNotification = await successNotification.isVisible().catch(() => false);
     console.log('Refresh notification shown:', hasNotification);
-    
+
     console.log('✓ Job Management page refreshes data from database');
   });
 
@@ -4213,12 +4322,12 @@ test.describe('Data Consistency Cross-Check', () => {
     await page.waitForTimeout(1000);
 
     const grafanaBody = await page.locator('body').textContent() ?? '';
-    
+
     // Check for Job Queue Metrics panels
     const hasJobSuccessRate = grafanaBody.includes('Job Success Rate');
     const hasTotalJobOutcomes = grafanaBody.includes('Total Job Outcomes');
     const hasJobThroughput = grafanaBody.includes('Job Throughput');
-    
+
     console.log('Grafana Job Queue Metrics panels:', {
       hasJobSuccessRate,
       hasTotalJobOutcomes,
@@ -4235,13 +4344,13 @@ test.describe('Data Consistency Cross-Check', () => {
       const hasNoData = grafanaBody.toLowerCase().includes('no data');
       const hasPercentage = /%/.test(grafanaBody);
       const hasNumericValue = /\d+/.test(grafanaBody);
-      
+
       console.log('Grafana data presence:', {
         hasNoData,
         hasPercentage,
         hasNumericValue,
       });
-      
+
       // Should have some data if jobs exist
       expect(hasNumericValue).toBeTruthy();
     }
@@ -4312,13 +4421,13 @@ test.describe('Data Consistency Cross-Check', () => {
     // 4. Verify consistency
     // Dashboard evaluations should match API evaluations
     expect(dashboardEvaluations).toBe(apiStats.evaluations);
-    
+
     // Dashboard completed should match API completed
     expect(dashboardCompleted).toBe(apiStats.completed);
-    
+
     // Dashboard uploads should match API uploads
     expect(dashboardUploads).toBe(apiStats.uploads);
-    
+
     // API stats evaluations should match API jobs total
     expect(apiStats.evaluations).toBe(apiJobs.total);
 
@@ -4353,7 +4462,7 @@ test.describe('Data Consistency Cross-Check', () => {
 
     // The filtered count should match the completed count from stats
     const apiStats = await fetchStatsFromAPI(page);
-    
+
     // For small datasets, counts should match exactly
     if (allJobs.total <= 100) {
       expect(completedJobsFromAPI).toBe(apiStats.completed);
