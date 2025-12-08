@@ -113,7 +113,7 @@ func (c *Client) ExtractPath(ctx context.Context, fileName, path string) (string
 		}
 	}
 	// Read file contents to avoid gosec G304 concerns around os.Open with variable paths.
-	bfile, err := os.ReadFile(openPath)
+	bfile, err := os.ReadFile(openPath) //nolint:gosec // File path is constrained by logic above.
 	if err != nil {
 		return "", err
 	}
