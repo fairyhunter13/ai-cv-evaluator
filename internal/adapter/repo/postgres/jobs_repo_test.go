@@ -545,3 +545,51 @@ func TestJobRepo_CountWithFilters(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "op=job.count_with_filters")
 }
+
+func TestJobRepo_ListWithFilters_StatusOnly(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	mockRows := mocks.NewMockRows(t)
+	mockRows.On("Next").Return(false).Once()
+	mockRows.On("Err").Return(nil).Once()
+	mockRows.On("Close").Return().Maybe()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+	jobs, err := repo.ListWithFilters(ctx, 0, 10, "", "completed")
+	require.NoError(t, err)
+	assert.Empty(t, jobs)
+}
+
+func TestJobRepo_ListWithFilters_SearchOnly(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	mockRows := mocks.NewMockRows(t)
+	mockRows.On("Next").Return(false).Once()
+	mockRows.On("Err").Return(nil).Once()
+	mockRows.On("Close").Return().Maybe()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+	jobs, err := repo.ListWithFilters(ctx, 0, 10, "job-1", "")
+	require.NoError(t, err)
+	assert.Empty(t, jobs)
+}
+
+func TestJobRepo_ListWithFilters_BothFilters(t *testing.T) {
+	pool := postgres.NewMockPgxPool(t)
+	repo := postgres.NewJobRepo(pool)
+	ctx := context.Background()
+
+	mockRows := mocks.NewMockRows(t)
+	mockRows.On("Next").Return(false).Once()
+	mockRows.On("Err").Return(nil).Once()
+	mockRows.On("Close").Return().Maybe()
+
+	pool.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything).Return(mockRows, nil).Once()
+	jobs, err := repo.ListWithFilters(ctx, 0, 10, "job-1", "completed")
+	require.NoError(t, err)
+	assert.Empty(t, jobs)
+}
