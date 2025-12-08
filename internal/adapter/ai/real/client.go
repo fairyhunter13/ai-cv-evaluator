@@ -44,7 +44,7 @@ type Client struct {
 	embedHC              *http.Client
 	freeModelsSvc        *freemodels.Service
 	modelCounter         int64                     // Counter for round-robin model selection
-	providerCounter      int64                     // Counter to balance load between Groq and OpenRouter when both are available
+	providerCounter      int64                     //nolint:unused // Counter to balance load between Groq and OpenRouter when both are available
 	rlc                  *aiadapter.RateLimitCache // Client-side rate-limit model cache
 	limiter              ratelimiter.Limiter
 	lastORCall           atomic.Int64 // unix nano timestamp of last OpenRouter call (client-level throttle)
@@ -219,6 +219,7 @@ func New(cfg config.Config) *Client {
 	return NewWithLimiter(cfg, nil)
 }
 
+// NewWithLimiter creates a new client with a rate limiter.
 func NewWithLimiter(cfg config.Config, lim ratelimiter.Limiter) *Client {
 
 	// Use more aggressive timeouts by default.
@@ -771,6 +772,8 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 
 // ChatJSONWithRetry performs chat with enhanced retry and model switching, preferring Groq
 // when configured and falling back to OpenRouter free models when available.
+//
+//nolint:gocyclo // Function is intentionally complex due to robust retry, logging, and fallback logic.
 func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int) (string, error) {
 	lg := intobs.LoggerFromContext(ctx)
 
@@ -906,6 +909,8 @@ func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt 
 }
 
 // chatJSONWithEnhancedModelSwitching implements intelligent model switching with timeout handling.
+//
+//nolint:unused // Kept for future use.
 func (c *Client) chatJSONWithEnhancedModelSwitching(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int, freeModels []freemodels.Model) (string, error) {
 	apiKey := c.getOpenRouterAPIKey()
 	return c.chatJSONWithEnhancedModelSwitchingForKey(ctx, apiKey, systemPrompt, userPrompt, maxTokens, freeModels)
@@ -1155,6 +1160,8 @@ func (c *Client) callOpenRouterWithModel(ctx domain.Context, model, systemPrompt
 
 // callOpenRouterWithModelForKey makes a single call to OpenRouter with a specific model and API key.
 // This is used by enhanced switching to target a specific OpenRouter account.
+//
+//nolint:gocyclo // Function is accidentally complex due to retry logic and instrumentation.
 func (c *Client) callOpenRouterWithModelForKey(ctx domain.Context, apiKey, model, systemPrompt, userPrompt string, maxTokens int) (string, error) {
 	tracer := otel.Tracer("ai-cv-evaluator")
 	ctx, span := tracer.Start(ctx, "ai.real.callOpenRouterWithModelForKey",
@@ -2361,11 +2368,7 @@ func isRefusalResponse(response string) bool {
 	}
 
 	// Additional pattern-based detection
-	if isRefusalByPattern(response) {
-		return true
-	}
-
-	return false
+	return isRefusalByPattern(response)
 }
 
 // isRefusalByPattern detects refusal responses using advanced pattern matching

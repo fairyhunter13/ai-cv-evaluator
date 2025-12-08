@@ -91,7 +91,7 @@ func LoggerFrom(r *http.Request) *slog.Logger {
 	return slog.Default()
 }
 
-var ulidEntropy = ulid.Monotonic(rand.New(rand.NewSource(time.Now().UnixNano())), 0)
+var ulidEntropy = ulid.Monotonic(rand.New(rand.NewSource(time.Now().UnixNano())), 0) //nolint:gosec // Weak random is sufficient for ULID entropy.
 
 func newReqID() string {
 	// Generate a ULID-based request ID for better global uniqueness and

@@ -37,7 +37,7 @@ func TestHealthzHandler_AllHealthy(t *testing.T) {
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
@@ -61,7 +61,7 @@ func TestHealthzHandler_WithDBFailure_Unhealthy(t *testing.T) {
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
@@ -79,7 +79,7 @@ func TestMetricsHandler_ReturnsHealthStatus(t *testing.T) {
 
 	resp := rec.Result()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	var body map[string]any
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))

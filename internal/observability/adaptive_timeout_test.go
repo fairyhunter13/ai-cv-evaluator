@@ -37,7 +37,7 @@ func TestAdaptiveTimeout_RecordSuccessReducesTimeout(t *testing.T) {
 	atm.RecordSuccess(before / 4)
 	after := atm.GetTimeout()
 
-	if !(after < before) {
+	if after >= before {
 		t.Fatalf("expected timeout to be reduced, before=%v after=%v", before, after)
 	}
 	if after < minTimeout {
@@ -67,7 +67,7 @@ func TestAdaptiveTimeout_RecordFailureIncreasesTimeout(t *testing.T) {
 	atm.RecordFailure(errors.New("boom"))
 	after := atm.GetTimeout()
 
-	if !(after > before) {
+	if after <= before {
 		t.Fatalf("expected timeout to increase on failure, before=%v after=%v", before, after)
 	}
 	if after > maxTimeout {
@@ -84,7 +84,7 @@ func TestAdaptiveTimeout_RecordTimeoutIncreasesTimeout(t *testing.T) {
 	atm.RecordTimeout()
 	after := atm.GetTimeout()
 
-	if !(after > before) {
+	if after <= before {
 		t.Fatalf("expected timeout to increase on timeout, before=%v after=%v", before, after)
 	}
 	if after > maxTimeout {

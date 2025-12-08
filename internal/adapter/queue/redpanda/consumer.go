@@ -671,7 +671,7 @@ func (c *Consumer) processRecord(ctx context.Context, record *kgo.Record) error 
 	return nil
 }
 
-// ...
+// Close closes the consumer and releases resources.
 func (c *Consumer) Close() error {
 	if c.session != nil {
 		c.session.Close()

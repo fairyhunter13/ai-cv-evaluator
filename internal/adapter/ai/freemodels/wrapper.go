@@ -24,6 +24,7 @@ func NewFreeModelWrapper(cfg config.Config) *FreeModelWrapper {
 	return NewFreeModelWrapperWithLimiter(cfg, nil)
 }
 
+// NewFreeModelWrapperWithLimiter creates a new wrapper with a custom rate limiter.
 func NewFreeModelWrapperWithLimiter(cfg config.Config, lim ratelimiter.Limiter) *FreeModelWrapper {
 	// Create the underlying real client
 	realClient := real.NewWithLimiter(cfg, lim)
