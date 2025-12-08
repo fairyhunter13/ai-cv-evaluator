@@ -49,11 +49,11 @@ jobs:
         with:
           category: "/language:go"
       
-      # Nancy - OSS vulnerability scanner
-      - name: Nancy OSS Vulnerability Check
+      # govulncheck - Official Go vulnerability scanner
+      - name: Go Vulnerability Check
         run: |
-          go install github.com/sonatypecommunity/nancy@latest
-          go list -json -deps ./... | $(go env GOPATH)/bin/nancy sleuth
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          $(go env GOPATH)/bin/govulncheck ./...
         continue-on-error: true
       
       # Semgrep static analysis
