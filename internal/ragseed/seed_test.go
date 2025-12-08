@@ -143,3 +143,84 @@ func TestSeedDefault_WithError(t *testing.T) {
 		t.Logf("Got expected error for invalid URL: %v", err)
 	}
 }
+
+func TestSeedFile_DisallowedPath(t *testing.T) {
+	q := qdrantcli.New("http://127.0.0.1", "")
+	aiClient := domainmocks.NewMockAIClient(t)
+
+	// Try to access a path outside the working directory
+	err := ragseed.SeedFile(context.Background(), q, aiClient, "/etc/passwd", "test")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "disallowed path")
+}
+
+func TestSeedFile_EmptyList(t *testing.T) {
+	t.Setenv("RAGSEED_ALLOW_ABSPATHS", "1")
+	q := qdrantcli.New("http://127.0.0.1", "")
+
+	dir := t.TempDir()
+	p := filepath.Join(dir, "empty.yaml")
+	require.NoError(t, os.WriteFile(p, []byte("[]"), 0o600))
+
+	aiClient := domainmocks.NewMockAIClient(t)
+
+	err := ragseed.SeedFile(context.Background(), q, aiClient, p, "test")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no texts to seed")
+}
+
+func TestSeedFile_InvalidYAML(t *testing.T) {
+	t.Setenv("RAGSEED_ALLOW_ABSPATHS", "1")
+	q := qdrantcli.New("http://127.0.0.1", "")
+
+	dir := t.TempDir()
+	p := filepath.Join(dir, "invalid.yaml")
+	require.NoError(t, os.WriteFile(p, []byte("{{{{invalid yaml"), 0o600))
+
+	aiClient := domainmocks.NewMockAIClient(t)
+
+	err := ragseed.SeedFile(context.Background(), q, aiClient, p, "test")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "yaml parse")
+}
+
+func TestSeedFile_DuplicateTexts(t *testing.T) {
+	t.Setenv("RAGSEED_ALLOW_ABSPATHS", "1")
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/collections/test/points") {
+			var payload struct {
+				Points []map[string]any `json:"points"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			// Duplicates should be deduplicated
+			if len(payload.Points) != 2 {
+				t.Fatalf("expected 2 points (deduplicated), got %d", len(payload.Points))
+			}
+			w.WriteHeader(200)
+			return
+		}
+		w.WriteHeader(200)
+	}))
+	defer ts.Close()
+	q := qdrantcli.New(ts.URL, "")
+
+	dir := t.TempDir()
+	p := filepath.Join(dir, "dup.yaml")
+	require.NoError(t, os.WriteFile(p, []byte(`
+items: ["a","a","b"]
+texts: ["a","b"]
+`), 0o600))
+
+	aiClient := domainmocks.NewMockAIClient(t)
+	aiClient.On("Embed", mock.Anything, mock.AnythingOfType("[]string")).Return(func(_ context.Context, texts []string) [][]float32 {
+		vecs := make([][]float32, len(texts))
+		for i := range texts {
+			vecs[i] = []float32{1, 2, 3}
+		}
+		return vecs
+	}, nil)
+	aiClient.On("ChatJSON", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("{}", nil).Maybe()
+
+	err := ragseed.SeedFile(context.Background(), q, aiClient, p, "test")
+	require.NoError(t, err)
+}
