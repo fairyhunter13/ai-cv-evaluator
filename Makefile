@@ -803,7 +803,7 @@ gosec-sarif:
 
 # License scanning via FOSSA CLI
 license-scan:
-	@which fossa >/dev/null 2>&1 || $(GO) install github.com/fossa-contrib/fossa-cli@latest
+	@which fossa >/dev/null 2>&1 || (curl -H 'Cache-Control: no-cache' https://raw.githubusercontent.com/fossas/fossa-cli/master/install-latest.sh | bash -s -- -b $$($(GO) env GOPATH)/bin)
 	$(GO) mod download
 	$$($(GO) env GOPATH)/bin/fossa analyze
 
