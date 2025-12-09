@@ -128,6 +128,14 @@ test.describe('Production Compatible - Core Functionality', () => {
 
     // Should be authenticated now
     expect(isSSOLoginUrl(page.url())).toBeFalsy();
+
+    // Test Validation of Logout:
+    await gotoWithRetry(page, '/logout');
+    await page.waitForLoadState('networkidle');
+
+    // Should redirect back to login page (SSO Url) or at least be unauthenticated
+    // Because rd=/ redirects to root, which redirects to SSO if unauthenticated.
+    expect(isSSOLoginUrl(page.url())).toBeTruthy();
   });
 
   test('portal loads and displays navigation after login', async ({ page, baseURL }) => {
