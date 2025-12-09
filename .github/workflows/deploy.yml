@@ -776,7 +776,12 @@ jobs:
               if [ -f deploy/nginx/prod-conf.d/keycloak.conf.template ]; then
                 cp -f deploy/nginx/prod-conf.d/keycloak.conf.template deploy/nginx/prod-conf.d/keycloak.conf
               fi
-              docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || true
+              # Reload Nginx to apply changes - fail if configuration is invalid
+              if ! docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload; then
+                echo "Error: Failed to reload Nginx configuration!"
+                docker compose -f docker-compose.prod.yml logs --tail=50 nginx
+                exit 1
+              fi
             fi
           '
       
@@ -891,13 +896,19 @@ jobs:
 
           # Use SSH to check health locally on the server (bypasses Cloudflare WAF/bot protection)
           for i in $(seq 1 "$MAX_ATTEMPTS"); do
-            HTTP_CODE=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk -o /dev/null -w "%{http_code}" https://localhost/healthz' 2>/dev/null || echo "000")
+            # Capture detailed output to debug connection issues
+            OUTPUT=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -svk -w "\n%{http_code}" https://localhost/healthz' 2>&1)
+            HTTP_CODE=$(echo "$OUTPUT" | tail -n1)
+            
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✓ Production health check passed via SSH (HTTP $HTTP_CODE)"
               READY=1
               break
             fi
-            echo "Attempt $i/$MAX_ATTEMPTS: /healthz returned HTTP $HTTP_CODE via SSH; waiting..."
+            
+            echo "Attempt $i/$MAX_ATTEMPTS: /healthz returned HTTP '$HTTP_CODE' via SSH; waiting..."
+            echo "Curl output snippet:"
+            echo "$OUTPUT" | tail -n 10 | sed 's/^/  /'
             sleep 10
           done
 
@@ -1166,9 +1177,13 @@ jobs:
             echo "⚠ real-eval test failed, but continuing with validation..."
           }
           
-          # Run comprehensive E2E tests for dashboard validation
           npx playwright test comprehensive-e2e.spec.ts -g "AI Metrics" --reporter=list --timeout=120000 || {
             echo "⚠ AI Metrics dashboard tests had issues, but continuing..."
+          }
+          
+          # Run Grafana dashboard validation (Docker metrics)
+          npx playwright test grafana.spec.ts --reporter=list --timeout=60000 || {
+            echo "⚠ Grafana dashboard verification failed, but continuing..."
           }
           
           echo "=== Playwright E2E tests completed ==="
