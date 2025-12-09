@@ -447,6 +447,11 @@ jobs:
             make decrypt-keycloak-realm
           fi
           scp docker-compose.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
+          # Debug local file content
+          echo "=== Local content of app-https.conf ==="
+          cat deploy/nginx/prod-conf.d/app-https.conf
+          echo "=== End local content ==="
+
           scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
