@@ -701,7 +701,7 @@ jobs:
             export COMPOSE_FILE=docker-compose.prod.yml
 
             echo "Bringing up backend_${NEXT_COLOR}, worker, frontend, nginx, and oauth2-proxy services..."
-            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard keycloak || { echo "Docker compose up failed!"; exit 1; }
+            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard keycloak jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console || { echo "Docker compose up failed!"; exit 1; }
 
             echo "Waiting for backend_${NEXT_COLOR} service to be running..."
             for i in {1..30}; do
@@ -985,6 +985,24 @@ jobs:
               echo "⚠ Mailpit check failed"
             fi
             
+            echo ""
+            echo "Checking Jaeger..."
+            JAEGER=$(curl -sfk https://localhost/jaeger/search 2>/dev/null | head -c 100)
+            if [ -n "$JAEGER" ]; then
+              echo "✓ Jaeger accessible"
+            else
+              echo "⚠ Jaeger check failed"
+            fi
+
+            echo ""
+            echo "Checking Redpanda Console..."
+            REDPANDA=$(curl -sfk https://localhost/redpanda/ 2>/dev/null | head -c 100)
+            if [ -n "$REDPANDA" ]; then
+              echo "✓ Redpanda Console accessible"
+            else
+              echo "⚠ Redpanda Console check failed"
+            fi
+
             echo ""
             echo "✓ Service validation completed"
           '
