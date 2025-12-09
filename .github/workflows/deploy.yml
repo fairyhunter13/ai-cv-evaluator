@@ -713,7 +713,7 @@ jobs:
             done
 
             echo "Switching Nginx upstream to backend_${NEXT_COLOR}..."
-            sed -i "s|set \$backend_host \".*:8080\";|set \$backend_host \"backend_${NEXT_COLOR}:8080\";|" deploy/nginx/prod-nginx.conf
+            sed -i "s|set \$backend_host \".*:8080\";|set \$backend_host \"backend_${NEXT_COLOR}:8080\";|" deploy/nginx/prod-conf.d/app-https.conf
             echo "$NEXT_COLOR" > "$COLOR_FILE"
 
             echo "Reloading Nginx to pick up new upstream..."
