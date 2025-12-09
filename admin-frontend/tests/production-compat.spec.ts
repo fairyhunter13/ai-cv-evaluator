@@ -63,19 +63,23 @@ const loginViaSSO = async (page: Page): Promise<void> => {
     try {
       await gotoWithRetry(page, PORTAL_PATH);
       if (!isSSOLoginUrl(page.url())) return;
-      
+
       const usernameInput = page.locator('input#username');
       const passwordInput = page.locator('input#password');
-      
+
       await usernameInput.waitFor({ state: 'visible', timeout: 10000 });
       await usernameInput.fill(SSO_USERNAME);
       await passwordInput.fill(SSO_PASSWORD);
-      
+
       const submitButton = page.locator('button[type="submit"], input[type="submit"]');
       await submitButton.first().click();
-      
+
       await completeKeycloakProfileUpdate(page);
       await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
+
+      // Verify we're on the main portal page and it loaded correctly
+      expect(await page.title()).toBe('AI CV Evaluator Portal');
+      await expect(page.getByRole('heading', { name: 'AI CV Evaluator Portal' })).toBeVisible();
       return;
     } catch (err) {
       if (attempt === maxLoginAttempts) throw err;
