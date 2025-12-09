@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7-labs
 
-FROM golang:1.24-bookworm AS builder
+FROM golang:1.25-bookworm AS builder
 ENV GOTOOLCHAIN=auto
 WORKDIR /src
 COPY go.mod ./
