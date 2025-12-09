@@ -515,6 +515,23 @@ services:
           memory: 64M
           cpus: '0.05'
 
+  # cAdvisor - Container monitoring
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
   # Centralized logging with Loki
   loki:
     image: grafana/loki:3.0.0
