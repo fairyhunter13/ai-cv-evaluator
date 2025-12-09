@@ -18,8 +18,8 @@ server {
   }
 
   # Health passthrough (no SSO)
-  location /healthz { auth_request off; proxy_pass http://app_upstream/healthz; }
-  location /readyz  { auth_request off; proxy_pass http://app_upstream/readyz; }
+  location /healthz { auth_request off; proxy_pass http://$backend_host/healthz; }
+  location /readyz  { auth_request off; proxy_pass http://$backend_host/readyz; }
 
   # Forward-auth via oauth2-proxy for all routes except health
   auth_request /oauth2/auth;
@@ -87,7 +87,7 @@ server {
 
   # OpenAPI document for the backend API (reachable via portal "Open API" button).
   location /openapi.yaml {
-    proxy_pass http://app_upstream/openapi.yaml;
+    proxy_pass http://$backend_host/openapi.yaml;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -105,12 +105,12 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header X-Forwarded-User $auth_user;
     proxy_set_header X-Auth-Request-User $auth_user;
-    proxy_pass http://app_upstream;
+    proxy_pass http://$backend_host;
   }
 
   # Admin API
   location /admin/ {
-    proxy_pass http://app_upstream;
+    proxy_pass http://$backend_host;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -121,7 +121,7 @@ server {
 
   # Prometheus metrics endpoint (SSO-gated)
   location /metrics {
-    proxy_pass http://app_upstream/metrics;
+    proxy_pass http://$backend_host/metrics;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
