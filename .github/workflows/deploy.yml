@@ -739,7 +739,7 @@ jobs:
             # Wait for health check through Nginx
             echo "Waiting for application to be healthy via Nginx..."
             for i in {1..30}; do
-              if curl -f http://localhost/healthz > /dev/null 2>&1; then
+              if docker compose -f docker-compose.prod.yml exec -T nginx curl -fk https://localhost/healthz > /dev/null 2>&1; then
                 echo "Backend is healthy through Nginx"
                 break
               fi
@@ -750,7 +750,7 @@ jobs:
             # Check frontend is accessible
             echo "Checking frontend accessibility..."
             for i in {1..10}; do
-              if curl -f http://localhost/ > /dev/null 2>&1; then
+              if docker compose -f docker-compose.prod.yml exec -T nginx curl -fk https://localhost/ > /dev/null 2>&1; then
                 echo "Frontend is accessible"
                 break
               fi
@@ -778,6 +778,9 @@ jobs:
             fi
             # Use prod-conf.d which is mounted by docker-compose.prod.yml
             if [ -f deploy/nginx/prod-conf.d/app-https.conf.template ]; then
+              # Clean up old configs to avoid duplicates/conflicts
+              rm -f deploy/nginx/prod-conf.d/*.conf
+              
               cp -f deploy/nginx/prod-conf.d/app-https.conf.template deploy/nginx/prod-conf.d/app-https.conf
               if [ -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template ]; then
                 cp -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template deploy/nginx/prod-conf.d/app-http.conf
@@ -911,7 +914,7 @@ jobs:
           # Use SSH to check health locally on the server (bypasses Cloudflare WAF/bot protection)
           for i in $(seq 1 "$MAX_ATTEMPTS"); do
             # Capture detailed output to debug connection issues
-            OUTPUT=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sv -w "\n%{http_code}" http://localhost/healthz' 2>&1)
+            OUTPUT=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -skv -w "\n%{http_code}" https://localhost/healthz' 2>&1)
             HTTP_CODE=$(echo "$OUTPUT" | tail -n1)
             
             if [ "$HTTP_CODE" = "200" ]; then
@@ -937,15 +940,15 @@ jobs:
           
           # Health check via SSH
           echo "Checking /healthz..."
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -s http://localhost/healthz' && echo " ✓ /healthz OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sk https://localhost/healthz' && echo " ✓ /healthz OK"
           
           # Readiness check via SSH
           echo "Checking /readyz..."
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -s http://localhost/readyz' && echo " ✓ /readyz OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sk https://localhost/readyz' && echo " ✓ /readyz OK"
           
           # OpenAPI spec via SSH
           echo "Checking /openapi.yaml..."
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -s http://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sk https://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
 
       - name: Validate services via SSH (Grafana, Prometheus, Mailpit)
         run: |
