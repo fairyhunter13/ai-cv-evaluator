@@ -134,6 +134,7 @@ server {
 
   # Service variables for runtime DNS resolution (allows nginx to start before all services)
   set $frontend_upstream frontend:80;
+  set $oauth2_proxy_upstream oauth2-proxy-app:4180;
   set $grafana_upstream grafana:3000;
   set $prometheus_upstream prometheus:9090;
   set $jaeger_upstream jaeger:16686;
