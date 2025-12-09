@@ -696,7 +696,7 @@ jobs:
             export COMPOSE_FILE=docker-compose.prod.yml
 
             echo "Bringing up backend_${NEXT_COLOR}, worker, frontend, nginx, and oauth2-proxy services..."
-            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard keycloak
+            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard keycloak || { echo "Docker compose up failed!"; exit 1; }
 
             echo "Waiting for backend_${NEXT_COLOR} service to be running..."
             for i in {1..30}; do
@@ -911,7 +911,7 @@ jobs:
           # Use SSH to check health locally on the server (bypasses Cloudflare WAF/bot protection)
           for i in $(seq 1 "$MAX_ATTEMPTS"); do
             # Capture detailed output to debug connection issues
-            OUTPUT=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -svk -w "\n%{http_code}" https://localhost/healthz' 2>&1)
+            OUTPUT=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sv -w "\n%{http_code}" http://localhost/healthz' 2>&1)
             HTTP_CODE=$(echo "$OUTPUT" | tail -n1)
             
             if [ "$HTTP_CODE" = "200" ]; then
@@ -937,15 +937,15 @@ jobs:
           
           # Health check via SSH
           echo "Checking /healthz..."
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/healthz' && echo " ✓ /healthz OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -s http://localhost/healthz' && echo " ✓ /healthz OK"
           
           # Readiness check via SSH
           echo "Checking /readyz..."
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/readyz' && echo " ✓ /readyz OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -s http://localhost/readyz' && echo " ✓ /readyz OK"
           
           # OpenAPI spec via SSH
           echo "Checking /openapi.yaml..."
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'curl -sk https://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -s http://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
 
       - name: Validate services via SSH (Grafana, Prometheus, Mailpit)
         run: |
