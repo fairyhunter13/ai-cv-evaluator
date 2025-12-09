@@ -293,6 +293,8 @@ jobs:
                 return 0
               fi
               
+              
+              # Determine which color is currently active
               # Extract coverage from the latest commit
               coverage=$(echo "$codecov_response" | jq -r '.results[0].totals.coverage // empty')
               commit_sha=$(echo "$codecov_response" | jq -r '.results[0].commitid // empty')
@@ -687,6 +689,9 @@ jobs:
             echo "Current backend color: $CURRENT_COLOR"
             echo "Next backend color: $NEXT_COLOR"
 
+            # Clean up known conflicting file if it exists
+            rm -f deploy/nginx/prod-conf.d/app-http-redirect.conf
+
             # Update image tags in prod compose file to the release tag
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-server:.*|image: ghcr.io/${{ github.repository }}-server:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
             sed -i "s|image: ghcr.io/.*/ai-cv-evaluator-worker:.*|image: ghcr.io/${{ github.repository }}-worker:${{ needs.pre-deploy-checks.outputs.image_tag }}|g" docker-compose.prod.yml || true
@@ -730,11 +735,8 @@ jobs:
             sed -i "s|set \$backend_host \".*:8080\";|set \$backend_host \"backend_${NEXT_COLOR}:8080\";|" deploy/nginx/prod-conf.d/app-https.conf.template
             echo "$NEXT_COLOR" > "$COLOR_FILE"
 
-            echo "Reloading Nginx to pick up new upstream..."
-            if ! docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload; then
-              echo "Nginx reload failed, restarting container..."
-              docker compose -f docker-compose.prod.yml restart nginx
-            fi
+            echo "Restarting Nginx to pick up new upstream..."
+            docker compose -f docker-compose.prod.yml restart nginx
 
             # Wait for health check through Nginx
             echo "Waiting for application to be healthy via Nginx..."
@@ -794,11 +796,8 @@ jobs:
                 cp -f deploy/nginx/prod-conf.d/keycloak.conf.template deploy/nginx/prod-conf.d/keycloak.conf
               fi
               # Reload Nginx to apply changes - fail if configuration is invalid
-              if ! docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload; then
-                echo "Error: Failed to reload Nginx configuration!"
-                docker compose -f docker-compose.prod.yml logs --tail=50 nginx
-                exit 1
-              fi
+              # Restart Nginx to apply changes (reload resulted in lost listeners previously)
+              docker compose -f docker-compose.prod.yml restart nginx
             fi
           '
       
