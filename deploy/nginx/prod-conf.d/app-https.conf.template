@@ -2,6 +2,10 @@ server {
   listen 443 ssl http2 default_server;
   server_name ai-cv-evaluator.web.id 43.157.225.155 localhost;
 
+  # Dynamic DNS resolution for backend (blue/green deployment)
+  # Use variable to enable runtime DNS resolution - nginx won't fail if upstream is missing at startup
+  set $backend_host "backend_blue:8080";
+
   ssl_certificate /etc/letsencrypt/live/ai-cv-evaluator.web.id/fullchain.pem;
   ssl_certificate_key /etc/letsencrypt/live/ai-cv-evaluator.web.id/privkey.pem;
   ssl_trusted_certificate /etc/letsencrypt/live/ai-cv-evaluator.web.id/chain.pem;
