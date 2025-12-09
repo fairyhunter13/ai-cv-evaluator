@@ -434,7 +434,7 @@ jobs:
 
       - name: Create deployment directory
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "rm -rf ~/ai-cv-evaluator/deploy && mkdir -p ~/ai-cv-evaluator/deploy"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -rf ~/ai-cv-evaluator/deploy && mkdir -p ~/ai-cv-evaluator/deploy && sudo chown -R \$(whoami):\$(whoami) ~/ai-cv-evaluator/deploy"
       
       - name: Decrypt production .env and upload compose/configs
         run: |
