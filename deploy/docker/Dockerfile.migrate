@@ -1,5 +1,5 @@
 # Migration container for database migrations
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install goose and other dependencies
 RUN apk add --no-cache git ca-certificates tzdata
