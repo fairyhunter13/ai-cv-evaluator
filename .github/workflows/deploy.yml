@@ -451,6 +451,15 @@ jobs:
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           fi
+      
+      - name: Debug file content on server
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            ls -la ~/ai-cv-evaluator/deploy/nginx/prod-conf.d/
+            echo "=== Content of app-https.conf ==="
+            cat ~/ai-cv-evaluator/deploy/nginx/prod-conf.d/app-https.conf || echo "File not found"
+            echo "=== End content ==="
+          '
       - name: Ensure Docker is available on server
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
