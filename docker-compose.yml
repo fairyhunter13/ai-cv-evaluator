@@ -259,9 +259,11 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
     command:
-      - "--housekeeping_interval=15s"
+      - "--housekeeping_interval=30s"
+      - "--max_housekeeping_interval=35s"
+      - "--global_housekeeping_interval=2m"
       - "--docker_only=true"
-      - "--disable_metrics=percpu,sched,tcp,udp"
+      - "--disable_metrics=percpu,sched,tcp,udp,advtcp"
       - "--store_container_labels=true"
       - "--whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project"
     restart: unless-stopped
