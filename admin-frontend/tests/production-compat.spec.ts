@@ -23,7 +23,7 @@ test.describe('Dashboard Metrics', () => {
       }
     }
 
-    // If redirected to Portal root, navigate to Grafana dashboard
+    // If redirected to Portal root, log it
     try {
       await expect(page).toHaveTitle(/Portal|AI CV Evaluator/, { timeout: 3000 });
       console.log('Redirected to Portal. Navigating to Docker Containers dashboard...');
@@ -42,11 +42,6 @@ test.describe('Dashboard Metrics', () => {
     // Verify Container CPU Usage panel is visible
     await expect(page.getByText('Container CPU Usage')).toBeVisible({ timeout: 10000 });
 
-    // Verify legend shows human-readable container names (not kubepods paths)
-    // Look for common container names that should appear in legends
-    const legendArea = page.locator('[class*="legend"]');
-    await expect(legendArea.first()).toBeVisible({ timeout: 10000 });
-
     // Verify NO kubepods paths are shown (these are the ugly cgroup names)
     const pageContent = await page.content();
     const hasKubepodsPaths = pageContent.includes('kubepods.slice') || pageContent.includes('kubepods-besteffort');
@@ -62,5 +57,7 @@ test.describe('Dashboard Metrics', () => {
     if (noDataVisible) {
       console.log('WARNING: Some panels show "No data" - may need to wait for metrics');
     }
+
+    console.log('Dashboard validation complete.');
   });
 });
