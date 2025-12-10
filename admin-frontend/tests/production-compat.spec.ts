@@ -55,25 +55,38 @@ test.describe('Dashboard Metrics', () => {
       console.log('SUCCESS: No kubepods cgroup paths found');
     }
 
-    // INFO: Log legend items for debugging/info
-    // This attempts to find common legend elements in Grafana, which often appear as text within specific SVG/HTML structures.
-    // This is not a strict check, just for informational purposes.
+    // STRICT CHECK: Verify human-readable service names are present
+    // We expect names like "backend", "frontend", "db" to appear in the legend
+    const expectedServices = ['backend', 'frontend', 'db'];
+    const missingServices = [];
+
+    // Legends are now clean: "backend" vs "085936d800b2"
     const legends = await page.locator('.graph-legend-table .graph-legend-series-name').allTextContents();
-    if (legends.length > 0) {
-      console.log(`INFO: Found ${legends.length} legend items: ${legends.join(', ')}`);
+    console.log(`INFO: Found legends: ${legends.join(', ')}`);
+
+    for (const service of expectedServices) {
+      if (!legends.some(l => l.includes(service))) {
+        missingServices.push(service);
+      }
+    }
+
+    if (missingServices.length > 0) {
+      console.error(`ERROR: Expected service names not found: ${missingServices.join(', ')}`);
+      // Fail the test if we are missing names - this is the core requirement
+      expect(missingServices.length).toBe(0);
     } else {
-      console.log('INFO: No legend items found on the dashboard.');
+      console.log('SUCCESS: Found expected service names in legend (backend, frontend, db)');
     }
 
     // Verify new panels are visible
-    await expect(page.getByText('Container Uptime')).toBeVisible({ timeout: 10000 });
-    // "Container Restarts" might be partially hidden or wrapping, so we check loosely or skip strict visibility if it's below the fold
-    // But let's check if the text exists in the page
-    const hasRestartsPanel = await page.getByText('Container Restarts').count() > 0;
-    if (hasRestartsPanel) {
-      console.log('SUCCESS: "Container Restarts" panel found');
-    } else {
-      console.log('WARNING: "Container Restarts" panel NOT found');
+    const newPanels = ['Container Uptime', 'Container Restarts', 'Container Memory Utilization'];
+    for (const panel of newPanels) {
+      const count = await page.getByText(panel).count();
+      if (count > 0) {
+        console.log(`SUCCESS: "${panel}" panel found`);
+      } else {
+        console.log(`WARNING: "${panel}" panel NOT found`);
+      }
     }
 
     // STRICT CHECK: Verify NO "No data" messages are visible
