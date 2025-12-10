@@ -324,6 +324,21 @@ services:
           memory: 512M
           cpus: '0.25'
 
+  # Docker Meta Exporter - Helper for Friendly Names
+  meta-exporter:
+    build: ./deploy/exporter
+    container_name: ai-cv-evaluator-meta-exporter
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.2'
+
   grafana:
     image: grafana/grafana:11.1.0
     volumes:
