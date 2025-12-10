@@ -578,11 +578,6 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
   // Just verify we're on Grafana by checking the title.
   await expect(page).toHaveTitle(/Docker Containers|Grafana/i, { timeout: 15000 });
 
-  // STRICT CHECK: Verify new panels are visible
-  // Scroll down to ensure lazy-loaded panels are rendered
-  await page.mouse.wheel(0, 1000);
-  await page.waitForTimeout(1000); // Wait for scroll to settle
-
   const newPanels = [
     /Container Uptime/,
     /Restarts/,
@@ -591,10 +586,33 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
     /Total Container Memory/,
     /Container CPU %/,
     /Container Memory %/,
-    /Resource Usage vs Host/
+    /Resource Usage vs Host/,
+    /Scaling Headroom: Memory/,
+    /Scaling Headroom: CPU/
   ];
+
   for (const panelPattern of newPanels) {
-    await expect(page.getByText(panelPattern).first()).toBeVisible({ timeout: 10000 });
+    let found = false;
+    // Reset scroll to top
+    await page.evaluate(() => {
+      const scrollable = document.querySelector('.scrollbar-view') || document.body;
+      scrollable.scrollTop = 0;
+    });
+
+    // Search loop: Scan, then scroll mouse wheel down
+    const maxAttempts = 10;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        await expect(page.getByText(panelPattern).first()).toBeVisible({ timeout: 500 });
+        found = true;
+        break; // Found it!
+      } catch (e) {
+        // Not found, scroll down using mouse wheel
+        await page.mouse.wheel(0, 600);
+        await page.waitForTimeout(300);
+      }
+    }
+    expect(found, `Panel matching ${panelPattern} not found in dashboard`).toBeTruthy();
   }
 
   // STRICT CHECK: Verify NO "No data" messages are visible

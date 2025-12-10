@@ -549,6 +549,132 @@
             ],
             "title": "Container Resource Usage vs Host (Over Time)",
             "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Visualize memory headroom: Total Host RAM vs Host Used vs Docker Used",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Bytes",
+                        "axisPlacement": "auto",
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        }
+                    },
+                    "unit": "decbytes",
+                    "min": 0
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 36
+            },
+            "id": 16,
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "lastNotNull",
+                        "max"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "node_memory_MemTotal_bytes",
+                    "legendFormat": "Host Total Capacity",
+                    "refId": "A"
+                },
+                {
+                    "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+                    "legendFormat": "Host Used (System + Docker)",
+                    "refId": "B"
+                },
+                {
+                    "expr": "sum(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"})",
+                    "legendFormat": "Docker Container Used",
+                    "refId": "C"
+                }
+            ],
+            "title": "Scaling Headroom: Memory",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Visualize CPU headroom: Host Total Load vs Docker Load",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Percent",
+                        "axisPlacement": "auto",
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        }
+                    },
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 100
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 36
+            },
+            "id": 17,
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "lastNotNull",
+                        "max"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "(1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))) * 100",
+                    "legendFormat": "Host Total CPU Utilization",
+                    "refId": "A"
+                },
+                {
+                    "expr": "sum(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m])) * 100",
+                    "legendFormat": "Docker Container CPU Load",
+                    "refId": "B"
+                }
+            ],
+            "title": "Scaling Headroom: CPU",
+            "type": "timeseries"
         }
     ],
     "schemaVersion": 30,
