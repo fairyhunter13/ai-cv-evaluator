@@ -28,45 +28,18 @@
                     "custom": {
                         "axisLabel": "",
                         "axisPlacement": "auto",
-                        "barAlignment": 0,
                         "drawStyle": "line",
                         "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                            "type": "linear"
-                        },
                         "showPoints": "auto",
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
                             "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                            "mode": "off"
                         }
                     },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
-                            }
-                        ]
-                    },
+                    "min": 0,
                     "unit": "percent"
                 },
                 "overrides": []
@@ -80,7 +53,6 @@
             "id": 2,
             "options": {
                 "legend": {
-                    "calcs": [],
                     "displayMode": "list",
                     "placement": "bottom"
                 },
@@ -91,8 +63,8 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m]), \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container) * 100",
-                    "legendFormat": "{{container}}",
+                    "expr": "sum(label_replace(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m]), \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) * 100",
+                    "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
             ],
@@ -109,36 +81,17 @@
                     "custom": {
                         "axisLabel": "Bytes",
                         "axisPlacement": "auto",
-                        "barAlignment": 0,
                         "drawStyle": "line",
                         "fillOpacity": 10,
-                        "gradientMode": "none",
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                            "type": "linear"
-                        },
                         "showPoints": "auto",
-                        "spanNulls": false,
                         "stacking": {
                             "group": "A",
                             "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                            "mode": "off"
                         }
                     },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    },
+                    "min": 0,
                     "unit": "decbytes"
                 },
                 "overrides": []
@@ -152,7 +105,6 @@
             "id": 4,
             "options": {
                 "legend": {
-                    "calcs": [],
                     "displayMode": "list",
                     "placement": "bottom"
                 },
@@ -163,12 +115,60 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"}, \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container)",
-                    "legendFormat": "{{container}}",
+                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
+                    "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
             ],
             "title": "Container Memory Usage",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Percent",
+                        "axisPlacement": "auto",
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "showPoints": "auto"
+                    },
+                    "max": 100,
+                    "min": 0,
+                    "unit": "percent"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 9
+            },
+            "id": 10,
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single",
+                    "sort": "none"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) / sum(label_replace(container_spec_memory_limit_bytes{id=~\"/system.slice/docker-.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) * 100",
+                    "legendFormat": "{{com_docker_compose_service}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Container Memory Utilization",
             "type": "timeseries"
         },
         {
@@ -197,7 +197,7 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 0,
+                "x": 12,
                 "y": 9
             },
             "id": 8,
@@ -212,8 +212,8 @@
             },
             "targets": [
                 {
-                    "expr": "time() - min(label_replace(container_start_time_seconds{id=~\"/system.slice/docker-.*\"}, \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container)",
-                    "legendFormat": "{{container}}",
+                    "expr": "time() - min(label_replace(container_start_time_seconds{id=~\"/system.slice/docker-.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
+                    "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
             ],
@@ -240,8 +240,8 @@
             "gridPos": {
                 "h": 8,
                 "w": 12,
-                "x": 12,
-                "y": 9
+                "x": 0,
+                "y": 17
             },
             "id": 9,
             "options": {
@@ -255,8 +255,8 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(changes(container_start_time_seconds{id=~\"/system.slice/docker-.*\"}[1h]), \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container)",
-                    "legendFormat": "{{container}}",
+                    "expr": "sum(label_replace(changes(container_start_time_seconds{id=~\"/system.slice/docker-.*\"}[1h]), \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
+                    "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
             ],
