@@ -701,7 +701,7 @@ jobs:
             export COMPOSE_FILE=docker-compose.prod.yml
 
             echo "Bringing up backend_${NEXT_COLOR}, worker, frontend, nginx, and oauth2-proxy services..."
-            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard keycloak jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console || { echo "Docker compose up failed!"; exit 1; }
+            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard keycloak jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
 
             echo "Waiting for backend_${NEXT_COLOR} service to be running..."
             for i in {1..30}; do
