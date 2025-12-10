@@ -529,7 +529,7 @@ services:
     command:
       - "--housekeeping_interval=15s"
       - "--store_container_labels=true"
-      - "--whitelisted_container_labels=com.docker.compose.service,com.docker.compose.project"
+
     deploy:
       resources:
         limits:
