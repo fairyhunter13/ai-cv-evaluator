@@ -375,6 +375,180 @@
             ],
             "title": "Total Container Memory",
             "type": "gauge"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Container CPU usage as percentage of total host CPU capacity",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 50,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 80,
+                                "color": "red"
+                            }
+                        ]
+                    },
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 100
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 0,
+                "y": 22
+            },
+            "id": 13,
+            "options": {
+                "reduceOptions": {
+                    "values": false,
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": ""
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m])) / count(count by (cpu)(node_cpu_seconds_total{mode=\"idle\"})) * 100",
+                    "legendFormat": "Container CPU % of Host",
+                    "refId": "A"
+                }
+            ],
+            "title": "Container CPU % of Host",
+            "type": "gauge"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Container memory usage as percentage of total host memory",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 60,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 80,
+                                "color": "red"
+                            }
+                        ]
+                    },
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 100
+                }
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 12,
+                "x": 12,
+                "y": 22
+            },
+            "id": 14,
+            "options": {
+                "reduceOptions": {
+                    "values": false,
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": ""
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "targets": [
+                {
+                    "expr": "sum(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"}) / node_memory_MemTotal_bytes * 100",
+                    "legendFormat": "Container Memory % of Host",
+                    "refId": "A"
+                }
+            ],
+            "title": "Container Memory % of Host",
+            "type": "gauge"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Timeseries comparison of container vs host resource usage",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "drawStyle": "line",
+                        "fillOpacity": 20,
+                        "lineInterpolation": "smooth",
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        }
+                    },
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 100
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 28
+            },
+            "id": 15,
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "multi",
+                    "sort": "desc"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m])) / count(count by (cpu)(node_cpu_seconds_total{mode=\"idle\"})) * 100",
+                    "legendFormat": "Container CPU %",
+                    "refId": "A"
+                },
+                {
+                    "expr": "sum(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"}) / node_memory_MemTotal_bytes * 100",
+                    "legendFormat": "Container Memory %",
+                    "refId": "B"
+                }
+            ],
+            "title": "Container Resource Usage vs Host (Over Time)",
+            "type": "timeseries"
         }
     ],
     "schemaVersion": 30,
