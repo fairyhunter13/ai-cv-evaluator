@@ -276,6 +276,19 @@ services:
       - "8000:8000"
     restart: unless-stopped
 
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+    restart: unless-stopped
+
   loki:
     image: grafana/loki:3.0.0
     command: ["-config.file=/etc/loki/config.yml"]
@@ -339,6 +352,16 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${ADMIN_USERNAME}
       KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # Optimization: Limit JVM memory usage
+      JAVA_OPTS_APPEND: "-Xms128m -Xmx512m -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=256m"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
     volumes:
       - ./deploy/keycloak/realm-aicv.dev.json:/opt/keycloak/data/import/realm-aicv.json:ro
     ports:
