@@ -36,3 +36,6 @@ playwright-e2e-logs-artifact/
 submissions/admin-frontend/test-results/
 submissions/
 admin-frontend/test-results/
+
+# Exporter binary
+deploy/exporter/exporter
