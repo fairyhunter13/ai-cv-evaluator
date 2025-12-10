@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Dashboard Metrics', () => {
   test('Grafana should load and display dashboards', async ({ page }) => {
     // Go to Grafana
-    await page.goto('https://dashboard.ai-cv-evaluator.web.id/grafana/');
+    await page.goto('https://ai-cv-evaluator.web.id/grafana/');
 
     // Handle Keycloak login if redirected there
     const pageTitle = await page.title();
@@ -27,7 +27,7 @@ test.describe('Dashboard Metrics', () => {
     try {
       await expect(page).toHaveTitle(/Portal|AI CV Evaluator/, { timeout: 3000 });
       console.log('Redirected to Portal root. Navigating back to Grafana...');
-      await page.goto('https://dashboard.ai-cv-evaluator.web.id/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s');
+      await page.goto('https://ai-cv-evaluator.web.id/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s');
     } catch (e) {
       // Ignore
     }
@@ -39,7 +39,7 @@ test.describe('Dashboard Metrics', () => {
     console.log('Grafana accessible. Attempting to load Dashboard...');
 
     // Go to Docker Containers Dashboard
-    await page.goto('https://dashboard.ai-cv-evaluator.web.id/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s');
+    await page.goto('https://ai-cv-evaluator.web.id/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s');
 
     // Check if loaded (Title or Panel)
     try {
