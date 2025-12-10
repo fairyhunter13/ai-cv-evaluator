@@ -91,8 +91,8 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m]), \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container) * 100",
-                    "legendFormat": "{{container}}",
+                    "expr": "sum(rate(container_cpu_usage_seconds_total{name!=\"\"}[1m]) * on(name) group_left(com_docker_compose_service) container_label_com_docker_compose_service) by (com_docker_compose_service) * 100",
+                    "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
             ],
@@ -107,17 +107,12 @@
                         "mode": "palette-classic"
                     },
                     "custom": {
-                        "axisLabel": "",
+                        "axisLabel": "Bytes",
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
                         "fillOpacity": 10,
                         "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
@@ -141,22 +136,18 @@
                             {
                                 "color": "green",
                                 "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
                             }
                         ]
                     },
-                    "unit": "bytes"
+                    "unit": "decbytes"
                 },
                 "overrides": []
             },
             "gridPos": {
-                "h": 9,
+                "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 0
+                "y": 1
             },
             "id": 4,
             "options": {
@@ -172,12 +163,104 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"}, \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container)",
-                    "legendFormat": "{{container}}",
+                    "expr": "sum(container_memory_usage_bytes{name!=\"\"} * on(name) group_left(com_docker_compose_service) container_label_com_docker_compose_service) by (com_docker_compose_service)",
+                    "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
             ],
             "title": "Container Memory Usage",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Seconds",
+                        "axisPlacement": "auto",
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "lineInterpolation": "stepAfter",
+                        "showPoints": "auto",
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        }
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 9
+            },
+            "id": 8,
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "time() - min(container_start_time_seconds{name!=\"\"} * on(name) group_left(com_docker_compose_service) container_label_com_docker_compose_service) by (com_docker_compose_service)",
+                    "legendFormat": "{{com_docker_compose_service}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Container Uptime",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "Restarts",
+                        "axisPlacement": "auto",
+                        "drawStyle": "bars",
+                        "fillOpacity": 80,
+                        "showPoints": "auto"
+                    },
+                    "unit": "none"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 9
+            },
+            "id": 9,
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "increase(container_start_time_seconds{name!=\"\"}[1h]) * on(name) group_left(com_docker_compose_service) container_label_com_docker_compose_service",
+                    "legendFormat": "{{com_docker_compose_service}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Container Restarts (Last 1h)",
             "type": "timeseries"
         }
     ],
