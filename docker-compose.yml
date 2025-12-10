@@ -355,7 +355,7 @@ services:
       KEYCLOAK_ADMIN: ${ADMIN_USERNAME}
       KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       # Optimization: Limit JVM memory usage
-      JAVA_OPTS_APPEND: "-Xms128m -Xmx512m -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=256m"
+      JAVA_OPTS_APPEND: "-Xms128m -Xmx384m -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=256m"
     deploy:
       resources:
         limits:
