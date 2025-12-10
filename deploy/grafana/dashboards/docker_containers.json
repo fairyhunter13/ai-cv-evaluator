@@ -675,6 +675,133 @@
             ],
             "title": "Scaling Headroom: CPU",
             "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Compare Host Network Traffic vs Aggregate Container Traffic",
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "axisLabel": "Bytes/sec",
+                        "drawStyle": "line",
+                        "lineInterpolation": "linear",
+                        "lineWidth": 2,
+                        "showPoints": "never"
+                    },
+                    "unit": "Bps"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 44
+            },
+            "id": 18,
+            "options": {
+                "legend": {
+                    "displayMode": "table",
+                    "placement": "right",
+                    "calcs": [
+                        "mean",
+                        "max"
+                    ]
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "rate(node_network_receive_bytes_total{device!~\"lo\"}[1m])",
+                    "legendFormat": "Host Inbound ({{device}})",
+                    "refId": "A"
+                },
+                {
+                    "expr": "sum(rate(container_network_receive_bytes_total{id=~\"/system.slice/docker-.*\"}[1m]))",
+                    "legendFormat": "All Containers Inbound",
+                    "refId": "B"
+                },
+                {
+                    "expr": "rate(node_network_transmit_bytes_total{device!~\"lo\"}[1m])",
+                    "legendFormat": "Host Outbound ({{device}})",
+                    "refId": "C"
+                },
+                {
+                    "expr": "sum(rate(container_network_transmit_bytes_total{id=~\"/system.slice/docker-.*\"}[1m]))",
+                    "legendFormat": "All Containers Outbound",
+                    "refId": "D"
+                }
+            ],
+            "title": "Network Traffic: Host vs Containers",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Available Memory vs Total vs Used",
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "axisLabel": "Bytes",
+                        "drawStyle": "line",
+                        "fillOpacity": 10
+                    },
+                    "unit": "decbytes"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 52
+            },
+            "id": 19,
+            "targets": [
+                {
+                    "expr": "node_memory_MemAvailable_bytes",
+                    "legendFormat": "Host Available Memory",
+                    "refId": "A"
+                },
+                {
+                    "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+                    "legendFormat": "Host Active/Used Memory",
+                    "refId": "B"
+                }
+            ],
+            "title": "Host Memory Analysis",
+            "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "description": "Per-Core CPU Usage on Host",
+            "fieldConfig": {
+                "defaults": {
+                    "custom": {
+                        "axisLabel": "Percent",
+                        "drawStyle": "line",
+                        "fillOpacity": 0
+                    },
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 100
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 52
+            },
+            "id": 20,
+            "targets": [
+                {
+                    "expr": "100 - (avg by (cpu) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+                    "legendFormat": "Core {{cpu}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "CPU Core Usage Breakdown",
+            "type": "timeseries"
         }
     ],
     "schemaVersion": 30,
