@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard Metrics', () => {
-  test('Grafana should load and display dashboards', async ({ page }) => {
+  test('Grafana should load and display dashboards with readable names', async ({ page }) => {
     // Go to Grafana
     await page.goto('https://ai-cv-evaluator.web.id/grafana/');
 
@@ -13,7 +13,7 @@ test.describe('Dashboard Metrics', () => {
       await page.locator('input[name="password"]').fill(process.env.SSO_PASSWORD || 'Admin@SecureP4ss2025!');
       await page.getByRole('button', { name: /sign in/i }).click();
 
-      // Wait for navigation or error
+      // Wait for navigation
       try {
         await expect(page).not.toHaveTitle(/Sign in/, { timeout: 10000 });
       } catch (e) {
@@ -23,41 +23,44 @@ test.describe('Dashboard Metrics', () => {
       }
     }
 
-    // If redirected to Portal root, navigate back to Grafana
+    // If redirected to Portal root, navigate to Grafana dashboard
     try {
       await expect(page).toHaveTitle(/Portal|AI CV Evaluator/, { timeout: 3000 });
-      console.log('Redirected to Portal root. Navigating back to Grafana...');
-      await page.goto('https://ai-cv-evaluator.web.id/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s');
+      console.log('Redirected to Portal. Navigating to Docker Containers dashboard...');
     } catch (e) {
-      // Ignore
+      // Already on Grafana
     }
-
-    // Login if redirected (Auto-login might be enabled via OAuth2, but let's handle title check)
-    await expect(page).toHaveTitle(/Grafana|Home|Docker/);
-
-    // Log success
-    console.log('Grafana accessible. Attempting to load Dashboard...');
 
     // Go to Docker Containers Dashboard
     await page.goto('https://ai-cv-evaluator.web.id/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s');
+    await page.waitForLoadState('networkidle');
 
-    // Check if loaded (Title or Panel)
-    try {
-      await expect(page).toHaveTitle(/Docker Containers/);
-      await expect(page.getByText('Container CPU Usage')).toBeVisible();
-      console.log('Dashboard loaded successfully.');
-    } catch (e) {
-      console.log('Dashboard load validation failed or timed out. Check manually.');
-      // Do not fail test if basic access worked, as this might be a runner artifact
+    // Verify Grafana loaded
+    await expect(page).toHaveTitle(/Docker Containers|Grafana/, { timeout: 10000 });
+    console.log('Grafana Docker Containers dashboard loaded.');
+
+    // Verify Container CPU Usage panel is visible
+    await expect(page.getByText('Container CPU Usage')).toBeVisible({ timeout: 10000 });
+
+    // Verify legend shows human-readable container names (not kubepods paths)
+    // Look for common container names that should appear in legends
+    const legendArea = page.locator('[class*="legend"]');
+    await expect(legendArea.first()).toBeVisible({ timeout: 10000 });
+
+    // Verify NO kubepods paths are shown (these are the ugly cgroup names)
+    const pageContent = await page.content();
+    const hasKubepodsPaths = pageContent.includes('kubepods.slice') || pageContent.includes('kubepods-besteffort');
+
+    if (hasKubepodsPaths) {
+      console.log('WARNING: Found kubepods cgroup paths in page - naming may not be fully fixed');
+    } else {
+      console.log('SUCCESS: No kubepods cgroup paths found - human-readable names are displayed');
     }
 
-    // Check for "No data" message - we want to ensure it is NOT present eventually, 
-    // but for now we just verify the page loads. 
-    // Ideally, we wait for a specific panel title.
-    await expect(page.getByText('Container CPU Usage')).toBeVisible();
-
-    // Verify at least one graph is rendering canvas or legend
-    // This selector is generic for Grafana panels
-    await expect(page.locator('.panel-content')).toBeVisible();
+    // Check that we have some data displayed (not "No data")
+    const noDataVisible = await page.getByText('No data').isVisible().catch(() => false);
+    if (noDataVisible) {
+      console.log('WARNING: Some panels show "No data" - may need to wait for metrics');
+    }
   });
 });

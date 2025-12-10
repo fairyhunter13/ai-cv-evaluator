@@ -91,7 +91,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(rate(container_cpu_usage_seconds_total[1m])) by (id, name, image) * 100",
+                    "expr": "sum(rate(container_cpu_usage_seconds_total{name!=''}[1m])) by (name) * 100",
                     "legendFormat": "{{name}}",
                     "refId": "A"
                 }
@@ -172,7 +172,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(container_memory_usage_bytes) by (id, name, image)",
+                    "expr": "sum(container_memory_usage_bytes{name!=''}) by (name)",
                     "legendFormat": "{{name}}",
                     "refId": "A"
                 }
@@ -253,12 +253,12 @@
             },
             "targets": [
                 {
-                    "expr": "sum(rate(container_network_receive_bytes_total[1m])) by (id, name, image)",
+                    "expr": "sum(rate(container_network_receive_bytes_total{name!=''}[1m])) by (name)",
                     "legendFormat": "{{name}} RX",
                     "refId": "A"
                 },
                 {
-                    "expr": "sum(rate(container_network_transmit_bytes_total[1m])) by (id, name, image)",
+                    "expr": "sum(rate(container_network_transmit_bytes_total{name!=''}[1m])) by (name)",
                     "legendFormat": "{{name}} TX",
                     "refId": "B"
                 }
