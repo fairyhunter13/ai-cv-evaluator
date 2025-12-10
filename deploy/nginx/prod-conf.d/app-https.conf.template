@@ -37,7 +37,7 @@ server {
   # Use variable to allow nginx to start even if oauth2-proxy-app isn't ready yet
   set $oauth2_proxy_app oauth2-proxy-app:4180;
   location = /oauth2/auth {
-    proxy_pass http://$oauth2_proxy_app/oauth2/auth;
+    proxy_pass http://$oauth2_proxy_app;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Scheme $scheme;
@@ -55,7 +55,7 @@ server {
     limit_req zone=oauth2_login_zone burst=20 delay=10;
     limit_req_status 429;
     limit_req_log_level warn;
-    proxy_pass http://$oauth2_proxy_app/oauth2/$is_args$args;
+    proxy_pass http://$oauth2_proxy_app;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -68,7 +68,7 @@ server {
     limit_req zone=oauth2_callback_zone burst=5 nodelay;
     limit_req_status 429;
     limit_req_log_level warn;
-    proxy_pass http://$oauth2_proxy_app/oauth2/callback$is_args$args;
+    proxy_pass http://$oauth2_proxy_app;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -125,7 +125,7 @@ server {
 
   # Prometheus metrics endpoint (SSO-gated)
   location /metrics {
-    proxy_pass http://$backend_host/metrics;
+    proxy_pass http://$backend_host;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -236,7 +236,8 @@ server {
   # Redpanda embedded.js also needs SSO bypass when requested via /redpanda/ base
   location = /redpanda/embedded.js {
     auth_request off;
-    proxy_pass http://$redpanda_upstream/embedded.js;
+    rewrite ^/redpanda/(.*) /$1 break;
+    proxy_pass http://$redpanda_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -256,7 +257,7 @@ server {
   # Redpanda Console static assets - bypass SSO (for root paths)
   location /static/js/ {
     auth_request off;
-    proxy_pass http://$redpanda_upstream/static/js/;
+    proxy_pass http://$redpanda_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -265,7 +266,7 @@ server {
 
   location /static/css/ {
     auth_request off;
-    proxy_pass http://$redpanda_upstream/static/css/;
+    proxy_pass http://$redpanda_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -274,7 +275,7 @@ server {
 
   location = /embedded.js {
     auth_request off;
-    proxy_pass http://$redpanda_upstream/embedded.js;
+    proxy_pass http://$redpanda_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -284,7 +285,7 @@ server {
   # Redpanda Console API endpoints
   location /api/ {
     auth_request off;
-    proxy_pass http://$redpanda_upstream/api/;
+    proxy_pass http://$redpanda_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
