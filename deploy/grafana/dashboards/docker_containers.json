@@ -262,6 +262,119 @@
             ],
             "title": "Container Restarts (Last 1h)",
             "type": "timeseries"
+        },
+        {
+            "datasource": "Prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 50,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 80,
+                                "color": "red"
+                            }
+                        ]
+                    },
+                    "unit": "percent",
+                    "min": 0,
+                    "max": 100
+                }
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 12,
+                "y": 17
+            },
+            "id": 11,
+            "options": {
+                "reduceOptions": {
+                    "values": false,
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": ""
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m])) * 100",
+                    "legendFormat": "Total CPU",
+                    "refId": "A"
+                }
+            ],
+            "title": "Total Server CPU Usage",
+            "type": "gauge"
+        },
+        {
+            "datasource": "Prometheus",
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "thresholds"
+                    },
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "value": null,
+                                "color": "green"
+                            },
+                            {
+                                "value": 60,
+                                "color": "yellow"
+                            },
+                            {
+                                "value": 80,
+                                "color": "red"
+                            }
+                        ]
+                    },
+                    "unit": "decbytes",
+                    "min": 0
+                }
+            },
+            "gridPos": {
+                "h": 5,
+                "w": 6,
+                "x": 18,
+                "y": 17
+            },
+            "id": 12,
+            "options": {
+                "reduceOptions": {
+                    "values": false,
+                    "calcs": [
+                        "lastNotNull"
+                    ],
+                    "fields": ""
+                },
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true
+            },
+            "targets": [
+                {
+                    "expr": "sum(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"})",
+                    "legendFormat": "Total Memory",
+                    "refId": "A"
+                }
+            ],
+            "title": "Total Container Memory",
+            "type": "gauge"
         }
     ],
     "schemaVersion": 30,
