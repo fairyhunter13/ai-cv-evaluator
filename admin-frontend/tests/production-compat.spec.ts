@@ -2,12 +2,14 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard Metrics', () => {
   test('Grafana should load and display dashboards with data', async ({ page }) => {
+    const baseUrl = process.env.E2E_BASE_URL || 'https://ai-cv-evaluator.web.id';
+
     // Go to Grafana
-    await page.goto('https://ai-cv-evaluator.web.id/grafana/');
+    await page.goto(`${baseUrl}/grafana/`);
 
     // Handle Keycloak login if redirected there
     const pageTitle = await page.title();
-    if (pageTitle.includes('Sign in')) {
+    if (pageTitle.toLowerCase().includes('sign in')) {
       console.log('Logging in via Keycloak...');
       await page.getByLabel('Username').fill(process.env.SSO_USERNAME || 'admin');
       await page.locator('input[name="password"]').fill(process.env.SSO_PASSWORD || 'Admin@SecureP4ss2025!');
@@ -32,7 +34,7 @@ test.describe('Dashboard Metrics', () => {
     }
 
     // Go to Docker Containers Dashboard
-    await page.goto('https://ai-cv-evaluator.web.id/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s');
+    await page.goto(`${baseUrl}/grafana/d/docker-monitoring/docker-containers?orgId=1&refresh=5s`);
     await page.waitForLoadState('networkidle');
 
     // Verify Grafana loaded
