@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard Metrics', () => {
-  test('Grafana should load and display dashboards with readable names', async ({ page }) => {
+  test('Grafana should load and display dashboards with data', async ({ page }) => {
     // Go to Grafana
     await page.goto('https://ai-cv-evaluator.web.id/grafana/');
 
@@ -42,6 +42,9 @@ test.describe('Dashboard Metrics', () => {
     // Verify Container CPU Usage panel is visible
     await expect(page.getByText('Container CPU Usage')).toBeVisible({ timeout: 10000 });
 
+    // Wait for data to load (give Prometheus time to return results)
+    await page.waitForTimeout(3000);
+
     // Verify NO kubepods paths are shown (these are the ugly cgroup names)
     const pageContent = await page.content();
     const hasKubepodsPaths = pageContent.includes('kubepods.slice') || pageContent.includes('kubepods-besteffort');
@@ -49,13 +52,20 @@ test.describe('Dashboard Metrics', () => {
     if (hasKubepodsPaths) {
       console.log('WARNING: Found kubepods cgroup paths in page - naming may not be fully fixed');
     } else {
-      console.log('SUCCESS: No kubepods cgroup paths found - human-readable names are displayed');
+      console.log('SUCCESS: No kubepods cgroup paths found');
     }
 
-    // Check that we have some data displayed (not "No data")
-    const noDataVisible = await page.getByText('No data').isVisible().catch(() => false);
-    if (noDataVisible) {
-      console.log('WARNING: Some panels show "No data" - may need to wait for metrics');
+    // STRICT CHECK: Verify NO "No data" messages are visible
+    const noDataElements = await page.getByText('No data').all();
+    const noDataCount = noDataElements.length;
+
+    if (noDataCount > 0) {
+      console.log(`FAIL: Found ${noDataCount} "No data" messages in dashboard panels`);
+      // Take screenshot for debugging
+      await page.screenshot({ path: 'no-data-failure.png' });
+      expect(noDataCount, 'Dashboard panels should not show "No data"').toBe(0);
+    } else {
+      console.log('SUCCESS: All dashboard panels have data');
     }
 
     console.log('Dashboard validation complete.');

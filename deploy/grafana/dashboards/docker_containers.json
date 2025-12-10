@@ -91,8 +91,8 @@
             },
             "targets": [
                 {
-                    "expr": "sum(rate(container_cpu_usage_seconds_total{name!=''}[1m])) by (name) * 100",
-                    "legendFormat": "{{name}}",
+                    "expr": "sum(label_replace(rate(container_cpu_usage_seconds_total{id=~\"/system.slice/docker-.*\"}[1m]), \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container) * 100",
+                    "legendFormat": "{{container}}",
                     "refId": "A"
                 }
             ],
@@ -172,8 +172,8 @@
             },
             "targets": [
                 {
-                    "expr": "sum(container_memory_usage_bytes{name!=''}) by (name)",
-                    "legendFormat": "{{name}}",
+                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/system.slice/docker-.*\"}, \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container)",
+                    "legendFormat": "{{container}}",
                     "refId": "A"
                 }
             ],
@@ -253,13 +253,13 @@
             },
             "targets": [
                 {
-                    "expr": "sum(rate(container_network_receive_bytes_total{name!=''}[1m])) by (name)",
-                    "legendFormat": "{{name}} RX",
+                    "expr": "sum(label_replace(rate(container_network_receive_bytes_total{id=~\"/system.slice/docker-.*\"}[1m]), \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container)",
+                    "legendFormat": "{{container}} RX",
                     "refId": "A"
                 },
                 {
-                    "expr": "sum(rate(container_network_transmit_bytes_total{name!=''}[1m])) by (name)",
-                    "legendFormat": "{{name}} TX",
+                    "expr": "sum(label_replace(rate(container_network_transmit_bytes_total{id=~\"/system.slice/docker-.*\"}[1m]), \"container\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\")) by (container)",
+                    "legendFormat": "{{container}} TX",
                     "refId": "B"
                 }
             ],
