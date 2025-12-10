@@ -55,23 +55,14 @@ test.describe('Dashboard Metrics', () => {
       console.log('SUCCESS: No kubepods cgroup paths found');
     }
 
-    // STRICT CHECK: Verify human-readable service names are present
-    // We expect names like "backend", "frontend", "db", "redis" to appear in the legend
-    const expectedServices = ['backend', 'frontend', 'db', 'redis'];
-    const missingServices = [];
-
-    for (const service of expectedServices) {
-      // Check if the service name appears in the page content (legend)
-      if (!pageContent.includes(service)) {
-        missingServices.push(service);
-      }
-    }
-
-    if (missingServices.length > 0) {
-      console.log('WARNING: Some expected service names not found in legend:', missingServices.join(', '));
-      // We don't fail here yet because it depends on cAdvisor labels actually being populated
+    // INFO: Log legend items for debugging/info
+    // This attempts to find common legend elements in Grafana, which often appear as text within specific SVG/HTML structures.
+    // This is not a strict check, just for informational purposes.
+    const legends = await page.locator('.graph-legend-table .graph-legend-series-name').allTextContents();
+    if (legends.length > 0) {
+      console.log(`INFO: Found ${legends.length} legend items: ${legends.join(', ')}`);
     } else {
-      console.log('SUCCESS: Found expected service names in legend (backend, frontend, db, redis)');
+      console.log('INFO: No legend items found on the dashboard.');
     }
 
     // Verify new panels are visible
