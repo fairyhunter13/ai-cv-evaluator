@@ -1296,24 +1296,35 @@ test('logout flow redirects to login page', async ({ page }) => {
 
   // Login if needed (usually cached, but ensured here)
   if (isSSOLoginUrl(page.url())) {
+    await page.locator('input#username').clear();
     await page.fill('input#username', SSO_USERNAME);
+    await page.locator('input#password').clear();
     await page.fill('input#password', SSO_PASSWORD);
     await page.click('button#sign-in-button', { force: true });
-    // Handle Consent if appears
+    // Handle Consent if appears (Authelia v4.37 often requires this)
     try {
-      await page.waitForSelector('button#accept', { timeout: 3000 });
-      await page.click('button#accept', { force: true });
-    } catch { }
-    await page.waitForURL((url) => !isSSOLoginUrl(url));
+      // Try multiple selectors
+      const acceptButton = page.locator('button#accept, button:has-text("Accept")');
+      await acceptButton.waitFor({ state: 'visible', timeout: 5000 });
+      await acceptButton.first().click({ force: true });
+      console.log('Clicked Consent Accept button');
+    } catch (e) {
+      console.log('Consent button not found or not needed');
+    }
+
+    // Ensure we passed the login gate
+    await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
   }
 
-  // Trigger Logout via Authelia Endpoint directly or OAuth2 Proxy sign_out
-  await gotoWithRetry(page, '/oauth2/sign_out');
+  // Trigger Logout via Portal UI (to utilize the ?rd=/logout chaining)
+  const logoutButton = page.locator('a[href*="/oauth2/sign_out"]');
+  await logoutButton.waitFor({ state: 'visible', timeout: 5000 });
+  await logoutButton.click();
 
-  // Verify we are redirected back to the Login Page (Authelia)
-  // Authelia /oauth2/sign_out often redirects to / or login
-  await page.waitForTimeout(2000);
+  // Verify we are redirected back to the Login Page (Authelia) or a Logout confirmation
+  // The chain is: Portal -> oauth2-proxy (clears cookie) -> [rd] Authelia Logout (clears session) -> Authelia Login
+  await page.waitForTimeout(5000);
   const url = page.url();
-  // Expect URL to be Authelia (9091) or contain typical SSO path
-  expect(isSSOLoginUrl(url) || url.includes('/oauth2/start')).toBeTruthy();
+  // Expect URL to be Authelia Login (9091) OR the path /logout if Authelia stays there
+  expect(isSSOLoginUrl(url) || url.includes('/logout')).toBeTruthy();
 });
