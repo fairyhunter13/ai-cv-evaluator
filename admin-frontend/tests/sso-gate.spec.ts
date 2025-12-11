@@ -306,9 +306,32 @@ for (const path of PROTECTED_PATHS) {
   });
 }
 
+const ensureAutheliaUp = async (page: Page): Promise<void> => {
+  console.log('[AutheliaDebug] Waiting for Authelia to be healthy...');
+  for (let i = 0; i < 30; i++) {
+    try {
+      const resp = await page.request.get('http://localhost:9091/api/health');
+      if (resp.ok()) {
+        const json = await resp.json();
+        if (json.status === 'OK') {
+          console.log('[AutheliaDebug] Authelia is healthy.');
+          return;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    await page.waitForTimeout(1000);
+  }
+  throw new Error('Authelia failed to become healthy within 30s');
+};
+
 // Happy path: log in via SSO once, land on the portal, then access dashboards
 // without seeing the login page again.
 test('single sign-on via portal allows access to dashboards', async ({ page, baseURL }) => {
+
+  // Ensure Authelia is up before doing anything to avoid race conditions in CI
+  await ensureAutheliaUp(page);
 
   // Start at portal; unauthenticated users should be redirected to SSO login
   await gotoWithRetry(page, PORTAL_PATH);
