@@ -397,9 +397,12 @@ services:
 
   # Authelia (Identity Provider)
   authelia:
-    image: authelia/authelia:4.37.5
+    image: authelia/authelia:4.38.19
+    container_name: ai-cv-evaluator-authelia
     environment:
       TZ: "UTC"
+      AUTHELIA_SERVER_SCHEME: http
+      AUTHELIA_SERVER_ADDRESS: tcp://0.0.0.0:9091
     volumes:
       - ./deploy/authelia/configuration.prod.yml:/config/configuration.yml:ro
       - ./deploy/authelia/users_database.yml:/config/users_database.yml:ro
