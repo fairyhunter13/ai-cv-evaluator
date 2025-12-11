@@ -1295,25 +1295,63 @@ test('logout flow redirects to login page', async ({ page }) => {
   await gotoWithRetry(page, PORTAL_PATH);
 
   // Login if needed (usually cached, but ensured here)
+  // Wait for potential redirections and load
+  await page.waitForLoadState('networkidle');
+  console.log(`Current URL before login check: ${page.url()}`);
+  console.log(`Current Title: ${await page.title()}`);
+
   if (isSSOLoginUrl(page.url())) {
-    await page.locator('input#username').clear();
-    await page.fill('input#username', SSO_USERNAME);
-    await page.locator('input#password').clear();
-    await page.fill('input#password', SSO_PASSWORD);
-    await page.click('button#sign-in-button', { force: true });
-    // Handle Consent if appears (Authelia v4.37 often requires this)
-    try {
-      // Try multiple selectors
-      const acceptButton = page.locator('button#accept, button:has-text("Accept")');
-      await acceptButton.waitFor({ state: 'visible', timeout: 5000 });
-      await acceptButton.first().click({ force: true });
-      console.log('Clicked Consent Accept button');
-    } catch (e) {
-      console.log('Consent button not found or not needed');
+    console.log('Detected SSO Login Page. Inputting credentials...');
+
+    // Authelia v4.37 uses 'username' / 'password' names
+    // Authelia v4.38 also uses 'username' / 'password' but structure might differ.
+    // We use robust selectors.
+
+    const usernameInput = page.locator('input[name="username"], input#username').first();
+    const passwordInput = page.locator('input[name="password"], input#password').first();
+
+    await expect(usernameInput).toBeVisible({ timeout: 10000 });
+    await usernameInput.clear();
+    await usernameInput.fill(SSO_USERNAME);
+
+    await expect(passwordInput).toBeVisible({ timeout: 10000 });
+    await passwordInput.clear();
+    await passwordInput.fill(SSO_PASSWORD);
+
+    // Click Sign In
+    const signInButton = page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")').first();
+    await expect(signInButton).toBeVisible();
+    await signInButton.click();
+    console.log('Clicked Sign in button.');
+
+    // Wait for navigation or potential consent page
+    await page.waitForTimeout(1000); // Small cooldown
+    await page.waitForLoadState('networkidle');
+    console.log(`URL after Sign in: ${page.url()}`);
+    console.log(`Title after Sign in: ${await page.title()}`);
+
+    // Handle Consent if detected
+    // v4.37 title might contain "Consent"
+    // v4.38 implicit mode skips this
+    if (page.url().includes('/consent') || (await page.title()).includes('Consent')) {
+      console.log('Detected Consent Page. Attempting to accept...');
+      const acceptButton = page.locator('button#accept, button:has-text("Accept")').first();
+      if (await acceptButton.isVisible()) {
+        await acceptButton.click();
+        console.log('Clicked Accept button.');
+        await page.waitForLoadState('networkidle');
+      } else {
+        console.log('Consent Page detected but button not visible immediately?');
+      }
     }
 
-    // Ensure we passed the login gate
-    await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
+    // Final wait to ensure we left SSO
+    await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 }).catch(() => {
+      console.log(`Timed out waiting for non-SSO URL. Current: ${page.url()}`);
+    });
+    console.log(`Final URL: ${page.url()}`);
+  } else {
+    console.log('Not on SSO Login Page. Proceeding...');
   }
 
   // Trigger Logout via Portal UI (to utilize the ?rd=/logout chaining)
