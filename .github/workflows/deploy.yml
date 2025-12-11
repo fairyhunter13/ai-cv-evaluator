@@ -458,6 +458,8 @@ jobs:
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           fi
+          # Ensure Grafana container (UID 472) can read the mounted files
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "chmod -R o+rX ~/ai-cv-evaluator/deploy/"
       
       - name: Debug file content on server
         run: |
@@ -719,6 +721,9 @@ jobs:
 
             echo "Force restarting oauth2-proxy services to ensure new configuration is applied..."
             docker compose -f docker-compose.prod.yml restart oauth2-proxy-app oauth2-proxy-dashboard || echo "Warning: oauth2-proxy restart failed"
+            
+            echo "Force restarting Grafana to ensure new dashboards are loaded..."
+            docker compose -f docker-compose.prod.yml restart grafana || echo "Warning: grafana restart failed"
             
             echo "Waiting for oauth2-proxy services to be ready..."
             sleep 10
