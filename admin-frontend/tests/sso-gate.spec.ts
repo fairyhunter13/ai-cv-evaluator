@@ -587,7 +587,8 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
     { pattern: /Scaling Headroom: CPU/, legends: [/Host Total CPU/] },
     { pattern: /Network Traffic: Host vs Containers/, legends: [/Host Inbound/] },
     { pattern: /Host Memory Analysis/, legends: [/Host Available Memory/] },
-    { pattern: /CPU Core Usage Breakdown/, legends: [/Core \d+/] } // Host metric
+    { pattern: /CPU Core Usage Breakdown/, legends: [/Core \d+/] }, // Host metric
+    { pattern: /Disk I\/O Interaction/, legends: [/Host Read/, /Host Write/] }
   ];
 
   for (const { pattern, legends } of panelValidations) {
