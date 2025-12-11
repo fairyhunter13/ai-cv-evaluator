@@ -818,7 +818,7 @@
             },
             "gridPos": {
                 "h": 8,
-                "w": 12,
+                "w": 24,
                 "x": 0,
                 "y": 60
             },
@@ -868,5 +868,5 @@
     "timezone": "",
     "title": "Docker Containers",
     "uid": "docker-monitoring",
-    "version": 2
+    "version": 3
 }
