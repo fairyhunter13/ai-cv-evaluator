@@ -14,6 +14,10 @@ const IS_DEV = !IS_PRODUCTION;
 const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
 const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123');
 
+// Authelia Configuration
+const AUTHELIA_URL = process.env.AUTHELIA_URL || (IS_PRODUCTION ? 'https://auth.ai-cv-evaluator.web.id' : 'http://localhost:9091');
+
+
 // Services that may not be available in all environments
 const DEV_ONLY_SERVICES = ['/mailpit/'];
 
@@ -307,10 +311,11 @@ for (const path of PROTECTED_PATHS) {
 }
 
 const ensureAutheliaUp = async (page: Page): Promise<void> => {
-  console.log('[AutheliaDebug] Waiting for Authelia to be healthy...');
+  console.log(`[AutheliaDebug] Waiting for Authelia to be healthy at ${AUTHELIA_URL}...`);
+  // Increase timeout to 60s (30 * 2s) for slower CI runners
   for (let i = 0; i < 30; i++) {
     try {
-      const resp = await page.request.get('http://localhost:9091/api/health');
+      const resp = await page.request.get(`${AUTHELIA_URL}/api/health`);
       if (resp.ok()) {
         const json = await resp.json();
         if (json.status === 'OK') {
@@ -319,12 +324,25 @@ const ensureAutheliaUp = async (page: Page): Promise<void> => {
         }
       }
     } catch (e) {
-      // ignore
+      // ignore connection errors
     }
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(2000);
   }
-  throw new Error('Authelia failed to become healthy within 30s');
+  throw new Error(`Authelia failed to become healthy at ${AUTHELIA_URL} within 60s`);
 };
+
+test('invalid credentials show error', async ({ page, baseURL }) => {
+  await ensureAutheliaUp(page);
+  await gotoWithRetry(page, PORTAL_PATH);
+
+  // API Login with bad creds
+  const loginResp = await page.request.post(`${AUTHELIA_URL}/api/firstfactor`, {
+    data: { username: 'admin', password: 'wrongpassword' },
+    headers: { 'Content-Type': 'application/json' }
+  });
+
+  expect(loginResp.status()).toBe(401);
+});
 
 // Happy path: log in via SSO once, land on the portal, then access dashboards
 // without seeing the login page again.
@@ -336,27 +354,18 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
   // Start at portal; unauthenticated users should be redirected to SSO login
   await gotoWithRetry(page, PORTAL_PATH);
 
-  // We expect to be on an SSO login page (oauth2-proxy or Keycloak realm)
-  const loginUrl = page.url();
-  expect(
-    isSSOLoginUrl(loginUrl),
-    `Expected unauthenticated navigation to portal root to end on SSO login, got ${loginUrl}`,
-  ).toBeTruthy();
+  expect(isSSOLoginUrl(page.url())).toBeTruthy();
 
-  // Try default dev credentials from realm-aicv.dev.json
   const usernameInput = page.locator('input#username');
   const passwordInput = page.locator('input#password');
 
   // Attempt API login to bypass potential UI flakiness (Authelia v4.37)
-  console.log('[AutheliaDebug] Attempting login via API...');
-  const loginResp = await page.request.post('http://localhost:9091/api/firstfactor', {
+  const loginResp = await page.request.post(`${AUTHELIA_URL}/api/firstfactor`, {
     data: { username: SSO_USERNAME, password: SSO_PASSWORD },
     headers: { 'Content-Type': 'application/json' }
   });
 
   if (loginResp.ok()) {
-    console.log('[AutheliaDebug] API Login Successful.');
-
     // EXTRACT COOKIE and force it to be non-secure for localhost HTTP testing
     const headers = loginResp.headers();
     const setCookie = headers['set-cookie'];
@@ -365,23 +374,20 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
       const sessionMatch = setCookie.match(/authelia_session=([^;]+)/);
       if (sessionMatch) {
         const sessionValue = sessionMatch[1];
-        console.log('[AutheliaDebug] Injecting authelia_session cookie (forcing secure=false)...');
         await page.context().addCookies([{
           name: 'authelia_session',
           value: sessionValue,
-          domain: 'localhost',
+          domain: IS_PRODUCTION ? 'ai-cv-evaluator.web.id' : 'localhost',
           path: '/',
           httpOnly: true,
-          secure: false, // FORCE FALSE
+          secure: IS_PRODUCTION,
           sameSite: 'Lax'
         }]);
       }
     }
 
-    console.log('[AutheliaDebug] Reloading page to apply cookie...');
     await page.goto(PORTAL_PATH);
   } else {
-    console.log(`[AutheliaDebug] API Login Failed: ${loginResp.status()} ${await loginResp.text()}`);
     if (await usernameInput.isVisible()) {
       await usernameInput.fill(SSO_USERNAME);
       await passwordInput.fill(SSO_PASSWORD);
@@ -391,9 +397,6 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
   }
 
   await handleAutheliaConsent(page);
-
-
-
   await completeKeycloakProfileUpdate(page);
 
   // Wait until we have returned from the SSO flow (no longer on oauth2-proxy
@@ -411,10 +414,52 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
   }
 });
 
+test('logout clears session', async ({ page }) => {
+  // Rely on previous login state or login again? Playwright tests are isolated primarily.
+  // Need to login first.
+  await ensureAutheliaUp(page);
+
+  // Quick API Login
+  const loginResp = await page.request.post(`${AUTHELIA_URL}/api/firstfactor`, {
+    data: { username: SSO_USERNAME, password: SSO_PASSWORD },
+    headers: { 'Content-Type': 'application/json' }
+  });
+  expect(loginResp.ok()).toBeTruthy();
+  const headers = loginResp.headers();
+  const setCookie = headers['set-cookie'];
+  if (setCookie) {
+    const sessionMatch = setCookie.match(/authelia_session=([^;]+)/);
+    if (sessionMatch) {
+      await page.context().addCookies([{
+        name: 'authelia_session',
+        value: sessionMatch[1],
+        domain: IS_PRODUCTION ? 'ai-cv-evaluator.web.id' : 'localhost',
+        path: '/',
+        httpOnly: true,
+        secure: IS_PRODUCTION,
+        sameSite: 'Lax'
+      }]);
+    }
+  }
+  await page.goto(PORTAL_PATH);
+  await expect(page).toHaveTitle(/Portal/i);
+
+  // Perform Logout (Authelia logout endpoint)
+  await page.goto(`${AUTHELIA_URL}/logout`);
+
+  // Verify redirect to Login
+  await expect(page).toHaveURL(/.*9091.*/);
+
+  // Verify accessing portal again redirects to SSO
+  await page.goto(PORTAL_PATH);
+  expect(isSSOLoginUrl(page.url())).toBeTruthy();
+});
+
 test('dashboards reachable via portal after SSO login', async ({ page, baseURL }) => {
   test.setTimeout(120000); // This test navigates to many dashboards and may take time.
 
   // Drive user through SSO login starting from the portal root.
+  await ensureAutheliaUp(page);
   await gotoWithRetry(page, PORTAL_PATH);
   expect(isSSOLoginUrl(page.url())).toBeTruthy();
 
@@ -422,29 +467,26 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
   const passwordInput = page.locator('input#password');
 
   // Attempt API login to bypass potential UI flakiness (Authelia v4.37)
-  const loginResp = await page.request.post('http://localhost:9091/api/firstfactor', {
+  const loginResp = await page.request.post(`${AUTHELIA_URL}/api/firstfactor`, {
     data: { username: SSO_USERNAME, password: SSO_PASSWORD },
     headers: { 'Content-Type': 'application/json' }
   });
 
   if (loginResp.ok()) {
-    // EXTRACT COOKIE and force it to be non-secure for localhost HTTP testing
     const headers = loginResp.headers();
-    // headers names are lower-case in playwright
     const setCookie = headers['set-cookie'];
 
     if (setCookie) {
-      // Naive parse: find authelia_session=...;
       const sessionMatch = setCookie.match(/authelia_session=([^;]+)/);
       if (sessionMatch) {
         const sessionValue = sessionMatch[1];
         await page.context().addCookies([{
           name: 'authelia_session',
           value: sessionValue,
-          domain: 'localhost',
+          domain: IS_PRODUCTION ? 'ai-cv-evaluator.web.id' : 'localhost',
           path: '/',
           httpOnly: true,
-          secure: false, // FORCE FALSE for localhost
+          secure: IS_PRODUCTION, // true in prod, false in dev
           sameSite: 'Lax'
         }]);
       }
