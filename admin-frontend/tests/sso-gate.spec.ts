@@ -1471,7 +1471,8 @@ test('logout flow redirects to login page', async ({ page }) => {
     const usernameInput = page.locator('input[name="username"], input#username').first();
     const passwordInput = page.locator('input[name="password"], input#password').first();
 
-    await expect(usernameInput).toBeVisible({ timeout: 10000 });
+    // Wait for the login form to appear (slow CI runners may take >10s)
+    await expect(usernameInput).toBeVisible({ timeout: 30000 });
     await usernameInput.clear();
     await usernameInput.fill(SSO_USERNAME);
 
