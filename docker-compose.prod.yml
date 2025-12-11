@@ -84,7 +84,7 @@ services:
       - backend_blue
       - oauth2-proxy-app
       - oauth2-proxy-dashboard
-      - keycloak
+      - authelia
     restart: unless-stopped
     deploy:
       resources:
@@ -395,40 +395,31 @@ services:
           memory: 256M
           cpus: '0.1'
 
-  # Keycloak (prod)
-  keycloak:
-    image: quay.io/keycloak/keycloak:25.0
-    command: ["start", "--import-realm"]
+  # Authelia (Identity Provider)
+  authelia:
+    image: authelia/authelia:4.37.5
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?Set KEYCLOAK_ADMIN in .env.production}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env.production}
-      # Proxy configuration for running behind nginx/cloudflare
-      KC_PROXY_HEADERS: xforwarded
-      KC_HTTP_ENABLED: "true"
-      # Full frontend URL with HTTPS (no port means 443)
-      KC_HOSTNAME_URL: https://keycloak.ai-cv-evaluator.web.id
-      KC_HOSTNAME_ADMIN_URL: https://keycloak.ai-cv-evaluator.web.id
-      KC_HOSTNAME_STRICT: "false"
-      KC_HOSTNAME_STRICT_HTTPS: "false"
+      TZ: "UTC"
     volumes:
-      - ./deploy/keycloak/realm-aicv.json:/opt/keycloak/data/import/realm-aicv.json:ro
+      - ./deploy/authelia/configuration.prod.yml:/config/configuration.yml:ro
+      - ./deploy/authelia/users_database.yml:/config/users_database.yml:ro
+      - ./deploy/authelia/oidc.key:/config/oidc.key:ro
     ports:
-      - "8090:8080" # ensure different port from portal
+      - "9091:9091" # Internal/Local access if needed, but primarily proxied via Nginx
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 768M
-          cpus: '1.0'
+          memory: 256M
+          cpus: '0.5'
         reservations:
-          memory: 512M
-          cpus: '0.25'
+          memory: 128M
+          cpus: '0.1'
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      test: ["CMD-SHELL", "authelia healthcheck"]
       interval: 30s
-      timeout: 5s
+      timeout: 3s
       retries: 5
-      start_period: 60s
 
   # oauth2-proxy for main app domain
   oauth2-proxy-app:
@@ -437,23 +428,18 @@ services:
       - ./.env.production
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
-      # Skip OIDC discovery to use internal URLs for token exchange
-      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
-      # Issuer URL must match what Keycloak puts in tokens
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
-      # External URL for browser redirects (login page)
-      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
-      # Internal URLs for server-to-server (Docker network) - avoids hairpin NAT
-      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
-      OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
-      # Skip profile/userinfo - causes issuer validation issues; get user info from ID token
-      OAUTH2_PROXY_SCOPE: "openid email profile"
-      OAUTH2_PROXY_USER_ID_CLAIM: sub
+      # Authelia URL (Production Domain)
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id
+      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/api/oidc/authorize
+      # Internal Docker Network Access
+      OAUTH2_PROXY_REDEEM_URL: http://authelia:9091/api/oidc/token
+      OAUTH2_PROXY_OIDC_JWKS_URL: http://authelia:9091/api/oidc/jwks
+      OAUTH2_PROXY_USER_INFO_URL: http://authelia:9091/api/oidc/userinfo
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
-      OAUTH2_PROXY_COOKIE_SAMESITE: none
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
       OAUTH2_PROXY_COOKIE_DOMAINS: "ai-cv-evaluator.web.id,.ai-cv-evaluator.web.id"
       OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
@@ -463,10 +449,11 @@ services:
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
-      OAUTH2_PROXY_OIDC_EXTRA_AUDIENCES: "realm-management,account"
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: "groups"
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
-      - keycloak
+      - authelia
     restart: unless-stopped
     deploy:
       resources:
@@ -484,23 +471,18 @@ services:
       - ./.env.production
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
-      # Skip OIDC discovery to use internal URLs for token exchange
-      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
-      # Issuer URL must match what Keycloak puts in tokens
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv
-      # External URL for browser redirects (login page)
-      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/realms/aicv/protocol/openid-connect/auth
-      # Internal URLs for server-to-server (Docker network) - avoids hairpin NAT
-      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
-      OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
-      # Skip profile/userinfo - causes issuer validation issues; get user info from ID token
-      OAUTH2_PROXY_SCOPE: "openid email profile"
-      OAUTH2_PROXY_USER_ID_CLAIM: sub
+      # Authelia URL (Production Domain)
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id
+      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/api/oidc/authorize
+      # Internal Docker Network Access
+      OAUTH2_PROXY_REDEEM_URL: http://authelia:9091/api/oidc/token
+      OAUTH2_PROXY_OIDC_JWKS_URL: http://authelia:9091/api/oidc/jwks
+      OAUTH2_PROXY_USER_INFO_URL: http://authelia:9091/api/oidc/userinfo
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
-      OAUTH2_PROXY_COOKIE_SAMESITE: none
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
       OAUTH2_PROXY_COOKIE_DOMAINS: "ai-cv-evaluator.web.id,.ai-cv-evaluator.web.id"
       OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
@@ -510,10 +492,11 @@ services:
       OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
-      OAUTH2_PROXY_OIDC_EXTRA_AUDIENCES: "realm-management,account"
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: "groups"
       OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
     depends_on:
-      - keycloak
+      - authelia
     restart: unless-stopped
     deploy:
       resources:
