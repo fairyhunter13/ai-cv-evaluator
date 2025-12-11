@@ -163,6 +163,9 @@ lint-infra:
 			OAUTH2_PROXY_CLIENT_SECRET=dummy-client-secret \
 			OAUTH2_PROXY_COOKIE_SECRET=dummy-cookie-secret \
 			OAUTH2_PROXY_EMAIL_DOMAINS=example.com \
+			ADMIN_USERNAME=dummy-admin \
+			ADMIN_PASSWORD=dummy-password \
+			ADMIN_SESSION_SECRET=dummy-session-secret \
 			docker compose -f docker-compose.prod.yml config -q; \
 			# Clean up temporary .env.production symlink + file if we created one above. \
 			if [ -n "$$TEMP_ENV_PROD_CREATED" ]; then \
@@ -210,6 +213,7 @@ decrypt-env:
 	$(call check_sops_key)
 	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type yaml --output-type dotenv secrets/env.sops.yaml > .env
 	@echo "Decrypted secrets/env.sops.yaml -> .env"
+	$(MAKE) decrypt-authelia
 
 # Encrypt .env.production -> secrets/env.production.sops.yaml (YAML) using SOPS + age
 encrypt-env-production:
