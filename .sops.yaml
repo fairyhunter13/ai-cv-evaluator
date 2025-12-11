@@ -7,3 +7,7 @@ creation_rules:
     key_groups:
       - age:
         - "age1ts8emyy5hmze7yph35njcfcn78nx8len4uuq0rfujtuh5pxvjcfqy6s5h9"
+  - path_regex: secrets/cv/.*\.sops
+    key_groups:
+      - age:
+        - "age1ts8emyy5hmze7yph35njcfcn78nx8len4uuq0rfujtuh5pxvjcfqy6s5h9"
