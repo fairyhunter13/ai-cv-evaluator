@@ -324,6 +324,27 @@ services:
           memory: 512M
           cpus: '0.25'
 
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.2'
+        reservations:
+          memory: 32M
+          cpus: '0.1'
+
   # Docker Meta Exporter - Helper for Friendly Names
   meta-exporter:
     build: ./deploy/exporter
@@ -539,7 +560,9 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
     privileged: true
+    pid: host
     devices:
       - /dev/kmsg
 
