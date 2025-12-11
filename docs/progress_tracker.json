@@ -79,6 +79,24 @@
                 "notes": "Need to verify against live Prod URL."
             },
             "validation_status": "Pending"
+        },
+        {
+            "id": "TASK-004",
+            "name": "Fix SOPS Download 504 Timeout in CI",
+            "status": "Implemented",
+            "description": "SOPS curl download was failing with 504 Gateway Timeout, corrupting the binary with HTML error.",
+            "implementation_details": {
+                "files_changed": [
+                    ".github/workflows/ci.yml"
+                ],
+                "notes": "Added retry loop (3 attempts) with exponential backoff and file type verification."
+            },
+            "test_status": {
+                "verified": false,
+                "method": "CI Pipeline",
+                "notes": "Awaiting next CI run."
+            },
+            "validation_status": "Pending CI Verification"
         }
     ],
     "gaps_analysis": [
