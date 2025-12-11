@@ -351,16 +351,27 @@ services:
       - prometheus
       - loki
 
-  # Authelia (Identity Provider)
-  authelia:
-    image: authelia/authelia:4.37.5
-    container_name: ai-cv-evaluator-authelia
-    volumes:
-      - ./deploy/authelia:/config
-    ports:
-      - "9091:9091"
+  # Keycloak (dev)
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    command: ["start-dev", "--import-realm"]
     environment:
-      TZ: "UTC"
+      KEYCLOAK_ADMIN: ${ADMIN_USERNAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      # Optimization: Limit JVM memory usage
+      JAVA_OPTS_APPEND: "-Xms128m -Xmx384m -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=256m"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    volumes:
+      - ./deploy/keycloak/realm-aicv.dev.json:/opt/keycloak/data/import/realm-aicv.json:ro
+    ports:
+      - "8089:8080" # Keycloak admin on different port from portal
     restart: unless-stopped
 
   # oauth2-proxy front-auth for Nginx
@@ -368,13 +379,11 @@ services:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
-      # Authelia URL (Browser Access)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: http://localhost:9091
-      OAUTH2_PROXY_LOGIN_URL: http://localhost:9091/api/oidc/authorize
-      # Internal Docker Network Access
-      OAUTH2_PROXY_REDEEM_URL: http://authelia:9091/api/oidc/token
-      OAUTH2_PROXY_OIDC_JWKS_URL: http://authelia:9091/api/oidc/jwks
-      OAUTH2_PROXY_USER_INFO_URL: http://authelia:9091/api/oidc/userinfo
+      # Use public issuer on localhost:8089 for tokens & discovery metadata
+      OAUTH2_PROXY_OIDC_ISSUER_URL: http://localhost:8089/realms/aicv
+      OAUTH2_PROXY_LOGIN_URL: http://localhost:8089/realms/aicv/protocol/openid-connect/auth
+      # Use internal keycloak hostname for backchannel token exchange only
+      OAUTH2_PROXY_REDEEM_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/token
       OAUTH2_PROXY_CLIENT_ID: oauth2-proxy
       OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:-oauth2-proxy-secret}
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:-MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=}
@@ -386,11 +395,15 @@ services:
       OAUTH2_PROXY_REDIRECT_URL: http://localhost:8088/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
-      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      # Skip OIDC discovery (container cannot reach localhost:8089); provide
+      # JWKS URL explicitly for signature verification.
       OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
-      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: "groups"
+      OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
+      OAUTH2_PROXY_OIDC_GROUPS_CLAIM: "email"
+      OAUTH2_PROXY_SKIP_CLAIMS_FROM_PROFILE_URL: "true"
+      OAUTH2_PROXY_OIDC_JWKS_URL: http://keycloak:8080/realms/aicv/protocol/openid-connect/certs
     depends_on:
-      - authelia
+      - keycloak
     restart: unless-stopped
 
   # Local nginx to serve portal and proxy to services (dev only)
@@ -406,7 +419,7 @@ services:
       - app
       - frontend
       - oauth2-proxy
-      - authelia
+      - keycloak
       - grafana
       - prometheus
       - jaeger

@@ -39,3 +39,7 @@ admin-frontend/test-results/
 
 # Exporter binary
 deploy/exporter/exporter
+deploy/authelia/configuration.yml
+deploy/authelia/configuration.prod.yml
+deploy/authelia/users_database.yml
+deploy/authelia/oidc.key
