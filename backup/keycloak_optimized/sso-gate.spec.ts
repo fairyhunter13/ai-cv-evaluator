@@ -20,8 +20,9 @@ const DEV_ONLY_SERVICES = ['/mailpit/'];
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
-  return url.includes('/oauth2/') || url.includes('/realms/aicv') || url.includes(':9091') || url.includes('/api/oidc/authorization') || url.includes('/login/oauth/authorize');
+  return url.includes('/oauth2/') || url.includes('/realms/aicv') || url.includes(':9091') || url.includes('/api/oidc/authorization');
 };
+
 // Generate real backend traffic so that Prometheus and Loki have recent
 // samples for http_request_by_id_total and request_id labels. This helps
 // ensure Grafana dashboards such as HTTP Metrics and Request Drilldown have
@@ -305,8 +306,8 @@ test('single sign-on via portal allows access to dashboards', async ({ page, bas
   ).toBeTruthy();
 
   // Try default dev credentials from realm-aicv.dev.json
-  const usernameInput = page.locator('input#username');
-  const passwordInput = page.locator('input#password');
+  const usernameInput = page.locator('input#username, input[name="username"]');
+  const passwordInput = page.locator('input#password, input[name="password"]');
 
   if (await usernameInput.isVisible()) {
     await usernameInput.fill(SSO_USERNAME);
@@ -340,8 +341,8 @@ test('dashboards reachable via portal after SSO login', async ({ page, baseURL }
   await gotoWithRetry(page, PORTAL_PATH);
   expect(isSSOLoginUrl(page.url())).toBeTruthy();
 
-  const usernameInput = page.locator('input#username');
-  const passwordInput = page.locator('input#password');
+  const usernameInput = page.locator('input#username, input[name="username"]');
+  const passwordInput = page.locator('input#password, input[name="password"]');
 
   if (await usernameInput.isVisible()) {
     await usernameInput.fill(SSO_USERNAME);
@@ -946,34 +947,10 @@ test('Grafana Request Drilldown dashboard links work correctly', async ({ page, 
   await gotoWithRetry(page, PORTAL_PATH);
   expect(isSSOLoginUrl(page.url())).toBeTruthy();
 
-  // Wait for username field (Keycloak/Authelia)
-  const usernameSelector = 'input#username, input[name="username"], input[id="id_username"], input[id="application-login_name"], input[placeholder*="sername"], input[placeholder*="mail"]';
-  await page.waitForSelector(usernameSelector, { timeout: 15000 });
-  await page.fill(usernameSelector, SSO_USERNAME);
-
-  // Wait for password field
-  const passwordSelector = 'input#password, input[name="password"], input[id="id_password"], input[id="application-login_password"], input[placeholder*="assword"]';
-  await page.fill(passwordSelector, SSO_PASSWORD);
-
-  // Generic submit button selector
-  const submitSelector = 'input#kc-login, button[type="submit"], button#sign-in-button';
-  try {
-    await page.waitForSelector(submitSelector, { timeout: 5000 });
-    await page.click(submitSelector, { force: true });
-  } catch (e) {
-    // Fallback to generic submit which usually works
-    await page.keyboard.press('Enter');
-  }
-
-  // Handle Authelia Consent if it Appears (despite implicit mode)
-  try {
-    const consentSelector = 'button#accept, button:has-text("Accept"), button:has-text("Authorize")';
-    // Short timeout to check for consent
-    await page.waitForSelector(consentSelector, { timeout: 3000 });
-    await page.click(consentSelector, { force: true });
-  } catch (e) {
-    // Consent page not found, proceed
-  }
+  // Login via Keycloak
+  await page.fill('#username', SSO_USERNAME);
+  await page.fill('#password', SSO_PASSWORD);
+  await page.click('#kc-login');
 
   // Handle profile update if needed
   await completeKeycloakProfileUpdate(page);
@@ -1288,32 +1265,4 @@ test('email service requires SSO login', async ({ browser, baseURL }) => {
   } finally {
     await freshContext.close();
   }
-});
-
-test('logout flow redirects to login page', async ({ page }) => {
-  // Navigate to Portal
-  await gotoWithRetry(page, PORTAL_PATH);
-
-  // Login if needed (usually cached, but ensured here)
-  if (isSSOLoginUrl(page.url())) {
-    await page.fill('input#username', SSO_USERNAME);
-    await page.fill('input#password', SSO_PASSWORD);
-    await page.click('button#sign-in-button', { force: true });
-    // Handle Consent if appears
-    try {
-      await page.waitForSelector('button#accept', { timeout: 3000 });
-      await page.click('button#accept', { force: true });
-    } catch { }
-    await page.waitForURL((url) => !isSSOLoginUrl(url));
-  }
-
-  // Trigger Logout via Authelia Endpoint directly or OAuth2 Proxy sign_out
-  await gotoWithRetry(page, '/oauth2/sign_out');
-
-  // Verify we are redirected back to the Login Page (Authelia)
-  // Authelia /oauth2/sign_out often redirects to / or login
-  await page.waitForTimeout(2000);
-  const url = page.url();
-  // Expect URL to be Authelia (9091) or contain typical SSO path
-  expect(isSSOLoginUrl(url) || url.includes('/oauth2/start')).toBeTruthy();
 });
