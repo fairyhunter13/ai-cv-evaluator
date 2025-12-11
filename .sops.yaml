@@ -1,19 +1,5 @@
-# SOPS configuration: standardize recipients and encrypted files
 creation_rules:
-  # Preferred location for encrypted artifacts (any filename under secrets/)
-  - path_regex: '(^|.*/)secrets/.*$'
+  - path_regex: deploy/authelia/.*\.(yaml|yml|key)
     key_groups:
       - age:
-          - age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u
-
-  # Conventional encrypted files: *.sops or *.sops.{yaml,json}
-  - path_regex: '(^|.*/).*\.sops(\.(ya?ml|json))?$'
-    key_groups:
-      - age:
-          - age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u
-
-  # Fallback: apply age recipient to any file if no rule above matched
-  - path_regex: '(^|.*/).+'
-    key_groups:
-      - age:
-          - age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u
+        - "age1ts8emyy5hmze7yph35njcfcn78nx8len4uuq0rfujtuh5pxvjcfqy6s5h9"

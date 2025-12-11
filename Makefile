@@ -933,3 +933,16 @@ frontend-help:
 	@echo ""
 	@echo "Or use the convenience script:"
 	@echo "  ./scripts/dev-frontend.sh"
+.PHONY: encrypt-authelia decrypt-authelia
+
+encrypt-authelia:
+	sops --encrypt deploy/authelia/configuration.yml > deploy/authelia/configuration.enc.yml
+	sops --encrypt deploy/authelia/configuration.prod.yml > deploy/authelia/configuration.prod.enc.yml
+	sops --encrypt deploy/authelia/users_database.yml > deploy/authelia/users_database.enc.yml
+	sops --encrypt --input-type binary --output-type binary deploy/authelia/oidc.key > deploy/authelia/oidc.enc.key
+
+decrypt-authelia:
+	sops --decrypt deploy/authelia/configuration.enc.yml > deploy/authelia/configuration.yml
+	sops --decrypt deploy/authelia/configuration.prod.enc.yml > deploy/authelia/configuration.prod.yml
+	sops --decrypt deploy/authelia/users_database.enc.yml > deploy/authelia/users_database.yml
+	sops --decrypt --input-type binary --output-type binary deploy/authelia/oidc.enc.key > deploy/authelia/oidc.key
