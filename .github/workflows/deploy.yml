@@ -484,6 +484,17 @@ jobs:
             echo "=== Content of app-https.conf ==="
             cat ~/ai-cv-evaluator/deploy/nginx/prod-conf.d/app-https.conf || echo "File not found"
             echo "=== End content ==="
+            
+            echo "=== Checking Authelia config file ==="
+            ls -la ~/ai-cv-evaluator/deploy/authelia/
+            if [ -f ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml ]; then
+              echo "configuration.prod.yml exists as file ✅"
+              head -5 ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml
+            elif [ -d ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml ]; then
+              echo "ERROR: configuration.prod.yml exists as DIRECTORY!"
+            else
+              echo "ERROR: configuration.prod.yml does not exist!"
+            fi
           '
       - name: Ensure Docker is available on server
         run: |
