@@ -8,15 +8,15 @@ output "dns_records" {
   value = {
     app = {
       hostname = cloudflare_record.app.hostname
-      value    = cloudflare_record.app.value
+      content  = cloudflare_record.app.content
     }
     dashboard = {
       hostname = cloudflare_record.dashboard.hostname
-      value    = cloudflare_record.dashboard.value
+      content  = cloudflare_record.dashboard.content
     }
     auth = {
       hostname = cloudflare_record.auth.hostname
-      value    = cloudflare_record.auth.value
+      content  = cloudflare_record.auth.content
     }
   }
 }
