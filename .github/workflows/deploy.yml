@@ -464,6 +464,13 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -f ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml 2>/dev/null || true"
           
           scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
+          
+          # Explicitly copy SOPS-decrypted Authelia config (gitignored, not included in scp -r)
+          if [ -f deploy/authelia/configuration.prod.yml ]; then
+            echo "Copying decrypted Authelia configuration to server..."
+            scp deploy/authelia/configuration.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/deploy/authelia/
+          fi
+          
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           fi
