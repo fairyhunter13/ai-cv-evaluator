@@ -455,7 +455,7 @@ jobs:
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           fi
           # Ensure Grafana container (UID 472) can read the mounted files
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "chmod -R o+rX ~/ai-cv-evaluator/deploy/"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "chmod -R o+rX ~/ai-cv-evaluator/deploy/ || true"
       
       - name: Debug file content on server
         run: |
