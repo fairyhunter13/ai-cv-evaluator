@@ -349,15 +349,25 @@ const performApiLogin = async (page: Page): Promise<void> => {
     if (setCookie) {
       const sessionMatch = setCookie.match(/authelia_session=([^;]+)/);
       if (sessionMatch) {
-        await page.context().addCookies([{
+        const cookie: any = {
           name: 'authelia_session',
           value: sessionMatch[1],
-          domain: IS_PRODUCTION ? 'ai-cv-evaluator.web.id' : 'localhost',
-          path: '/',
           httpOnly: true,
           secure: IS_PRODUCTION,
           sameSite: 'Lax'
-        }]);
+        };
+
+        // Playwright req: Either url OR (domain + path)
+        if (IS_PRODUCTION) {
+          cookie.domain = 'ai-cv-evaluator.web.id';
+          cookie.path = '/';
+        } else {
+          // For localhost, use URL to establish Host-Only cookie
+          cookie.url = AUTHELIA_URL;
+        }
+
+        await page.context().addCookies([cookie]);
+        console.log(`[AutheliaDebug] Injected session cookie: ${JSON.stringify(cookie)}`);
       }
     }
   } else {
