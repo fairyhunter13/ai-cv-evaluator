@@ -1365,3 +1365,23 @@ jobs:
           fi
 
   # Slack notifications intentionally omitted; see Windsurf rules for rationale
+  infra-dns:
+    runs-on: ubuntu-latest
+    needs: pre-deploy-checks
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform/cloudflare
+
+      - name: Terraform Apply
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_server_ip: ${{ secrets.SSH_HOST }}
+          TF_VAR_domain_name: "ai-cv-evaluator.web.id"
+        run: terraform apply -auto-approve
+        working-directory: terraform/cloudflare
