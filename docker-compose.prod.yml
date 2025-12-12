@@ -432,8 +432,8 @@ services:
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
       # Authelia URL (Production Domain)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id
-      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/api/oidc/authorization
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://auth.ai-cv-evaluator.web.id
+      OAUTH2_PROXY_LOGIN_URL: https://auth.ai-cv-evaluator.web.id/api/oidc/authorization
       # Internal Docker Network Access
       OAUTH2_PROXY_REDEEM_URL: http://authelia:9091/api/oidc/token
       OAUTH2_PROXY_OIDC_JWKS_URL: http://authelia:9091/jwks.json
@@ -475,8 +475,8 @@ services:
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
       # Authelia URL (Production Domain)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://keycloak.ai-cv-evaluator.web.id
-      OAUTH2_PROXY_LOGIN_URL: https://keycloak.ai-cv-evaluator.web.id/api/oidc/authorization
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://auth.ai-cv-evaluator.web.id
+      OAUTH2_PROXY_LOGIN_URL: https://auth.ai-cv-evaluator.web.id/api/oidc/authorization
       # Internal Docker Network Access
       OAUTH2_PROXY_REDEEM_URL: http://authelia:9091/api/oidc/token
       OAUTH2_PROXY_OIDC_JWKS_URL: http://authelia:9091/jwks.json
