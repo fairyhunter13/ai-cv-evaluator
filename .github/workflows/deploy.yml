@@ -460,6 +460,8 @@ jobs:
 
           # Fix authelia directory permissions before scp (may be owned by Docker)
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo chown -R \$USER:\$USER ~/ai-cv-evaluator/deploy/authelia 2>/dev/null || mkdir -p ~/ai-cv-evaluator/deploy/authelia"
+          # Also ensure the file itself is writable if it exists
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -f ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml 2>/dev/null || true"
           
           scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           if [ -f .env.production ]; then
