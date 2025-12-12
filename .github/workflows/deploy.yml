@@ -739,16 +739,16 @@ jobs:
             docker compose stop authelia 2>/dev/null || true
             docker compose rm -f authelia 2>/dev/null || true
 
-            echo "Bringing up backend_${NEXT_COLOR}, worker, frontend, nginx, and oauth2-proxy services..."
-            docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
+            echo "Bringing up backend_$NEXT_COLOR, worker, frontend, nginx, and oauth2-proxy services..."
+            docker compose up -d "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
 
-            echo "Waiting for backend_${NEXT_COLOR} service to be running..."
+            echo "Waiting for backend_$NEXT_COLOR service to be running..."
             for i in {1..30}; do
-              if docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | grep -q "backend_${NEXT_COLOR}"; then
-                echo "backend_${NEXT_COLOR} is running"
+              if docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | grep -q "backend_$NEXT_COLOR"; then
+                echo "backend_$NEXT_COLOR is running"
                 break
               fi
-              echo "Attempt $i: Waiting for backend_${NEXT_COLOR} to start..."
+              echo "Attempt $i: Waiting for backend_$NEXT_COLOR to start..."
               sleep 5
             done
 
@@ -773,8 +773,8 @@ jobs:
               sleep 3
             done
 
-            echo "Switching Nginx upstream to backend_${NEXT_COLOR}..."
-            sed -i "s|set \$backend_host \".*:8080\";|set \$backend_host \"backend_${NEXT_COLOR}:8080\";|" deploy/nginx/prod-conf.d/app-https.conf.template
+            echo "Switching Nginx upstream to backend_$NEXT_COLOR..."
+            sed -i "s|set \$backend_host \".*:8080\";|set \$backend_host \"backend_$NEXT_COLOR:8080\";|" deploy/nginx/prod-conf.d/app-https.conf.template
             echo "$NEXT_COLOR" > "$COLOR_FILE"
 
             echo "Restarting Nginx to pick up new upstream..."
