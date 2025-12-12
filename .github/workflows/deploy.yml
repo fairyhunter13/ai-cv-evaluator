@@ -444,6 +444,14 @@ jobs:
           if [ -f secrets/env.production.sops.yaml ]; then
             make decrypt-env-production
           fi
+          
+          # Decrypt Authelia configuration (SOPS-encrypted)
+          if [ -f deploy/authelia/configuration.prod.sops.yml ]; then
+            echo "Decrypting Authelia configuration..."
+            sops -d deploy/authelia/configuration.prod.sops.yml > deploy/authelia/configuration.prod.yml
+            echo "Authelia configuration decrypted successfully"
+          fi
+          
           scp docker-compose.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           # Debug local file content
           echo "=== Local content of app-https.conf ==="
