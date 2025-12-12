@@ -390,10 +390,12 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [pre-deploy-checks, infra-dns, infra-vps]
+    needs: [pre-deploy-checks, e2e-verify, security-gate, infra-dns, infra-vps]
     if: |
       always() &&
-      needs.pre-deploy-checks.outputs.should_deploy == 'true'
+      needs.pre-deploy-checks.outputs.should_deploy == 'true' &&
+      needs.e2e-verify.result == 'success' &&
+      needs.security-gate.result == 'success'
     environment:
       name: production
     steps:
@@ -678,7 +680,6 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
             cd ~/ai-cv-evaluator
             # Load production env so docker compose can interpolate required variables
-            set -x # DEBUG: Enable verbal execution logging
             if [ -f .env.production ]; then
               set -a
               while IFS= read -r line; do
@@ -739,14 +740,6 @@ jobs:
             docker compose rm -f authelia 2>/dev/null || true
 
 
-            echo "DEBUG: Checking variables before docker compose up..."
-            echo "DEBUG: NEXT_COLOR='$NEXT_COLOR'"
-            echo "DEBUG: CURRENT_COLOR='$CURRENT_COLOR'"
-            env | grep COLOR || true # Check environment
-            if [ -z "$NEXT_COLOR" ]; then
-              echo "CRITICAL FAILURE: NEXT_COLOR is empty!"
-              exit 1
-            fi
 
             echo "Bringing up backend_$NEXT_COLOR, worker, frontend, nginx, and oauth2-proxy services..."
             docker compose up -d "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
