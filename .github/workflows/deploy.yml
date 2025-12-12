@@ -729,6 +729,13 @@ jobs:
 
             export COMPOSE_FILE=docker-compose.prod.yml
 
+            # Stop and remove authelia container to clear stale volume mounts
+            # This is needed because the container may have been created when configuration.prod.yml
+            # didn't exist, causing Docker to create a directory instead of expecting a file
+            echo "Stopping and removing authelia container to clear stale volume mounts..."
+            docker compose stop authelia 2>/dev/null || true
+            docker compose rm -f authelia 2>/dev/null || true
+
             echo "Bringing up backend_${NEXT_COLOR}, worker, frontend, nginx, and oauth2-proxy services..."
             docker compose up -d "backend_${NEXT_COLOR}" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
 
