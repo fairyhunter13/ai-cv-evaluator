@@ -390,7 +390,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [pre-deploy-checks, e2e-verify, security-gate]
+    needs: [pre-deploy-checks, e2e-verify, security-gate, infra-dns, infra-vps]
     if: |
       always() &&
       needs.pre-deploy-checks.outputs.should_deploy == 'true' &&
@@ -1385,3 +1385,25 @@ jobs:
           TF_VAR_domain_name: "ai-cv-evaluator.web.id"
         run: terraform apply -auto-approve
         working-directory: terraform/cloudflare
+  infra-vps:
+    runs-on: ubuntu-latest
+    needs: pre-deploy-checks
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform/vps
+
+      - name: Terraform Apply (Provision Server)
+        env:
+          TF_VAR_server_ip: ${{ secrets.SSH_HOST }}
+          TF_VAR_ssh_user: ${{ secrets.SSH_USER }}
+          TF_VAR_ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: terraform apply -auto-approve
+        working-directory: terraform/vps
+
+
