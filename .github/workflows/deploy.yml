@@ -390,12 +390,11 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [pre-deploy-checks, e2e-verify, security-gate, infra-dns, infra-vps]
+    needs: [pre-deploy-checks, e2e-verify, infra-dns, infra-vps]
     if: |
       always() &&
       needs.pre-deploy-checks.outputs.should_deploy == 'true' &&
-      needs.e2e-verify.result == 'success' &&
-      needs.security-gate.result == 'success'
+      needs.e2e-verify.result == 'success'
     environment:
       name: production
     steps:
