@@ -450,6 +450,9 @@ jobs:
           cat deploy/nginx/prod-conf.d/app-https.conf
           echo "=== End local content ==="
 
+          # Fix authelia directory permissions before scp (may be owned by Docker)
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo chown -R \$USER:\$USER ~/ai-cv-evaluator/deploy/authelia 2>/dev/null || mkdir -p ~/ai-cv-evaluator/deploy/authelia"
+          
           scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
