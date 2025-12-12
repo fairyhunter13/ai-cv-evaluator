@@ -8,17 +8,22 @@
         "deployment_success_rate": "100%"
     },
     "summary_status": {
-        "overall_health": "✅ STABLE - SOPS Security Implemented",
+        "overall_health": "🔄 IN PROGRESS - v1.0.222 Re-running",
         "critical_blockers": [],
-        "current_focus": "Deploying Authelia v4.38 config with SOPS-encrypted secrets",
-        "deployment_verified": {
-            "timestamp": "2025-12-12T17:17:38Z",
-            "version": "v1.0.216",
-            "method": "curl HTTP headers verification",
-            "results": {
-                "main_app": "HTTP 302 → oauth2/start (SSO redirect working)",
-                "auth_subdomain": "HTTP 302 → oauth2/start (Authelia accessible)"
-            }
+        "current_focus": "SOPS-encrypted Authelia config deployment",
+        "latest_deployment": {
+            "version": "v1.0.222",
+            "status": "Re-running after e2e-verify TLS timeout",
+            "fixes_included": [
+                "SOPS decryption before SCP",
+                "Explicit SCP for gitignored files",
+                "Stale authelia container stop/rm"
+            ]
+        },
+        "debug_results": {
+            "configuration_file": "exists on server (3951 bytes ✅)",
+            "e2e_verify_failure": "TLS handshake timeout on docker.redpanda.com (transient)",
+            "action_taken": "Workflow re-run triggered"
         },
         "security_improvements": {
             "sops_encrypted_files": [
@@ -31,11 +36,11 @@
             "ci_cd_decryption": "deploy.yml decrypts before SCP"
         },
         "components": {
-            "authelia_login": "🔄 Pending - SOPS config deployment",
+            "authelia_login": "🔄 Pending - v1.0.222 deployment",
             "backend_api": "✅ Stable",
             "infrastructure_terraform": "✅ Stable (infra-dns SUCCESS)",
             "infrastructure_vps": "✅ Stable (infra-vps SUCCESS)",
-            "deployment_pipeline": "🔄 Pending - SOPS integration"
+            "deployment_pipeline": "🔄 Re-running v1.0.222"
         }
     },
     "tasks": [

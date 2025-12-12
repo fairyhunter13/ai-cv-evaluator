@@ -714,6 +714,9 @@ jobs:
             else
               NEXT_COLOR="blue"
             fi
+            
+            # Export for use in subprocesses and command substitution
+            export CURRENT_COLOR NEXT_COLOR
 
             echo "Current backend color: $CURRENT_COLOR"
             echo "Next backend color: $NEXT_COLOR"
