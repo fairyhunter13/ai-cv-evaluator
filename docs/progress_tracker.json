@@ -115,6 +115,24 @@
                 "notes": "All 6 tests passed locally in Docker."
             },
             "validation_status": "Verified Locally - Pending CI"
+        },
+        {
+            "id": "TASK-006",
+            "name": "Fix Cookie Domain in CI",
+            "status": "Implemented",
+            "description": "Fixed 'domain: localhost' mismatch in CI by using Host-Only cookie pattern with strict Playwright params.",
+            "implementation_details": {
+                "files_changed": [
+                    "admin-frontend/tests/sso-gate.spec.ts"
+                ],
+                "notes": "Playwright treats 'url' vs 'domain+path' as mutually exclusive. Updated addCookies to use 'url' for localhost (Host-Only) and 'domain+path' for Prod. Fixed syntax error."
+            },
+            "test_status": {
+                "verified": true,
+                "method": "Local Docker (Playwright v1.49.0)",
+                "notes": "Passed locally. Cookie injection confirmed via logs."
+            },
+            "validation_status": "Verified Locally - Pending CI"
         }
     ],
     "gaps_analysis": [
