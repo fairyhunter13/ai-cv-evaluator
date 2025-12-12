@@ -39,12 +39,18 @@ resource "null_resource" "docker_install" {
   provisioner "remote-exec" {
     inline = [
       "export DEBIAN_FRONTEND=noninteractive",
-      "curl -fsSL https://get.docker.com -o get-docker.sh",
-      "sh get-docker.sh",
-      "usermod -aG docker ${var.ssh_user}",
-      "systemctl enable docker",
-      "systemctl start docker",
-      "rm get-docker.sh",
+      # Check if Docker is already installed to make script idempotent
+      "if ! command -v docker >/dev/null 2>&1; then",
+      "  echo 'Docker not found. Installing...'",
+      "  curl -fsSL https://get.docker.com -o get-docker.sh",
+      "  sh get-docker.sh",
+      "  rm get-docker.sh",
+      "  usermod -aG docker ${var.ssh_user}",
+      "  systemctl enable docker",
+      "  systemctl start docker",
+      "else",
+      "  echo 'Docker is already installed. Skipping installation.'",
+      "fi",
       "docker --version",
       "docker compose version"
     ]
