@@ -9,7 +9,7 @@
         "workspace": "fairyhunter13/ai-cv-evaluator",
         "owner": "hafiz",
         "created_at": "2025-12-12T17:20:00Z",
-        "last_updated": "2025-12-13T11:52:38Z"
+        "last_updated": "2025-12-13T12:05:19Z"
     },
     "references": {
         "retrieved_at": "2025-12-12",
@@ -76,7 +76,7 @@
             "configuration.prod.yml is correctly decrypted on server",
             "No secrets in git history"
         ],
-        "notes": "Operational tooling: monitor deployment status using GitHub CLI (e.g., gh run list --workflow Deploy -L 3; gh run view <run_id>). Production VPS SSH: ssh -i ~/.ssh/id_rsa ubuntu@43.157.225.155"
+        "notes": "Operational tooling: monitor deployment status using GitHub CLI (e.g., gh run list --workflow Deploy -L 3; gh run view <run_id>). Production VPS SSH: ssh -i ~/.ssh/id_rsa ubuntu@43.157.225.155. Secrets handling: store sensitive values only in SOPS-encrypted files (commit encrypted artifacts, keep decrypted outputs gitignored). Use Makefile targets for encrypt/decrypt (make encrypt-env/decrypt-env, encrypt-env-production/decrypt-env-production, encrypt-authelia/decrypt-authelia). CI/CD uses GitHub secret SOPS_AGE_KEY (validated in .github/workflows/secrets-healthcheck.yml#L346) to populate ~/.config/sops/age/keys.txt and decrypt during CI + deploy."
     },
     "requirements": {
         "status": "OPTIONAL",
@@ -144,7 +144,7 @@
             "sast": "NOT_STARTED",
             "dependency_scan": "NOT_STARTED",
             "secrets_scan": "COMPLETED",
-            "notes": "SOPS implemented for all sensitive files. gitignore updated."
+            "notes": "SOPS implemented for sensitive files; decrypted outputs are gitignored. CI/CD decrypts using secrets.SOPS_AGE_KEY to ~/.config/sops/age/keys.txt and Makefile decrypt targets."
         },
         "reference_ids": [
             "REF-OWASP-TOP10"
