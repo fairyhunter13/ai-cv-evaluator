@@ -436,7 +436,7 @@ jobs:
 
       - name: Create deployment directory
         run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -rf ~/ai-cv-evaluator/deploy && mkdir -p ~/ai-cv-evaluator/deploy && sudo chown -R \$(whoami):\$(whoami) ~/ai-cv-evaluator/deploy"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/ai-cv-evaluator/deploy && sudo chown -R \$(whoami):\$(whoami) ~/ai-cv-evaluator/deploy"
       
       - name: Decrypt production .env and upload compose/configs
         run: |
@@ -451,6 +451,20 @@ jobs:
             sops -d deploy/authelia/configuration.prod.sops.yml > deploy/authelia/configuration.prod.yml
             echo "Authelia configuration decrypted successfully"
           fi
+
+          # Decrypt Authelia user database and OIDC private key (SOPS-encrypted)
+          if [ -f deploy/authelia/users_database.enc.yml ]; then
+            echo "Decrypting Authelia users_database..."
+            sops -d deploy/authelia/users_database.enc.yml > deploy/authelia/users_database.yml
+            echo "Authelia users_database decrypted successfully"
+          fi
+
+          if [ -f deploy/authelia/oidc.enc.key ]; then
+            echo "Decrypting Authelia OIDC private key..."
+            sops -d --input-type binary --output-type binary deploy/authelia/oidc.enc.key > deploy/authelia/oidc.key
+            chmod 600 deploy/authelia/oidc.key
+            echo "Authelia OIDC private key decrypted successfully"
+          fi
           
           scp docker-compose.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           # Debug local file content
@@ -461,7 +475,7 @@ jobs:
           # Fix authelia directory permissions before scp (may be owned by Docker)
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo chown -R \$USER:\$USER ~/ai-cv-evaluator/deploy/authelia 2>/dev/null || mkdir -p ~/ai-cv-evaluator/deploy/authelia"
           # Also ensure the file itself is writable if it exists
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -f ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml 2>/dev/null || true"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -rf ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml ~/ai-cv-evaluator/deploy/authelia/users_database.yml ~/ai-cv-evaluator/deploy/authelia/oidc.key 2>/dev/null || true"
           
           scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           
@@ -470,12 +484,37 @@ jobs:
             echo "Copying decrypted Authelia configuration to server..."
             scp deploy/authelia/configuration.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/deploy/authelia/
           fi
+
+          if [ -f deploy/authelia/users_database.yml ]; then
+            echo "Copying decrypted Authelia users_database to server..."
+            scp deploy/authelia/users_database.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/deploy/authelia/
+          fi
+
+          if [ -f deploy/authelia/oidc.key ]; then
+            echo "Copying decrypted Authelia OIDC private key to server..."
+            scp deploy/authelia/oidc.key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/deploy/authelia/
+          fi
           
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           fi
           # Ensure Grafana container (UID 472) can read the mounted files
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "chmod -R o+rX ~/ai-cv-evaluator/deploy/ || true"
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+            cd ~/ai-cv-evaluator
+            if [ -f deploy/authelia/oidc.key ]; then
+              chmod 600 deploy/authelia/oidc.key || true
+            fi
+            if [ -f deploy/authelia/users_database.yml ]; then
+              chmod 600 deploy/authelia/users_database.yml || true
+            fi
+            if [ -f deploy/authelia/configuration.prod.yml ]; then
+              chmod 600 deploy/authelia/configuration.prod.yml || true
+            fi
+            if [ -d deploy/grafana ]; then
+              chmod -R o+rX deploy/grafana || true
+            fi
+          '
       
       - name: Debug file content on server
         run: |
@@ -494,6 +533,24 @@ jobs:
               echo "ERROR: configuration.prod.yml exists as DIRECTORY!"
             else
               echo "ERROR: configuration.prod.yml does not exist!"
+            fi
+
+            if [ -f ~/ai-cv-evaluator/deploy/authelia/users_database.yml ]; then
+              echo "users_database.yml exists as file ✅"
+              head -5 ~/ai-cv-evaluator/deploy/authelia/users_database.yml
+            elif [ -d ~/ai-cv-evaluator/deploy/authelia/users_database.yml ]; then
+              echo "ERROR: users_database.yml exists as DIRECTORY!"
+            else
+              echo "ERROR: users_database.yml does not exist!"
+            fi
+
+            if [ -f ~/ai-cv-evaluator/deploy/authelia/oidc.key ]; then
+              echo "oidc.key exists as file ✅"
+              ls -la ~/ai-cv-evaluator/deploy/authelia/oidc.key
+            elif [ -d ~/ai-cv-evaluator/deploy/authelia/oidc.key ]; then
+              echo "ERROR: oidc.key exists as DIRECTORY!"
+            else
+              echo "ERROR: oidc.key does not exist!"
             fi
           '
       - name: Ensure Docker is available on server
@@ -721,6 +778,25 @@ jobs:
             echo "Current backend color: $CURRENT_COLOR"
             echo "Next backend color: $NEXT_COLOR"
 
+            render_nginx_confs() {
+              local color="$1"
+
+              if [ -f deploy/nginx/prod-conf.d/app-https.conf.template ]; then
+                sed "s|set \\\$backend_host \"backend_.*:8080\";|set \\\$backend_host \"backend_${color}:8080\";|" \
+                  deploy/nginx/prod-conf.d/app-https.conf.template > deploy/nginx/prod-conf.d/app-https.conf
+              fi
+
+              if [ -f deploy/nginx/prod-conf.d/dashboard.conf.template ]; then
+                sed "s|set \\\$backend_host \"backend_.*:8080\";|set \\\$backend_host \"backend_${color}:8080\";|" \
+                  deploy/nginx/prod-conf.d/dashboard.conf.template > deploy/nginx/prod-conf.d/dashboard.conf
+              fi
+
+              if [ -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template ]; then
+                cp -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template deploy/nginx/prod-conf.d/app-http.conf
+              fi
+            }
+            render_nginx_confs "$CURRENT_COLOR"
+
             # Clean up known conflicting file if it exists
             rm -f deploy/nginx/prod-conf.d/app-http-redirect.conf
 
@@ -734,7 +810,7 @@ jobs:
 
             # Stop and remove authelia container to clear stale volume mounts
             # This is needed because the container may have been created when configuration.prod.yml
-            # didn't exist, causing Docker to create a directory instead of expecting a file
+            # did not exist, causing Docker to create a directory instead of expecting a file
             echo "Stopping and removing authelia container to clear stale volume mounts..."
             docker compose stop authelia 2>/dev/null || true
             docker compose rm -f authelia 2>/dev/null || true
@@ -753,6 +829,22 @@ jobs:
               echo "Attempt $i: Waiting for backend_$NEXT_COLOR to start..."
               sleep 5
             done
+
+            echo "Waiting for backend_$NEXT_COLOR to be healthy (direct check, not via nginx routing)..."
+            backend_ready=0
+            for i in {1..30}; do
+              if docker compose -f docker-compose.prod.yml exec -T nginx curl -fsS "http://backend_$NEXT_COLOR:8080/healthz" >/dev/null 2>&1; then
+                backend_ready=1
+                echo "backend_$NEXT_COLOR is healthy"
+                break
+              fi
+              echo "Attempt $i: Waiting for backend_$NEXT_COLOR health..."
+              sleep 5
+            done
+            if [ "$backend_ready" -ne 1 ]; then
+              echo "ERROR: backend_$NEXT_COLOR failed health check; not switching active color"
+              exit 1
+            fi
 
             echo "Force restarting Authelia to refresh configuration..."
             docker compose -f docker-compose.prod.yml restart authelia || echo "Warning: authelia restart failed"
@@ -776,8 +868,7 @@ jobs:
             done
 
             echo "Switching Nginx upstream to backend_$NEXT_COLOR..."
-            sed -i "s|set \$backend_host \".*:8080\";|set \$backend_host \"backend_$NEXT_COLOR:8080\";|" deploy/nginx/prod-conf.d/app-https.conf.template
-            echo "$NEXT_COLOR" > "$COLOR_FILE"
+            render_nginx_confs "$NEXT_COLOR"
 
             echo "Restarting Nginx to pick up new upstream..."
             docker compose -f docker-compose.prod.yml restart nginx
@@ -787,6 +878,7 @@ jobs:
             for i in {1..30}; do
               if docker compose -f docker-compose.prod.yml exec -T nginx curl -fk https://localhost/healthz > /dev/null 2>&1; then
                 echo "Backend is healthy through Nginx"
+                echo "$NEXT_COLOR" > "$COLOR_FILE"
                 break
               fi
               echo "Attempt $i: Waiting for backend health check through Nginx..."
@@ -824,21 +916,43 @@ jobs:
             fi
             # Use prod-conf.d which is mounted by docker-compose.prod.yml
             if [ -f deploy/nginx/prod-conf.d/app-https.conf.template ]; then
+              COLOR_FILE=".active_color"
+              ACTIVE_COLOR="blue"
+              if [ -f "$COLOR_FILE" ]; then
+                ACTIVE_COLOR=$(cat "$COLOR_FILE" | tr -d " \t\r\n")
+                case "$ACTIVE_COLOR" in
+                  blue|green) ;;
+                  *) ACTIVE_COLOR="blue" ;;
+                esac
+              fi
+
+              render_nginx_confs() {
+                local color="$1"
+
+                sed "s|set \\\$backend_host \"backend_.*:8080\";|set \\\$backend_host \"backend_${color}:8080\";|" \
+                  deploy/nginx/prod-conf.d/app-https.conf.template > deploy/nginx/prod-conf.d/app-https.conf
+
+                if [ -f deploy/nginx/prod-conf.d/dashboard.conf.template ]; then
+                  sed "s|set \\\$backend_host \"backend_.*:8080\";|set \\\$backend_host \"backend_${color}:8080\";|" \
+                    deploy/nginx/prod-conf.d/dashboard.conf.template > deploy/nginx/prod-conf.d/dashboard.conf
+                fi
+
+                if [ -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template ]; then
+                  cp -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template deploy/nginx/prod-conf.d/app-http.conf
+                fi
+              }
+
               # Clean up old configs to avoid duplicates/conflicts
-              rm -f deploy/nginx/prod-conf.d/*.conf
-              
-              cp -f deploy/nginx/prod-conf.d/app-https.conf.template deploy/nginx/prod-conf.d/app-https.conf
-              if [ -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template ]; then
-                cp -f deploy/nginx/prod-conf.d/app-http-redirect.conf.template deploy/nginx/prod-conf.d/app-http.conf
+              rm -f deploy/nginx/prod-conf.d/app-https.conf deploy/nginx/prod-conf.d/app-http.conf deploy/nginx/prod-conf.d/app-http-redirect.conf deploy/nginx/prod-conf.d/dashboard.conf deploy/nginx/prod-conf.d/keycloak.conf
+
+              render_nginx_confs "$ACTIVE_COLOR"
+
+              if docker compose -f docker-compose.prod.yml config --services 2>/dev/null | grep -qx "keycloak"; then
+                if [ -f deploy/nginx/prod-conf.d/keycloak.conf.template ]; then
+                  cp -f deploy/nginx/prod-conf.d/keycloak.conf.template deploy/nginx/prod-conf.d/keycloak.conf
+                fi
               fi
-              # Enable dashboard HTTPS config if present
-              if [ -f deploy/nginx/prod-conf.d/dashboard.conf.template ]; then
-                cp -f deploy/nginx/prod-conf.d/dashboard.conf.template deploy/nginx/prod-conf.d/dashboard.conf
-              fi
-              # Enable keycloak HTTPS config if present
-              if [ -f deploy/nginx/prod-conf.d/keycloak.conf.template ]; then
-                cp -f deploy/nginx/prod-conf.d/keycloak.conf.template deploy/nginx/prod-conf.d/keycloak.conf
-              fi
+
               # Reload Nginx to apply changes - fail if configuration is invalid
               # Restart Nginx to apply changes (reload resulted in lost listeners previously)
               docker compose -f docker-compose.prod.yml restart nginx

@@ -30,6 +30,7 @@ artifacts/
 
 # GitHub Actions logs and artifacts (local downloads)
 gh-logs/
+gosec-results.sarif
 
 # Terraform
 *.tfstate
