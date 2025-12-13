@@ -9,7 +9,7 @@
         "workspace": "fairyhunter13/ai-cv-evaluator",
         "owner": "hafiz",
         "created_at": "2025-12-12T17:20:00Z",
-        "last_updated": "2025-12-13T11:42:53Z"
+        "last_updated": "2025-12-13T11:52:38Z"
     },
     "references": {
         "retrieved_at": "2025-12-12",
@@ -76,7 +76,7 @@
             "configuration.prod.yml is correctly decrypted on server",
             "No secrets in git history"
         ],
-        "notes": ""
+        "notes": "Operational tooling: monitor deployment status using GitHub CLI (e.g., gh run list --workflow Deploy -L 3; gh run view <run_id>). Production VPS SSH: ssh -i ~/.ssh/id_rsa ubuntu@43.157.225.155"
     },
     "requirements": {
         "status": "OPTIONAL",
@@ -454,7 +454,7 @@
         "services": [
             "docker compose (dev stack)"
         ],
-        "notes": "Resolved tooling permission issue: deploy/authelia/notification.txt was root-owned 0600 causing permission denied for repo searches; chowned back to hafiz. Local docker compose up initially failed to bind 8088 due to an existing SSH port-forward; killed the SSH tunnel and re-attempting dev-nginx startup."
+        "notes": "Resolved tooling permission issue: deploy/authelia/notification.txt was root-owned 0600 causing permission denied for repo searches; chowned back to hafiz. Local docker compose up initially failed to bind 8088 due to an existing SSH port-forward; killed the SSH tunnel and re-attempting dev-nginx startup. Local tooling available: gh CLI for GitHub Actions inspection. Production VPS access: ssh -i ~/.ssh/id_rsa ubuntu@43.157.225.155"
     },
     "validation_summary": {
         "core_validation_status": "COMPLETED",
