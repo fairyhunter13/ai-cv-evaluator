@@ -9,7 +9,7 @@
         "workspace": "fairyhunter13/ai-cv-evaluator",
         "owner": "hafiz",
         "created_at": "2025-12-12T17:20:00Z",
-        "last_updated": "2025-12-13T10:46:35Z"
+        "last_updated": "2025-12-13T11:42:53Z"
     },
     "references": {
         "retrieved_at": "2025-12-12",
@@ -85,11 +85,11 @@
         "notes": ""
     },
     "overall_status": {
-        "completion_percentage": 90,
+        "completion_percentage": 95,
         "status": "IN_PROGRESS",
-        "current_blocker": "Commit, tag a new release, and deploy via GitHub Actions",
-        "risk_level": "MEDIUM",
-        "summary": "Production restored via hotfix: nginx is listening on 80/443, https://ai-cv-evaluator.web.id/healthz returns 200, and https://auth.ai-cv-evaluator.web.id/api/health returns 200. Deploy workflow hardening is implemented (nginx configs rendered from templates per active color, backend health gate before switching, and Authelia secrets chmod 600), pending CI redeploy with a new tag."
+        "current_blocker": "Expand Playwright E2E coverage for remaining Authelia edge cases (session expiry, denied consent, MFA/2FA variants)",
+        "risk_level": "LOW",
+        "summary": "Deploy hardening is live in production (nginx configs rendered from templates per active color, backend health gate before switching, and Authelia secrets chmod 600). Release v1.0.230 deployed successfully via GitHub Actions (run 20191259067) with validate-production passing (health endpoints + E2E)."
     },
     "architecture": {
         "status": "NOT_STARTED",
@@ -447,7 +447,7 @@
         "blocked": 0,
         "test_coverage": "",
         "prod_scenario_replicated": false,
-        "fix_validated": false,
+        "fix_validated": true,
         "notes": "Local checks: make lint-all (PASS), make vet (PASS), make vuln (PASS), make gosec-sarif (PASS), make ci-test (PASS, total coverage 82.2%), make openapi-validate (PASS), admin-frontend npm run build (PASS). Playwright E2E: admin-frontend npm run test:e2e -- tests/sso-gate.spec.ts (PASS, 17 passed / 2 skipped) after npx playwright install."
     },
     "local_execution_status": {
@@ -457,9 +457,11 @@
         "notes": "Resolved tooling permission issue: deploy/authelia/notification.txt was root-owned 0600 causing permission denied for repo searches; chowned back to hafiz. Local docker compose up initially failed to bind 8088 due to an existing SSH port-forward; killed the SSH tunnel and re-attempting dev-nginx startup."
     },
     "validation_summary": {
-        "core_validation_status": "NOT_STARTED",
-        "summary": "",
-        "evidence": [],
+        "core_validation_status": "COMPLETED",
+        "summary": "GitHub Actions Deploy for v1.0.230 completed successfully, including validate-production checks (health endpoints + Playwright E2E).",
+        "evidence": [
+            "https://github.com/fairyhunter13/ai-cv-evaluator/actions/runs/20191259067"
+        ],
         "notes": ""
     },
     "issues_summary": [],
@@ -470,12 +472,12 @@
         "reference_ids": []
     },
     "latest_deployment": {
-        "version": "v1.0.229",
-        "status": "Production hotfix applied; CI redeploy pending",
+        "version": "v1.0.230",
+        "status": "Deployed successfully via GitHub Actions (run 20191259067)",
         "fixes_included": [
-            "Variable expansion fix ($VAR syntax)",
-            "Restored Security Gates",
-            "Removed Debug Logs"
+            "Deploy workflow hardening (template-rendered nginx configs per active color; backend health gate before switching)",
+            "Authelia secrets upload + restrictive permissions (chmod 600)",
+            "SSO E2E additions (cookie clearing + oauth2 burst/rate-limit tolerance)"
         ]
     },
     "deployment_readiness": {
@@ -483,15 +485,14 @@
         "tests_passed": true,
         "config_ready": true,
         "documentation_ready": true,
-        "prod_scenario_validated": false,
+        "prod_scenario_validated": true,
         "local_services_running": false,
         "local_e2e_status": "PASSED (local)",
-        "core_validation_complete": false,
-        "recommendation": "Run local CI checks, then tag and deploy",
+        "core_validation_complete": true,
+        "recommendation": "Production validated (v1.0.230 deployed successfully)",
         "next_steps": [
-            "Run go+frontend+playwright checks",
-            "Commit and tag new release",
-            "Verify deployment"
+            "Expand Playwright E2E coverage for remaining Authelia edge cases",
+            "Continue monitoring production logs/metrics and health endpoints"
         ]
     },
     "documentation": {
