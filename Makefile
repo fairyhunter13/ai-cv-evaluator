@@ -940,13 +940,23 @@ frontend-help:
 .PHONY: encrypt-authelia decrypt-authelia
 
 encrypt-authelia:
-	sops --encrypt deploy/authelia/configuration.yml > deploy/authelia/configuration.enc.yml
-	sops --encrypt deploy/authelia/configuration.prod.yml > deploy/authelia/configuration.prod.enc.yml
-	sops --encrypt deploy/authelia/users_database.yml > deploy/authelia/users_database.enc.yml
-	sops --encrypt --input-type binary --output-type binary deploy/authelia/oidc.key > deploy/authelia/oidc.enc.key
+	$(call check_file_exists,deploy/authelia/configuration.yml)
+	$(call check_file_exists,deploy/authelia/configuration.prod.yml)
+	$(call check_file_exists,deploy/authelia/users_database.yml)
+	$(call check_file_exists,deploy/authelia/oidc.key)
+	$(call check_sops_key)
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt deploy/authelia/configuration.yml > deploy/authelia/configuration.enc.yml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt deploy/authelia/configuration.prod.yml > deploy/authelia/configuration.prod.sops.yml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt deploy/authelia/users_database.yml > deploy/authelia/users_database.enc.yml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type binary --output-type binary deploy/authelia/oidc.key > deploy/authelia/oidc.enc.key
 
 decrypt-authelia:
-	sops --decrypt deploy/authelia/configuration.enc.yml > deploy/authelia/configuration.yml
-	sops --decrypt deploy/authelia/configuration.prod.enc.yml > deploy/authelia/configuration.prod.yml
-	sops --decrypt deploy/authelia/users_database.enc.yml > deploy/authelia/users_database.yml
-	sops --decrypt --input-type binary --output-type binary deploy/authelia/oidc.enc.key > deploy/authelia/oidc.key
+	$(call check_file_exists,deploy/authelia/configuration.enc.yml)
+	$(call check_file_exists,deploy/authelia/configuration.prod.sops.yml)
+	$(call check_file_exists,deploy/authelia/users_database.enc.yml)
+	$(call check_file_exists,deploy/authelia/oidc.enc.key)
+	$(call check_sops_key)
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt deploy/authelia/configuration.enc.yml > deploy/authelia/configuration.yml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt deploy/authelia/configuration.prod.sops.yml > deploy/authelia/configuration.prod.yml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt deploy/authelia/users_database.enc.yml > deploy/authelia/users_database.yml
+	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type binary --output-type binary deploy/authelia/oidc.enc.key > deploy/authelia/oidc.key
