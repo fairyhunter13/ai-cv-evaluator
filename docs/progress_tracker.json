@@ -9,10 +9,10 @@
         "workspace": "fairyhunter13/ai-cv-evaluator",
         "owner": "hafiz",
         "created_at": "2025-12-12T17:20:00Z",
-        "last_updated": "2025-12-13T12:05:19Z"
+        "last_updated": "2025-12-14T17:16:35Z"
     },
     "references": {
-        "retrieved_at": "2025-12-12",
+        "retrieved_at": "2025-12-13",
         "items": [
             {
                 "id": "REF-AUTHELIA",
@@ -53,28 +53,35 @@
                 "id": "REF-C4MODEL",
                 "title": "C4 Model",
                 "url": "https://c4model.com/"
+            },
+            {
+                "id": "REF-PLAYWRIGHT-TEST-PARALLEL",
+                "title": "Playwright Test Parallelism (test list file)",
+                "url": "https://playwright.dev/docs/test-parallel"
             }
         ]
     },
     "context": {
-        "problem_statement": "Authelia OIDC endpoints returning 404 in production; secrets management was insecure; deployment pipeline fragile.",
-        "background": "Migrating authentication from Keycloak to Authelia. Need secure secret management (SOPS) and robust deployment.",
+        "problem_statement": "Local + production Playwright E2E suite has failures (SSO/login flakiness and brittle Jaeger span assertions). Need all E2E specs to pass locally and against https://ai-cv-evaluator.web.id.",
+        "background": "After Authelia deployment hardening, continuing to stabilize Playwright E2E tests. Jaeger traces show Groq spans present while OpenRouter/Tika spans may be absent depending on fixtures and provider selection.",
         "goals": [
-            "Deploy Authelia v4.38 with SOPS-encrypted configuration",
-            "Fix OIDC endpoint 404 error",
-            "Ensure clean deployment (no stale containers/volumes)",
-            "Verify OIDC flow with Google/GitHub providers"
+            "Fix failing Playwright E2E specs (comprehensive-e2e.spec.ts, real-eval.spec.ts) while reusing shared helpers",
+            "Get full local Playwright E2E suite passing",
+            "Validate Playwright E2E specs against production (https://ai-cv-evaluator.web.id)"
         ],
         "non_goals": [],
-        "constraints": [],
+        "constraints": [
+            "Prefer minimal diffs; reuse admin-frontend/tests/helpers/* where possible",
+            "Do not break CI/deploy validation gates"
+        ],
         "environments": [
+            "local",
             "production"
         ],
         "success_criteria": [
-            "Deploy workflow passes successfully",
-            "Authelia /api/oidc/authorization returns valid response (not 404)",
-            "configuration.prod.yml is correctly decrypted on server",
-            "No secrets in git history"
+            "Local Playwright E2E suite passes consistently",
+            "Production Playwright E2E validation passes against https://ai-cv-evaluator.web.id",
+            "Jaeger assertions are robust to provider selection (Groq vs OpenRouter) and fixture type (.txt vs .pdf/.docx)"
         ],
         "notes": "Operational tooling: monitor deployment status using GitHub CLI (e.g., gh run list --workflow Deploy -L 3; gh run view <run_id>). Production VPS SSH: ssh -i ~/.ssh/id_rsa ubuntu@43.157.225.155. Secrets handling: store sensitive values only in SOPS-encrypted files (commit encrypted artifacts, keep decrypted outputs gitignored). Use Makefile targets for encrypt/decrypt (make encrypt-env/decrypt-env, encrypt-env-production/decrypt-env-production, encrypt-authelia/decrypt-authelia). CI/CD uses GitHub secret SOPS_AGE_KEY (validated in .github/workflows/secrets-healthcheck.yml#L346) to populate ~/.config/sops/age/keys.txt and decrypt during CI + deploy."
     },
@@ -85,11 +92,12 @@
         "notes": ""
     },
     "overall_status": {
-        "completion_percentage": 95,
+        "completion_percentage": 90,
         "status": "IN_PROGRESS",
-        "current_blocker": "Expand Playwright E2E coverage for remaining Authelia edge cases (session expiry, denied consent, MFA/2FA variants)",
-        "risk_level": "LOW",
-        "summary": "Deploy hardening is live in production (nginx configs rendered from templates per active color, backend health gate before switching, and Authelia secrets chmod 600). Release v1.0.230 deployed successfully via GitHub Actions (run 20191259067) with validate-production passing (health endpoints + E2E)."
+        "current_blocker": "Commit latest changes and push a new semver tag to trigger deploy.yml validate-production; run Playwright E2E validation against production (https://ai-cv-evaluator.web.id) and fix any prod-only issues",
+        "risk_level": "MEDIUM",
+        "summary": "Local Playwright E2E suite is now green (190 passed, 2 skipped). Production validation is pending; Cloudflare bot challenge was observed on Authelia (auth.ai-cv-evaluator.web.id) during SSO redirect, so deploy workflow Cloudflare proxy disable/enable + DNS sync were updated to target auth subdomain instead of the removed keycloak subdomain. validate-production Playwright step was updated to run all Playwright spec files and fail the job if any spec fails.",
+        "notes": "Repo state before production validation: branch=main head=6d59fbd; latest tags=v1.0.230..v1.0.226; working tree has modified deploy.yml + Playwright specs and untracked admin-frontend/tests/helpers + admin-frontend/tests/sso-gate (pending commit + tag v1.0.231)."
     },
     "architecture": {
         "status": "NOT_STARTED",
@@ -434,21 +442,591 @@
                 "how_to": "",
                 "reference_ids": []
             }
+        },
+        {
+            "id": "TASK-006",
+            "title": "Refactor Playwright sso-gate suite into modular specs + shared helpers",
+            "description": "Split admin-frontend/tests/sso-gate.spec.ts into smaller organized spec files and extract shared helpers into admin-frontend/tests/helpers/ while preserving all existing test behavior, titles, tags, and logic.",
+            "category": "testing",
+            "priority": "HIGH",
+            "status": "COMPLETED",
+            "owner": "hafiz",
+            "notes": "CI currently runs: npm run test:e2e -- tests/sso-gate.spec.ts (see .github/workflows/ci.yml). Refactor must preserve identical test selection and behavior; update CI invocation only if required. Progress: extracted shared helpers to admin-frontend/tests/helpers/ (env.ts, navigation.ts, sso.ts, api.ts, mailpit.ts, traffic.ts, authelia.ts, grafana.ts) and updated sso-gate.spec.ts to import them. Split sso-gate.spec.ts into modular test registrars under admin-frontend/tests/sso-gate/ (unauthenticated.ts, auth-basic.ts, portal-login.ts, portal-backend-api-links.ts, grafana-request-drilldown.ts, backend-api-health.ts, grafana-contact-points.ts, notifications.ts, portal-dashboards.ts, logout.ts) while keeping tests/sso-gate.spec.ts as the CI entrypoint (Playwright \"test list file\" pattern).",
+            "links": [],
+            "test_status": {
+                "status": "COMPLETED",
+                "process": "Local Playwright discovery + execution",
+                "commands": [
+                    "cd admin-frontend && npm run test:e2e -- --list",
+                    "cd admin-frontend && npm run test:e2e -- <refactored spec path(s)>"
+                ],
+                "expected_result": "All previously discovered tests remain discoverable with identical titles/tags; execution passes with no behavior change.",
+                "actual_result": "PASS: npm run test:e2e -- --list discovers 192 tests in 16 files; npm run test:e2e -- tests/sso-gate.spec.ts runs 19 tests (17 passed, 2 skipped) with some tests now defined in imported module files.",
+                "evidence": [
+                    "admin-frontend: npm run test:e2e -- --list => Total: 192 tests in 16 files (exit 0)",
+                    "admin-frontend: npm run test:e2e -- tests/sso-gate.spec.ts => 17 passed, 2 skipped (exit 0)",
+                    "admin-frontend: npm run lint => PASS (exit 0)"
+                ],
+                "notes": "Required ESM fix: change Playwright imports to use type-only imports for Page/BrowserContext. Required Playwright browser install: npx playwright install chromium."
+            },
+            "validation_status": {
+                "status": "NOT_STARTED",
+                "process": "CI Playwright job validation",
+                "criteria": [
+                    "GitHub Actions ci.yml playwright-e2e job runs the refactored tests with identical behavior"
+                ],
+                "evidence": [],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "OPEN",
+                "issue_summary": "sso-gate.spec.ts is too large and contains embedded helpers",
+                "impact": "Hard to maintain; changes risk unintended behavior drift",
+                "root_cause": "Single large spec file accumulated multiple suites and helper utilities",
+                "how_to_solve": "Extract helpers into tests/helpers and split tests into smaller spec files grouped by responsibility; keep CI behavior identical",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "NOT_STARTED",
+                "process": "",
+                "hypotheses": [],
+                "findings": [],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-007",
+            "title": "Refactor GitHub Actions workflows using reusable actions/workflows",
+            "description": "Reduce duplication in CI/CD by introducing reusable composite actions and/or reusable workflows following GitHub best practices (Dec 2025), while preserving all existing behavior and avoiding unnecessary comment churn.",
+            "category": "ci-cd",
+            "priority": "MEDIUM",
+            "status": "NOT_STARTED",
+            "owner": "hafiz",
+            "notes": "Must preserve existing deploy behavior and validate-production gates. deploy.yml validate-production currently runs Playwright specs (real-eval.spec.ts, comprehensive-e2e.spec.ts filtered, grafana.spec.ts).",
+            "links": [],
+            "test_status": {
+                "status": "NOT_STARTED",
+                "process": "Workflow dry-run via GitHub Actions",
+                "commands": [],
+                "expected_result": "CI and deploy workflows behave identically with reduced duplication",
+                "actual_result": "",
+                "evidence": [],
+                "notes": ""
+            },
+            "validation_status": {
+                "status": "NOT_STARTED",
+                "process": "GitHub Actions run comparison",
+                "criteria": [
+                    "ci.yml jobs still run with same triggers and steps",
+                    "deploy.yml jobs still run with same triggers, secrets handling (SOPS/AGE), and deployment logic"
+                ],
+                "evidence": [],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "OPEN",
+                "issue_summary": "Workflow duplication across CI and deploy pipelines",
+                "impact": "Higher maintenance and risk of drift",
+                "root_cause": "Similar setup steps repeated across multiple jobs",
+                "how_to_solve": "Extract common steps into composite actions and/or reusable workflows; update callers with minimal diffs",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "NOT_STARTED",
+                "process": "",
+                "hypotheses": [],
+                "findings": [],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-008",
+            "title": "Verify windsurf / windsurf-next resolution on macbook",
+            "description": "SSH into the macbook device and confirm windsurf and windsurf-next commands resolve correctly in bash.",
+            "category": "investigation",
+            "priority": "LOW",
+            "status": "COMPLETED",
+            "owner": "hafiz",
+            "notes": "Verified via SSH that windsurf resolves to /Users/hafizputraludyanto/.codeium/windsurf/bin/windsurf (symlink -> /Applications/Windsurf.app/Contents/Resources/app/bin/windsurf) and windsurf-next resolves to /Users/hafizputraludyanto/.codeium/windsurf/bin/windsurf-next (symlink -> /Applications/Windsurf - Next.app/Contents/Resources/app/bin/windsurf-next) in bash login shells.",
+            "links": [],
+            "test_status": {
+                "status": "NOT_APPLICABLE",
+                "process": "",
+                "commands": [],
+                "expected_result": "",
+                "actual_result": "",
+                "evidence": [],
+                "notes": ""
+            },
+            "validation_status": {
+                "status": "VALIDATED",
+                "process": "Remote shell verification over SSH",
+                "criteria": [
+                    "windsurf is resolvable in bash login shells",
+                    "windsurf-next is resolvable in bash login shells"
+                ],
+                "evidence": [
+                    "bash: type -a windsurf -> /Users/hafizputraludyanto/.codeium/windsurf/bin/windsurf",
+                    "bash: type -a windsurf-next -> /Users/hafizputraludyanto/.codeium/windsurf/bin/windsurf-next",
+                    "ls -l windsurf -> /Applications/Windsurf.app/Contents/Resources/app/bin/windsurf",
+                    "ls -l windsurf-next -> /Applications/Windsurf - Next.app/Contents/Resources/app/bin/windsurf-next"
+                ],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "NONE",
+                "issue_summary": "",
+                "impact": "",
+                "root_cause": "",
+                "how_to_solve": "",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "COMPLETED",
+                "process": "SSH into macbook and check PATH + shell resolution.",
+                "hypotheses": [],
+                "findings": [
+                    "Both commands are available via /Users/hafizputraludyanto/.codeium/windsurf/bin and are symlinks to /Applications/... binaries.",
+                    "Commands resolve in bash login shells."
+                ],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-009",
+            "title": "Sync Windsurf automation profiles between Ubuntu and macbook",
+            "description": "Update /home/hafiz/sync-devices.sh to include syncing ~/.windsurf-automation and ~/.windsurf-next-automation and verify they are present on the Mac after sync.",
+            "category": "tooling",
+            "priority": "LOW",
+            "status": "COMPLETED",
+            "owner": "hafiz",
+            "notes": "Ran sync-devices.sh --dry-run and real run; verified on Mac that ~/.windsurf-automation and ~/.windsurf-next-automation exist.",
+            "links": [],
+            "test_status": {
+                "status": "NOT_APPLICABLE",
+                "process": "",
+                "commands": [],
+                "expected_result": "",
+                "actual_result": "",
+                "evidence": [],
+                "notes": ""
+            },
+            "validation_status": {
+                "status": "VALIDATED",
+                "process": "sync-devices.sh dry-run + real run + remote ls over SSH",
+                "criteria": [
+                    "Dry-run includes rsync for ~/.windsurf-automation and ~/.windsurf-next-automation",
+                    "Real sync copies both directories to the Mac",
+                    "Mac has both directories after sync"
+                ],
+                "evidence": [
+                    "sync-devices.sh --dry-run: [DRY-RUN] Would rsync ~/.windsurf-automation -> Mac ~/.windsurf-automation",
+                    "sync-devices.sh --dry-run: [DRY-RUN] Would rsync ~/.windsurf-next-automation -> Mac ~/.windsurf-next-automation",
+                    "sync-devices.sh: [OK] Synced: Windsurf automation profile (~/.windsurf-automation)",
+                    "sync-devices.sh: [OK] Synced: Windsurf-Next automation profile (~/.windsurf-next-automation)",
+                    "ssh mac: ls -ld ~/.windsurf-automation ~/.windsurf-next-automation -> directories exist"
+                ],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "NONE",
+                "issue_summary": "",
+                "impact": "",
+                "root_cause": "",
+                "how_to_solve": "",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "COMPLETED",
+                "process": "Update sync script and run dry-run + real sync; verify target directories on Mac.",
+                "hypotheses": [],
+                "findings": [
+                    "sync-devices.sh now includes syncing automation user-data-dir folders for windsurf and windsurf-next",
+                    "Mac target directories exist after sync"
+                ],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-010",
+            "title": "Make windsurf aliases cross-platform (Linux + Darwin) and validate on Mac",
+            "description": "Update ~/.bash_aliases to support Darwin binary paths for windsurf/windsurf-next (and automation variants), sync to Mac, and validate in bash.",
+            "category": "tooling",
+            "priority": "LOW",
+            "status": "COMPLETED",
+            "owner": "hafiz",
+            "notes": "Added uname-based alias selection for Darwin vs Linux.",
+            "links": [],
+            "test_status": {
+                "status": "NOT_APPLICABLE",
+                "process": "",
+                "commands": [],
+                "expected_result": "",
+                "actual_result": "",
+                "evidence": [],
+                "notes": ""
+            },
+            "validation_status": {
+                "status": "VALIDATED",
+                "process": "Local source + remote SSH verification (bash) after device sync",
+                "criteria": [
+                    "On macOS (Darwin), windsurf/windsurf-next aliases use $HOME/.codeium/windsurf/bin/*",
+                    "On Linux, windsurf/windsurf-next aliases use /usr/bin/*",
+                    "Automation aliases include correct --user-data-dir and --remote-debugging-port flags",
+                    "Aliases are available in bash login shells on macOS after sync"
+                ],
+                "evidence": [
+                    "Mac bash: source ~/.bash_aliases; alias windsurf shows ${HOME}/.codeium/windsurf/bin/windsurf --remote-debugging-port=9222",
+                    "Mac bash: source ~/.bash_aliases; alias windsurf-next shows ${HOME}/.codeium/windsurf/bin/windsurf-next --remote-debugging-port=9223",
+                    "Mac: type -a windsurf and type -a windsurf-next resolve to /Users/hafizputraludyanto/.codeium/windsurf/bin/windsurf and /Users/hafizputraludyanto/.codeium/windsurf/bin/windsurf-next",
+                    "Mac: $HOME/.codeium/windsurf/bin/windsurf and windsurf-next are executable"
+                ],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "NONE",
+                "issue_summary": "",
+                "impact": "",
+                "root_cause": "",
+                "how_to_solve": "",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "COMPLETED",
+                "process": "Sync ~/.bash_aliases to Mac and check alias/type output in bash",
+                "hypotheses": [],
+                "findings": [
+                    "Aliases are auto-loaded in bash login shells on the Mac.",
+                    "Aliases correctly switch binary paths based on uname (Darwin vs Linux)."
+                ],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-011",
+            "title": "Sync VS Code state directory (~/.vscode) between Ubuntu and macbook",
+            "description": "Update /home/hafiz/sync-devices.sh to sync ~/.vscode to the Mac behind SYNC_VSCODE_STATE and verify argv.json + extensions are present after sync.",
+            "category": "tooling",
+            "priority": "LOW",
+            "status": "COMPLETED",
+            "owner": "hafiz",
+            "notes": "Added SYNC_VSCODE_STATE flag (default false) and synced ~/.vscode to the Mac using targeted env flags; verified via SSH that ~/.vscode/argv.json and ~/.vscode/extensions exist with expected contents.",
+            "links": [
+                "https://code.visualstudio.com/docs/setup/setup-overview"
+            ],
+            "test_status": {
+                "status": "NOT_APPLICABLE",
+                "process": "",
+                "commands": [],
+                "expected_result": "",
+                "actual_result": "",
+                "evidence": [],
+                "notes": ""
+            },
+            "validation_status": {
+                "status": "VALIDATED",
+                "process": "sync-devices.sh targeted run + remote ls over SSH",
+                "criteria": [
+                    "SYNC_VSCODE_STATE=true triggers rsync ~/.vscode -> Mac ~/.vscode",
+                    "Mac has ~/.vscode/argv.json",
+                    "Mac has ~/.vscode/extensions with extension folders"
+                ],
+                "evidence": [
+                    "sync-devices.sh: [OK] Synced: VS Code state (~/.vscode)",
+                    "ssh mac: ls -la ~/.vscode shows argv.json, cli/, extensions/",
+                    "ssh mac: ls -la ~/.vscode/extensions shows extensions.json and extension directories (e.g., github.copilot-*, golang.go-0.50.0)"
+                ],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "NONE",
+                "issue_summary": "",
+                "impact": "",
+                "root_cause": "",
+                "how_to_solve": "",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "COMPLETED",
+                "process": "Audit sync-devices.sh flags + verify macOS ~/.vscode content after sync",
+                "hypotheses": [],
+                "findings": [
+                    "macOS uses ~/.vscode in addition to $HOME/Library/Application Support/Code per VS Code docs",
+                    "~/.vscode/argv.json and ~/.vscode/extensions were successfully synced and present on the Mac"
+                ],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "COMPLETED",
+                "questions": [
+                    "Where does VS Code store user data / extension state on macOS?"
+                ],
+                "notes": "VS Code docs (clean uninstall guidance) lists macOS user data folders: $HOME/Library/Application Support/Code and ~/.vscode.",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-012",
+            "title": "Fix Playwright E2E failures (comprehensive-e2e + real-eval) locally and in production",
+            "description": "Stabilize Playwright E2E specs with robust SSO handling and Jaeger trace assertions; validate locally and on https://ai-cv-evaluator.web.id.",
+            "category": "testing",
+            "priority": "HIGH",
+            "status": "IN_PROGRESS",
+            "owner": "hafiz",
+            "notes": "Jaeger traces show ProcessEvaluateJob/extractUploadedText and Groq spans, while OpenRouter/Tika spans may be absent (provider selection + .txt fixtures bypass Tika). Updated comprehensive-e2e.spec.ts to query Jaeger API by operation and accept either Groq or OpenRouter AI span.",
+            "links": [
+                "admin-frontend/tests/comprehensive-e2e.spec.ts",
+                "admin-frontend/tests/real-eval.spec.ts"
+            ],
+            "test_status": {
+                "status": "COMPLETED",
+                "process": "Run targeted Playwright tests, then full local suite; validate against production site.",
+                "commands": [
+                    "admin-frontend: node --input-type=module -e '<inline script>' (queries /jaeger/api/traces for operations: tika.ExtractPath, ai.real.callOpenRouterWithModelForKey, ai.real.callGroqChatWithModel, ProcessEvaluateJob, HandleEvaluate)",
+                    "admin-frontend: node --input-type=module -e '<inline script>' (queries /jaeger/api/traces for operation: extractUploadedText)",
+                    "admin-frontend: npm run test:e2e -- tests/comprehensive-e2e.spec.ts -g \"complete trace spans for evaluation job\"",
+                    "admin-frontend: npm run test:e2e -- tests/real-eval.spec.ts",
+                    "admin-frontend: npm run test:e2e"
+                ],
+                "expected_result": "Targeted tests pass and Jaeger queries show expected operations for the evaluation flow (job processing, upload/extraction, and at least one AI provider call).",
+                "actual_result": "Jaeger API query results: tika.ExtractPath=0 traces, ai.real.callOpenRouterWithModelForKey=0 traces, ai.real.callGroqChatWithModel=10 traces, ProcessEvaluateJob=10 traces, HandleEvaluate=10 traces, extractUploadedText=5 traces. Updated test assertions accordingly; targeted reruns PASS (comprehensive trace test: 1 passed, 1.4m; real-eval: 1 passed, 56.2s). Full local suite rerun PASS (190 passed, 2 skipped, 11.5m).",
+                "evidence": [
+                    "OP tika.ExtractPath STATUS 200 TRACE_COUNT 0",
+                    "OP ai.real.callOpenRouterWithModelForKey STATUS 200 TRACE_COUNT 0",
+                    "OP ai.real.callGroqChatWithModel STATUS 200 TRACE_COUNT 10",
+                    "OP ProcessEvaluateJob STATUS 200 TRACE_COUNT 10",
+                    "OP HandleEvaluate STATUS 200 TRACE_COUNT 10",
+                    "OP extractUploadedText STATUS 200 TRACE_COUNT 5",
+                    "admin-frontend: npm run test:e2e -- tests/comprehensive-e2e.spec.ts -g \"complete trace spans for evaluation job\" => 1 passed (1.4m) (exit 0)",
+                    "admin-frontend: npm run test:e2e -- tests/real-eval.spec.ts => 1 passed (56.2s) (exit 0)",
+                    "admin-frontend: npm run test:e2e => 190 passed, 2 skipped (11.5m) (exit 0)"
+                ],
+                "notes": "Targeted tests pass after Jaeger assertion update; full local suite rerun PASS (190 passed, 2 skipped)."
+            },
+            "validation_status": {
+                "status": "NOT_STARTED",
+                "process": "Run E2E suite against production (https://ai-cv-evaluator.web.id) after local suite is green.",
+                "criteria": [
+                    "All Playwright E2E specs pass locally",
+                    "All Playwright E2E specs pass against production"
+                ],
+                "evidence": [],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "RESOLVED",
+                "issue_summary": "comprehensive-e2e.spec.ts Jaeger span assertions too strict (assumed OpenRouter + Tika spans always present)",
+                "impact": "E2E suite fails even when system is functioning",
+                "root_cause": "Provider selection may use Groq; .txt fixtures bypass Tika, so related spans may not appear in Jaeger",
+                "how_to_solve": "Query Jaeger API by operation and assert a minimal set of operations (ProcessEvaluateJob, extractUploadedText, and an AI provider call span) + ai.* tags on the AI span.",
+                "notes": "Test updated; targeted rerun PASS locally (1 passed, 1.4m). Full-suite + production validation pending."
+            },
+            "investigation_status": {
+                "status": "COMPLETED",
+                "process": "Query Jaeger API by operation and inspect upload handler text extraction behavior.",
+                "hypotheses": [
+                    "OpenRouter/Tika spans missing because code paths not executed for current fixtures",
+                    "Provider selection uses Groq instead of OpenRouter"
+                ],
+                "findings": [
+                    "Jaeger traces exist for ProcessEvaluateJob/HandleEvaluate and ai.real.callGroqChatWithModel, but not for OpenRouter/Tika operations for the current run.",
+                    "Upload handler uses Tika only for .pdf/.docx; .txt uploads are sanitized directly (no Tika)."
+                ],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-013",
+            "title": "Sync Windsurf home state directories (~/.windsurf, ~/.windsurf-next) between Ubuntu and macbook",
+            "description": "Ensure /home/hafiz/sync-devices.sh syncs ~/.windsurf and ~/.windsurf-next to the Mac behind SYNC_WINDSURF_STATE and verify argv.json + extensions are present after sync.",
+            "category": "tooling",
+            "priority": "LOW",
+            "status": "COMPLETED",
+            "owner": "hafiz",
+            "notes": "Ran sync-devices.sh with SYNC_DEV_REPOS=false SYNC_VSCODE_STATE=true and verified via SSH that ~/.windsurf and ~/.windsurf-next exist with argv.json and extensions directories on the Mac.",
+            "links": [],
+            "test_status": {
+                "status": "NOT_APPLICABLE",
+                "process": "",
+                "commands": [],
+                "expected_result": "",
+                "actual_result": "",
+                "evidence": [],
+                "notes": ""
+            },
+            "validation_status": {
+                "status": "VALIDATED",
+                "process": "sync-devices.sh dry-run + real run + remote ls over SSH",
+                "criteria": [
+                    "Dry-run includes rsync for ~/.windsurf and ~/.windsurf-next",
+                    "Real sync copies both directories to the Mac",
+                    "Mac has argv.json + extensions directory under both ~/.windsurf and ~/.windsurf-next"
+                ],
+                "evidence": [
+                    "sync-devices.sh --dry-run: [DRY-RUN] Would rsync ~/.windsurf -> Mac ~/.windsurf (argv.json + extensions)",
+                    "sync-devices.sh --dry-run: [DRY-RUN] Would rsync ~/.windsurf-next -> Mac ~/.windsurf-next (argv.json + extensions)",
+                    "sync-devices.sh: [OK] Synced: Windsurf home state (~/.windsurf)",
+                    "sync-devices.sh: [OK] Synced: Windsurf-Next home state (~/.windsurf-next)",
+                    "ssh mac: ls -l ~/.windsurf/argv.json -> -rw-rw-r-- (798 bytes)",
+                    "ssh mac: ls -l ~/.windsurf-next/argv.json -> -rw-rw-r-- (798 bytes)",
+                    "ssh mac: ls -ld ~/.windsurf/extensions and ~/.windsurf-next/extensions -> directories exist with extension folders"
+                ],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "NONE",
+                "issue_summary": "",
+                "impact": "",
+                "root_cause": "",
+                "how_to_solve": "",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "COMPLETED",
+                "process": "Run sync-devices.sh dry-run + real sync; verify ~/.windsurf and ~/.windsurf-next on the Mac over SSH.",
+                "hypotheses": [],
+                "findings": [
+                    "Both ~/.windsurf and ~/.windsurf-next exist on the Mac with argv.json and extensions directories.",
+                    "sync-devices.sh verify_sync reports Windsurf home state present (~/.windsurf, ~/.windsurf-next)."
+                ],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
+        },
+        {
+            "id": "TASK-014",
+            "title": "Sync Antigravity home state directory (~/.antigravity) between Ubuntu and macbook",
+            "description": "Ensure /home/hafiz/sync-devices.sh syncs ~/.antigravity/argv.json and ~/.antigravity/extensions to the Mac behind SYNC_ANTIGRAVITY_STATE and verify they are present after sync.",
+            "category": "tooling",
+            "priority": "LOW",
+            "status": "COMPLETED",
+            "owner": "hafiz",
+            "notes": "Ran sync-devices.sh (SYNC_ANTIGRAVITY_STATE=true by default) and verified via SSH that ~/.antigravity/argv.json and ~/.antigravity/extensions exist on the Mac.",
+            "links": [],
+            "test_status": {
+                "status": "NOT_APPLICABLE",
+                "process": "",
+                "commands": [],
+                "expected_result": "",
+                "actual_result": "",
+                "evidence": [],
+                "notes": ""
+            },
+            "validation_status": {
+                "status": "VALIDATED",
+                "process": "sync-devices.sh dry-run + real run + remote ls over SSH",
+                "criteria": [
+                    "Dry-run includes sync for ~/.antigravity/argv.json and rsync for ~/.antigravity/extensions",
+                    "Real sync copies ~/.antigravity/extensions to the Mac",
+                    "Mac has ~/.antigravity/argv.json and ~/.antigravity/extensions"
+                ],
+                "evidence": [
+                    "sync-devices.sh --dry-run: [DRY-RUN] Would sync: /home/hafiz/.antigravity/argv.json -> Mac:/Users/hafizputraludyanto/.antigravity/argv.json",
+                    "sync-devices.sh --dry-run: [DRY-RUN] Would rsync ~/.antigravity/extensions -> Mac ~/.antigravity/extensions",
+                    "sync-devices.sh: [OK] Synced: Antigravity extensions (~/.antigravity/extensions)",
+                    "ssh mac: ls -l ~/.antigravity/argv.json -> -rw-r--r-- (798 bytes)",
+                    "ssh mac: ls -ld ~/.antigravity/extensions -> directory exists with extension folders"
+                ],
+                "notes": ""
+            },
+            "issue_status": {
+                "status": "NONE",
+                "issue_summary": "",
+                "impact": "",
+                "root_cause": "",
+                "how_to_solve": "",
+                "notes": ""
+            },
+            "investigation_status": {
+                "status": "COMPLETED",
+                "process": "Run sync-devices.sh dry-run + real sync; verify ~/.antigravity state on the Mac over SSH.",
+                "hypotheses": [],
+                "findings": [
+                    "~/.antigravity exists on the Mac with argv.json and extensions directories.",
+                    "sync-devices.sh verify_sync reports Antigravity home state present (~/.antigravity)."
+                ],
+                "time_spent": "",
+                "notes": ""
+            },
+            "research_status": {
+                "status": "NOT_STARTED",
+                "questions": [],
+                "notes": "",
+                "how_to": "",
+                "reference_ids": []
+            }
         }
     ],
     "test_summary": {
-        "total_tests": 0,
+        "total_tests": 192,
         "unit_tests": 0,
         "integration_tests": 0,
-        "e2e_tests": 0,
+        "e2e_tests": 192,
         "manual_tests": 0,
-        "passed": 0,
+        "passed": 190,
         "failed": 0,
         "blocked": 0,
         "test_coverage": "",
         "prod_scenario_replicated": false,
         "fix_validated": true,
-        "notes": "Local checks: make lint-all (PASS), make vet (PASS), make vuln (PASS), make gosec-sarif (PASS), make ci-test (PASS, total coverage 82.2%), make openapi-validate (PASS), admin-frontend npm run build (PASS). Playwright E2E: admin-frontend npm run test:e2e -- tests/sso-gate.spec.ts (PASS, 17 passed / 2 skipped) after npx playwright install."
+        "notes": "Local checks: make lint-all (PASS), make vet (PASS), make vuln (PASS), make gosec-sarif (PASS), make ci-test (PASS, total coverage 82.2%), make openapi-validate (PASS), admin-frontend npm run build (PASS). Playwright E2E discovery: admin-frontend npm run test:e2e -- --list (192 tests in 16 files). Playwright E2E: admin-frontend npm run test:e2e -- tests/sso-gate.spec.ts (PASS, 17 passed / 2 skipped). Frontend lint: admin-frontend npm run lint (PASS, no warnings). Targeted E2E: comprehensive-e2e.spec.ts 'complete trace spans for evaluation job' (PASS, 1 passed, 1.4m); real-eval.spec.ts (PASS, 1 passed, 56.2s). Full Playwright local suite: admin-frontend npm run test:e2e => 190 passed, 2 skipped (11.5m) (exit 0). Git prep: git tag --list (latest v1.0.230); git status shows modified deploy.yml + Playwright specs and untracked tests/helpers + tests/sso-gate; production validation pending."
     },
     "local_execution_status": {
         "services": [
@@ -457,19 +1035,54 @@
         "notes": "Resolved tooling permission issue: deploy/authelia/notification.txt was root-owned 0600 causing permission denied for repo searches; chowned back to hafiz. Local docker compose up initially failed to bind 8088 due to an existing SSH port-forward; killed the SSH tunnel and re-attempting dev-nginx startup. Local tooling available: gh CLI for GitHub Actions inspection. Production VPS access: ssh -i ~/.ssh/id_rsa ubuntu@43.157.225.155"
     },
     "validation_summary": {
-        "core_validation_status": "COMPLETED",
-        "summary": "GitHub Actions Deploy for v1.0.230 completed successfully, including validate-production checks (health endpoints + Playwright E2E).",
+        "core_validation_status": "IN_PROGRESS",
+        "summary": "Production deploy v1.0.230 was validated previously (run 20191259067). Local Playwright E2E suite is now green (190 passed, 2 skipped). Production E2E validation is pending for the latest Playwright E2E fixes (comprehensive-e2e / real-eval).",
         "evidence": [
             "https://github.com/fairyhunter13/ai-cv-evaluator/actions/runs/20191259067"
         ],
-        "notes": ""
+        "notes": "Production Playwright validation is executed via .github/workflows/deploy.yml validate-production (runs after deploy). pre-deploy-checks enforces production runs must use a semantic version tag (vX.Y.Z), so validating the latest E2E fixes requires a new tag and a Deploy workflow run. validate-production was updated to run all Playwright spec files (all *.spec.ts under admin-frontend/tests) and fail the job if any spec fails."
     },
-    "issues_summary": [],
+    "issues_summary": [
+        {
+            "id": "ISSUE-012",
+            "title": "comprehensive-e2e 'complete trace spans' fails due to missing OpenRouter/Tika spans in Jaeger",
+            "status": "RESOLVED",
+            "impact": "Local and production Playwright E2E suite can fail despite healthy services",
+            "root_cause": "Test assumed .txt upload uses Tika and OpenRouter is always used; in reality .txt bypasses Tika and provider selection may use Groq. Jaeger traces show Groq spans present while OpenRouter/Tika spans may be absent.",
+            "resolution": "Update the test to query Jaeger API by operation and accept either Groq or OpenRouter AI span; assert ai.model/ai.provider tags on the AI span; do not require Tika span when uploading .txt fixtures.",
+            "notes": "Validated: targeted rerun PASS locally (1 passed, 1.4m) and full local suite PASS (190 passed, 2 skipped, 11.5m). Production validation still pending."
+        },
+        {
+            "id": "ISSUE-013",
+            "title": "real-eval.spec.ts loginViaSSO waitForURL timeout due to skipping login form interaction",
+            "status": "RESOLVED",
+            "impact": "real-eval.spec.ts fails during SSO login (page.waitForURL timeout)",
+            "root_cause": "loginViaSSO gated login form actions on usernameInput.count(); when the form wasn't immediately present, it skipped filling credentials and got stuck on SSO redirect URLs.",
+            "resolution": "Always wait for the username input to be visible and submit credentials when on an SSO URL (no early skip).",
+            "notes": "Validated: admin-frontend: npm run test:e2e -- tests/real-eval.spec.ts => 1 passed (56.2s) (exit 0) and full local suite PASS (190 passed, 2 skipped, 11.5m)."
+        },
+        {
+            "id": "ISSUE-014",
+            "title": "Production Playwright E2E can be blocked by Cloudflare challenge on Authelia auth subdomain",
+            "status": "RESOLVED",
+            "impact": "Production Playwright E2E may fail to complete SSO login when Cloudflare serves a bot-challenge page on auth.ai-cv-evaluator.web.id",
+            "root_cause": "deploy.yml temporarily disabled Cloudflare proxy for keycloak.ai-cv-evaluator.web.id, but SSO uses auth.ai-cv-evaluator.web.id (Authelia), so the auth subdomain remained proxied and could present Cloudflare challenge scripts.",
+            "resolution": "Update .github/workflows/deploy.yml Cloudflare proxy disable/enable steps and Cloudflare DNS sync record list to use auth.ai-cv-evaluator.web.id instead of keycloak.ai-cv-evaluator.web.id.",
+            "notes": "Observed Cloudflare challenge script on Authelia OIDC authorization page via redirect. Workflow updated locally; production validation pending."
+        }
+    ],
     "research_summary": {
-        "status": "NOT_STARTED",
-        "key_questions": [],
-        "key_findings": [],
-        "reference_ids": []
+        "status": "IN_PROGRESS",
+        "key_questions": [
+            "Does Playwright Test support a thin *.spec.ts entrypoint that imports modules to register test groups (\"test list file\" pattern)?"
+        ],
+        "key_findings": [
+            "Playwright discovers tests by scanning testDir for files matching testMatch; non-matching modules can be imported from a matching spec file.",
+            "Playwright docs recommend not defining tests directly in helper files; instead export a function that defines tests and call it from a test list file to avoid import order issues."
+        ],
+        "reference_ids": [
+            "REF-PLAYWRIGHT-TEST-PARALLEL"
+        ]
     },
     "latest_deployment": {
         "version": "v1.0.230",
@@ -485,14 +1098,14 @@
         "tests_passed": true,
         "config_ready": true,
         "documentation_ready": true,
-        "prod_scenario_validated": true,
-        "local_services_running": false,
-        "local_e2e_status": "PASSED (local)",
-        "core_validation_complete": true,
-        "recommendation": "Production validated (v1.0.230 deployed successfully)",
+        "prod_scenario_validated": false,
+        "local_services_running": true,
+        "local_e2e_status": "PASSED",
+        "core_validation_complete": false,
+        "recommendation": "Run Playwright E2E validation against production (https://ai-cv-evaluator.web.id) and fix any prod-only failures.",
         "next_steps": [
-            "Expand Playwright E2E coverage for remaining Authelia edge cases",
-            "Continue monitoring production logs/metrics and health endpoints"
+            "Run production E2E validation against https://ai-cv-evaluator.web.id and fix any prod-only failures",
+            "Update docs/progress_tracker.json with production E2E commands, outputs, and evidence"
         ]
     },
     "documentation": {
@@ -529,6 +1142,20 @@
             "date": "2025-12-12",
             "changes": [
                 "Added stale container stop/rm fix"
+            ]
+        },
+        {
+            "version": "unreleased",
+            "date": "2025-12-14",
+            "changes": [
+                "Updated admin-frontend/tests/comprehensive-e2e.spec.ts Jaeger validation to query Jaeger API by operation and accept Groq/OpenRouter; added evidence that .txt uploads bypass Tika.",
+                "Validated locally: Playwright targeted test 'complete trace spans for evaluation job' passes (1 passed, 1.4m).",
+                "Fixed real-eval.spec.ts SSO login flake by always waiting for username input visibility before submitting credentials; validated locally (1 passed, 56.2s).",
+                "Validated locally: full Playwright E2E suite passes (190 passed, 2 skipped, 11.5m).",
+                "Updated .github/workflows/deploy.yml Cloudflare proxy disable/enable and DNS sync records to use auth.ai-cv-evaluator.web.id instead of keycloak.ai-cv-evaluator.web.id to reduce production Playwright flakiness caused by Cloudflare challenges.",
+                "Updated .github/workflows/deploy.yml validate-production Playwright step to run all Playwright spec files (all *.spec.ts under admin-frontend/tests) and fail the job if any spec fails.",
+                "Pre-production git state captured: branch main at 6d59fbd; latest semver tag v1.0.230; working tree contains uncommitted changes for deploy.yml + Playwright spec updates + new helpers/sso-gate modules.",
+                "Next action: commit changes and push semver tag v1.0.231 to trigger deploy.yml validate-production against https://ai-cv-evaluator.web.id."
             ]
         }
     ]

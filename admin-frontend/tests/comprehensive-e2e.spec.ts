@@ -1,4 +1,4 @@
-import { test, expect, Page, BrowserContext } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -62,7 +62,20 @@ const getPrometheusDatasourceUid = async (page: Page): Promise<string> => {
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
-  return url.includes('/oauth2/') || url.includes('/realms/aicv');
+  return url.includes('/oauth2/') || url.includes('/realms/aicv') || url.includes(':9091') || url.includes('auth.ai-cv-evaluator.web.id') || url.includes('workflow=openid_connect') || url.includes('/api/oidc/authorization') || url.includes('/api/oidc/authorize') || url.includes('/login/oauth/authorize');
+};
+
+const handleAutheliaConsent = async (page: Page): Promise<void> => {
+  // Authelia v4.37/v4.38 consent page handling
+  try {
+    const consentHeader = page.getByRole('heading', { name: /Consent|Authorization/i });
+    if (await consentHeader.isVisible({ timeout: 2000 })) {
+      const acceptBtn = page.getByRole('button', { name: /Accept|Allow|Authorize/i }).first();
+      if (await acceptBtn.isVisible()) {
+        await acceptBtn.click();
+      }
+    }
+  } catch (_error) {}
 };
 
 const completeKeycloakProfileUpdate = async (page: Page): Promise<void> => {
@@ -109,16 +122,21 @@ const loginViaSSO = async (page: Page): Promise<void> => {
       await gotoWithRetry(page, PORTAL_PATH);
       if (!isSSOLoginUrl(page.url())) return;
 
-      const usernameInput = page.locator('input#username');
-      const passwordInput = page.locator('input#password');
+      const usernameInput = page.locator('#username-textfield, input#username');
+      const passwordInput = page.locator('#password-textfield, input#password');
 
       await usernameInput.waitFor({ state: 'visible', timeout: 10000 });
       await usernameInput.fill(SSO_USERNAME);
       await passwordInput.fill(SSO_PASSWORD);
 
-      const submitButton = page.locator('button[type="submit"], input[type="submit"]');
-      await submitButton.first().click();
+      const submitButton = page.locator('#sign-in-button, button[type="submit"], input[type="submit"]');
+      if ((await submitButton.count()) > 0) {
+        await submitButton.first().click();
+      } else {
+        await passwordInput.press('Enter');
+      }
 
+      await handleAutheliaConsent(page);
       await completeKeycloakProfileUpdate(page);
       await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
       return;
@@ -279,15 +297,13 @@ test.describe('Job Management', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for status filter dropdown
-    const statusFilter = page.getByRole('combobox').filter({ hasText: /status|all/i });
+    const statusFilter = page.getByRole('combobox').filter({ hasText: /status|all/i }).first();
     const filterExists = await statusFilter.count() > 0;
 
     if (filterExists) {
-      await statusFilter.click();
-      // Should have filter options
-      const completedOption = page.getByRole('option', { name: /completed/i });
+      const completedOption = statusFilter.locator('option[value="completed"]');
       if (await completedOption.count() > 0) {
-        await completedOption.click();
+        await statusFilter.selectOption('completed');
         await page.waitForLoadState('networkidle');
       }
     }
@@ -810,20 +826,21 @@ test.describe('Observability Dashboards', () => {
     test.setTimeout(180000);
     await loginViaSSO(page);
 
-    // Navigate to frontend and upload files
-    await page.goto('/frontend');
-    await page.waitForLoadState('networkidle');
+    await page.getByRole('link', { name: /Open Frontend/i }).click();
+    await page.waitForLoadState('domcontentloaded');
 
     // Check if we need to click "Upload Files" or if we are already there
     const uploadLink = page.getByRole('link', { name: /Upload Files/i });
     if (await uploadLink.count() > 0 && await uploadLink.isVisible()) {
       await uploadLink.click();
+      await page.waitForLoadState('domcontentloaded');
     }
 
     // Upload test files
     const fileInputs = page.locator('input[type="file"]');
-    // Ensure we have inputs
-    await expect(fileInputs.first()).toBeVisible({ timeout: 10000 });
+    await expect
+      .poll(async () => fileInputs.count(), { timeout: 10000 })
+      .toBeGreaterThanOrEqual(2);
 
     // Note: The file paths are relative to the project root or where playwright is run
     // Assuming running from admin-frontend directory or similar
@@ -858,61 +875,63 @@ test.describe('Observability Dashboards', () => {
 
     // Search for recent traces with service "ai-cv-evaluator"
     // Note: Jaeger UI interactions can be tricky, ensuring elements are ready
-    const serviceSelect = page.getByLabel(/Service/i);
-    await expect(serviceSelect).toBeVisible();
-    await serviceSelect.selectOption('ai-cv-evaluator');
+    const queryTraces = async (params: Record<string, string>, attempts = 10): Promise<any[]> => {
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        const resp = await page.request.get('/jaeger/api/traces', { params });
+        if (resp.ok()) {
+          const body = await resp.json().catch(() => ({}));
+          const traces = (body as any)?.data ?? [];
+          if (traces.length > 0) {
+            return traces;
+          }
+        }
+        await page.waitForTimeout(2000);
+      }
+      return [];
+    };
 
-    const operationSelect = page.getByLabel(/Operation/i);
-    await operationSelect.click(); // sometimes needed to populate
-    await page.waitForTimeout(1000);
-    await operationSelect.selectOption('ProcessEvaluateJob');
+    const processTraces = await queryTraces({
+      service: 'ai-cv-evaluator',
+      operation: 'ProcessEvaluateJob',
+      lookback: '4h',
+      limit: '5',
+    });
+    expect(processTraces.length).toBeGreaterThan(0);
 
-    await page.getByRole('button', { name: /Find Traces/i }).click();
+    const uploadTraces = await queryTraces({
+      service: 'ai-cv-evaluator',
+      operation: 'extractUploadedText',
+      lookback: '4h',
+      limit: '5',
+    });
+    expect(uploadTraces.length).toBeGreaterThan(0);
 
-    // Wait for results
-    await page.waitForTimeout(5000);
-
-    // Click on the most recent trace
-    const recentTrace = page.locator('.trace-result').first();
-    await expect(recentTrace).toBeVisible();
-    await recentTrace.click();
-
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000); // Wait for trace detail to render
-
-    // Verify critical spans exist in the DOM
-    // Jaeger renders spans as rows
-    const traceContentText = await page.locator('.trace-detail').textContent();
-    const traceContent = traceContentText || '';
-
-    // Check for the new spans we added
-    const expectedSpans = [
-      'ai.real.callOpenRouterWithModelForKey',
-      'ai.real.callGroqChatWithModel',
-      // 'freemodels.fetchModelsFromAPI', // This might happen periodically or during job, maybe not always in this specific job flow if cached
-      'tika.ExtractPath', // Should definitely happen during file processing
-      'ai.real.waitOpenRouterMinInterval', // Likely to be hit
-      // 'ai.real.Embed' // If embedding is part of the flow
-    ];
-
-    let foundCount = 0;
-    for (const spanName of expectedSpans) {
-      if (traceContent.includes(spanName)) {
-        console.log(`Found span: ${spanName}`);
-        foundCount++;
-      } else {
-        console.log(`Missing span: ${spanName}`);
+    const aiOperations = ['ai.real.callOpenRouterWithModelForKey', 'ai.real.callGroqChatWithModel'];
+    let aiTraces: any[] = [];
+    let aiOp = '';
+    for (const op of aiOperations) {
+      const traces = await queryTraces({
+        service: 'ai-cv-evaluator',
+        operation: op,
+        lookback: '4h',
+        limit: '5',
+      });
+      if (traces.length > 0) {
+        aiTraces = traces;
+        aiOp = op;
+        break;
       }
     }
+    expect(aiOp).toBeTruthy();
 
-    // We expect at least Tika and AI calls to be present
-    expect(traceContent).toContain('ai.real.callOpenRouterWithModelForKey');
-    expect(traceContent).toContain('tika.ExtractPath');
-    expect(traceContent).toContain('ai.real.waitOpenRouterMinInterval');
+    const allAiSpans = aiTraces.flatMap((t: any) => (t.spans ?? []));
+    const aiTagKeys = new Set(
+      allAiSpans.flatMap((s: any) => (s.tags ?? []).map((t: any) => String(t.key ?? ''))),
+    );
 
-    // Check if attributes are arguably there (searching text content for keys)
-    expect(traceContent).toContain('ai.model');
-    expect(traceContent).toContain('ai.provider');
+    console.log(`Using AI operation for validation: ${aiOp}`);
+    expect(aiTagKeys.has('ai.model')).toBeTruthy();
+    expect(aiTagKeys.has('ai.provider')).toBeTruthy();
   });
 
   test('Jaeger API is accessible', async ({ page }) => {
