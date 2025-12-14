@@ -1347,6 +1347,18 @@ jobs:
           echo "Waiting 30s for DNS propagation..."
           sleep 30
 
+          ORIGIN_IP="${{ secrets.SSH_HOST }}"
+          if [[ "${ORIGIN_IP}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Overriding /etc/hosts to map production hostnames to origin IP ${ORIGIN_IP}"
+            sudo sh -c "printf '%s\n' \"${ORIGIN_IP} ai-cv-evaluator.web.id\" \"${ORIGIN_IP} dashboard.ai-cv-evaluator.web.id\" \"${ORIGIN_IP} auth.ai-cv-evaluator.web.id\" >> /etc/hosts"
+            echo "Hosts override applied. Current resolution:"
+            getent hosts ai-cv-evaluator.web.id || true
+            getent hosts dashboard.ai-cv-evaluator.web.id || true
+            getent hosts auth.ai-cv-evaluator.web.id || true
+          else
+            echo "⚠ SSH_HOST is not an IPv4 address (${ORIGIN_IP}); skipping /etc/hosts override"
+          fi
+
       - name: Run Playwright E2E tests for CV evaluation and AI metrics
         working-directory: admin-frontend
         env:
@@ -1409,6 +1421,15 @@ jobs:
           fi
           
           echo "=== Playwright E2E tests completed ==="
+
+      - name: Upload Playwright test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: admin-frontend/test-results
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Re-enable Cloudflare proxy after E2E tests
         if: always()
