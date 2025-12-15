@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { recordAutheliaLoginAttempt, waitForAutheliaLoginRateLimit } from './helpers/authelia.ts';
+import { assertNotAutheliaOneTimePasswordUrl, waitForNotSSOLoginUrl } from './helpers/sso.ts';
 
 const PORTAL_PATH = '/';
 
@@ -43,6 +45,7 @@ const completeKeycloakProfileUpdate = async (page: Page): Promise<void> => {
 
 const loginViaSSO = async (page: Page): Promise<void> => {
   await page.goto(PORTAL_PATH, { waitUntil: 'domcontentloaded' });
+  assertNotAutheliaOneTimePasswordUrl(page.url());
   if (!isSSOLoginUrl(page.url())) return;
   const usernameInput = page.locator('#username-textfield, input#username');
   const passwordInput = page.locator('#password-textfield, input#password');
@@ -50,16 +53,34 @@ const loginViaSSO = async (page: Page): Promise<void> => {
     throw new Error('SSO_PASSWORD required for login');
   }
 
-  await usernameInput.waitFor({ state: 'visible', timeout: 10000 });
-  await usernameInput.fill(SSO_USERNAME);
-  await passwordInput.fill(SSO_PASSWORD);
+  let didSubmit = false;
+  try {
+    await usernameInput.waitFor({ state: 'visible', timeout: 10000 });
+    await usernameInput.fill(SSO_USERNAME);
+    await passwordInput.fill(SSO_PASSWORD);
 
-  const submitButton = page.locator('#sign-in-button, button[type="submit"], input[type="submit"]');
-  if ((await submitButton.count()) > 0) await submitButton.first().click();
-  else await passwordInput.press('Enter');
-  await handleAutheliaConsent(page);
-  await completeKeycloakProfileUpdate(page);
-  await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
+    await waitForAutheliaLoginRateLimit(page);
+
+    const submitButton = page.locator('#sign-in-button, button[type="submit"], input[type="submit"]');
+    didSubmit = true;
+    if ((await submitButton.count()) > 0) await submitButton.first().click();
+    else await passwordInput.press('Enter');
+    await handleAutheliaConsent(page);
+    await completeKeycloakProfileUpdate(page);
+    await waitForNotSSOLoginUrl(page, isSSOLoginUrl, 30000);
+    recordAutheliaLoginAttempt(true);
+  } catch (err) {
+    const message = String(err);
+    if (message.includes('Authelia requires two-factor authentication')) {
+      throw err;
+    }
+
+    if (didSubmit) {
+      recordAutheliaLoginAttempt(false);
+    }
+
+    throw err;
+  }
 };
 
 // Drive a REAL evaluation end-to-end (no mocks): upload -> evaluate -> poll result -> assert Jaeger spans
