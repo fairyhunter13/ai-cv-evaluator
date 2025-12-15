@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test';
 
+import { assertNotAutheliaOneTimePasswordUrl } from './sso.ts';
+
 export const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
   const maxAttempts = 10;
   const retryDelayMs = 3000;
@@ -7,6 +9,7 @@ export const gotoWithRetry = async (page: Page, path: string): Promise<void> => 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      assertNotAutheliaOneTimePasswordUrl(page.url());
       return;
     } catch (err) {
       const message = String(err);
