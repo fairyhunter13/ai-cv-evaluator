@@ -5,6 +5,42 @@ export const isSSOLoginUrl = (input: string | URL): boolean => {
   return url.includes('/oauth2/') || url.includes('/realms/aicv') || url.includes(':9091') || url.includes('/api/oidc/authorization') || url.includes('/login/oauth/authorize');
 };
 
+export const isAutheliaOneTimePasswordUrl = (input: string | URL): boolean => {
+  const url = typeof input === 'string' ? input : input.toString();
+  return url.includes('/2fa/one-time-password');
+};
+
+export const assertNotAutheliaOneTimePasswordUrl = (input: string | URL): void => {
+  if (!isAutheliaOneTimePasswordUrl(input)) {
+    return;
+  }
+
+  throw new Error(
+    'Authelia requires two-factor authentication (one-time password). This Playwright suite only supports username/password and intentionally does not bypass 2FA. Disable 2FA for the test user or adjust access control policy.',
+  );
+};
+
+export const waitForNotSSOLoginUrl = async (
+  page: Page,
+  isLoginUrl: (input: string | URL) => boolean,
+  timeoutMs = 30000,
+): Promise<void> => {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    const url = page.url();
+    assertNotAutheliaOneTimePasswordUrl(url);
+    if (!isLoginUrl(url)) {
+      return;
+    }
+    await page.waitForTimeout(250);
+  }
+
+  const finalUrl = page.url();
+  assertNotAutheliaOneTimePasswordUrl(finalUrl);
+  throw new Error(`Timed out waiting for SSO login flow to complete; still on ${finalUrl}`);
+};
+
 export const handleAutheliaConsent = async (page: Page): Promise<void> => {
   // Authelia v4.37/v4.38 consent page handling
   try {
