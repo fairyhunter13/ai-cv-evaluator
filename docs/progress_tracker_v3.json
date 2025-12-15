@@ -1,0 +1,239 @@
+{
+  "$schema": "progress_tracker_v3.0",
+  "metadata": {
+    "project_name": "ai-cv-evaluator",
+    "project_description": "E2E/CI validation for Authelia SSO login without OTP/TOTP",
+    "conversation_id": "",
+    "ticket_ids": [],
+    "repository": "https://github.com/fairyhunter13/ai-cv-evaluator",
+    "workspace": "fairyhunter13/ai-cv-evaluator",
+    "owner": "",
+    "created_at": "2025-12-15",
+    "last_updated": "2025-12-15"
+  },
+  "references": {
+    "retrieved_at": "2025-12-15",
+    "items": []
+  },
+  "context": {
+    "problem_statement": "Refine Playwright Authelia SSO login helpers to use username/password only (no TOTP), add client-side backoff/rate limiting, fail fast on OTP/2FA screen, and ensure production validate-production passes.",
+    "background": "Production validate-production has repeatedly failed due to Authelia login issues; recent changes focused the suite to sso-gate and improved detection/backoff and cookie scoping.",
+    "goals": [
+      "Validate production SSO works with username/password only",
+      "Fail fast if Authelia OTP/2FA screen is shown",
+      "Avoid brute-force behavior via client-side throttling/backoff",
+      "Make validate-production reliable"
+    ],
+    "non_goals": [
+      "Implement or bypass TOTP/2FA",
+      "Weaken authentication"
+    ],
+    "constraints": [
+      "Must not leak credentials in logs",
+      "Production validation is performed via GitHub Actions"
+    ],
+    "environments": ["local", "prod"],
+    "success_criteria": [
+      "Deploy workflow validate-production passes",
+      "No navigation to /2fa/one-time-password in production validation"
+    ],
+    "notes": ""
+  },
+  "requirements": {
+    "status": "OPTIONAL",
+    "forbidden": ["TOTP generation/bypass"],
+    "required": ["Username/password auth only", "OTP/2FA fail-fast", "Client-side backoff"],
+    "notes": ""
+  },
+  "overall_status": {
+    "completion_percentage": 70,
+    "status": "IN_PROGRESS",
+    "current_blocker": "Production GitHub Secrets SSO_USERNAME/SSO_PASSWORD appear to not match deployed Authelia users_database.yml; /api/firstfactor returns 401.",
+    "risk_level": "MEDIUM",
+    "summary": "Code changes are in place; production validation is blocked on credentials mismatch causing Authelia /api/firstfactor 401."
+  },
+  "architecture": {
+    "status": "NOT_STARTED",
+    "concepts": [],
+    "decisions": [],
+    "artifacts": [],
+    "reference_ids": [],
+    "notes": ""
+  },
+  "performance": {
+    "status": "NOT_STARTED",
+    "standards": {
+      "slo": "",
+      "capacity": "",
+      "notes": ""
+    },
+    "optimization_best_practices": [],
+    "measurement": {
+      "benchmarks": [],
+      "profiling": [],
+      "artifacts": [],
+      "notes": ""
+    },
+    "reference_ids": [],
+    "notes": ""
+  },
+  "security": {
+    "status": "IN_PROGRESS",
+    "standards_reference_ids": [],
+    "best_practices": ["Do not log secrets", "Fail fast on unexpected auth flows"],
+    "checks": {
+      "threat_model": "NOT_STARTED",
+      "code_review": "IN_PROGRESS",
+      "sast": "NOT_STARTED",
+      "dependency_scan": "NOT_STARTED",
+      "secrets_scan": "NOT_STARTED",
+      "notes": ""
+    },
+    "reference_ids": [],
+    "notes": ""
+  },
+  "safety": {
+    "status": "IN_PROGRESS",
+    "standards": "",
+    "checks": ["Backoff/rate limit on login attempts", "Fail fast on OTP/2FA screen"],
+    "reference_ids": [],
+    "notes": ""
+  },
+  "tasks": [
+    {
+      "id": "TASK-SSO-001",
+      "title": "Fix validate-production Authelia login failures",
+      "description": "Ensure production validation does not hit OTP/2FA, uses username/password only, and succeeds.",
+      "category": "debugging",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "owner": "",
+      "notes": "v1.0.236 and v1.0.237 validate-production failed due to /api/firstfactor 401 Authentication failed.",
+      "links": [
+        "https://github.com/fairyhunter13/ai-cv-evaluator/actions/runs/20240442834",
+        "https://github.com/fairyhunter13/ai-cv-evaluator/actions/runs/20241482957"
+      ],
+      "test_status": {
+        "status": "FAILED",
+        "process": "GitHub Actions validate-production",
+        "commands": ["npx playwright test sso-gate.spec.ts"],
+        "expected_result": "All SSO gate tests pass",
+        "actual_result": "Authelia /api/firstfactor returns 401; multiple tests fail",
+        "evidence": [
+          "v1.0.236 run_id=20240442834 job_id=58108595540",
+          "v1.0.237 run_id=20241482957 job_id=58112032777"
+        ],
+        "notes": "No /2fa/one-time-password observed in logs."
+      },
+      "validation_status": {
+        "status": "IN_PROGRESS",
+        "process": "Fix credentials mismatch; rerun Deploy validate-production",
+        "criteria": ["validate-production passes", "No OTP/2FA URL"],
+        "evidence": [],
+        "notes": ""
+      },
+      "issue_status": {
+        "status": "OPEN",
+        "issue_summary": "Authelia API login returns 401 in production validation",
+        "impact": "Blocks Deploy workflow completion",
+        "root_cause": "Likely SSO_USERNAME/SSO_PASSWORD secrets do not match deployed Authelia users_database.yml (shows user admin / comment admin123).",
+        "how_to_solve": "Align GitHub Secrets to deployed credentials or rotate Authelia users_database to match intended secrets.",
+        "notes": ""
+      },
+      "investigation_status": {
+        "status": "IN_PROGRESS",
+        "process": "Review run logs and deployed Authelia config",
+        "hypotheses": ["Secrets mismatch", "Account lockout/ban", "Request format mismatch"],
+        "findings": [
+          "Deploy logs show users_database.yml contains user 'admin' and comment '# admin123'",
+          "validate-production failures show /api/firstfactor 401 Authentication failed",
+          "No OTP/2FA URL observed"
+        ],
+        "time_spent": "",
+        "notes": ""
+      },
+      "research_status": {
+        "status": "NOT_STARTED",
+        "questions": [],
+        "notes": "",
+        "how_to": "",
+        "reference_ids": []
+      }
+    }
+  ],
+  "test_summary": {
+    "total_tests": 0,
+    "unit_tests": 0,
+    "integration_tests": 0,
+    "e2e_tests": 0,
+    "manual_tests": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0,
+    "test_coverage": "",
+    "prod_scenario_replicated": true,
+    "fix_validated": false,
+    "notes": ""
+  },
+  "local_execution_status": {
+    "services": [],
+    "notes": ""
+  },
+  "validation_summary": {
+    "core_validation_status": "IN_PROGRESS",
+    "summary": "Blocked on production credentials mismatch (Authelia /api/firstfactor 401).",
+    "evidence": [],
+    "notes": ""
+  },
+  "issues_summary": [
+    {
+      "id": "ISSUE-SSO-401",
+      "title": "Production validate-production failing due to Authelia /api/firstfactor 401",
+      "status": "OPEN",
+      "impact": "Deploy workflow fails",
+      "root_cause": "Likely GitHub Secrets credentials mismatch",
+      "resolution": "Align secrets to deployed users_database or rotate users_database",
+      "notes": ""
+    }
+  ],
+  "research_summary": {
+    "status": "NOT_STARTED",
+    "key_questions": [],
+    "key_findings": [],
+    "reference_ids": []
+  },
+  "deployment_readiness": {
+    "code_ready": true,
+    "tests_passed": false,
+    "config_ready": false,
+    "documentation_ready": true,
+    "prod_scenario_validated": false,
+    "local_services_running": false,
+    "local_e2e_status": "NOT_STARTED",
+    "core_validation_complete": false,
+    "recommendation": "Update GitHub Secrets to match deployed Authelia users_database credentials, then cut a new tag to rerun Deploy validate-production.",
+    "next_steps": [
+      "Set repository secrets SSO_USERNAME/SSO_PASSWORD to match deployed Authelia users_database.yml",
+      "Cut v1.0.238 tag and monitor Deploy validate-production"
+    ]
+  },
+  "documentation": {
+    "research": [],
+    "testing": [],
+    "status": [],
+    "code": [],
+    "other": []
+  },
+  "changelog": [
+    {
+      "version": "v1.0.236",
+      "date": "2025-12-15",
+      "changes": ["Deploy validate-production failed with Authelia /api/firstfactor 401."]
+    },
+    {
+      "version": "v1.0.237",
+      "date": "2025-12-15",
+      "changes": ["Deploy validate-production failed again with Authelia /api/firstfactor 401."]
+    }
+  ]
+}
