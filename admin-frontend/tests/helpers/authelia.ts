@@ -117,13 +117,8 @@ export const performApiLogin = async (page: Page): Promise<void> => {
     };
 
     // Playwright req: Either url OR (domain + path)
-    if (IS_PRODUCTION) {
-      cookie.domain = 'ai-cv-evaluator.web.id';
-      cookie.path = '/';
-    } else {
-      // For localhost, use URL to establish Host-Only cookie
-      cookie.url = AUTHELIA_URL;
-    }
+    // Use URL to establish a Host-Only cookie for Authelia's domain
+    cookie.url = AUTHELIA_URL;
 
     await page.context().addCookies([cookie]);
     console.log(`[AutheliaDebug] Injected session cookie: ${JSON.stringify(cookie)}`);
