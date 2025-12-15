@@ -17,6 +17,7 @@ export default defineConfig({
     actionTimeout: 15000,
     // Increase navigation timeout
     navigationTimeout: 30000,
+    ignoreHTTPSErrors: process.env.PLAYWRIGHT_IGNORE_HTTPS_ERRORS === '1',
   },
   projects: [
     {
