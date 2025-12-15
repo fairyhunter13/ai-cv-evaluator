@@ -1160,7 +1160,9 @@
                 "Triggered production validation v1.0.231: validate-production failed (run_id=20211520463, job_id=58018527993) with real-eval.spec.ts portal 'Open Frontend' click TimeoutError and cascading comprehensive-e2e.spec.ts failures.",
                 "Production validation v1.0.234: validate-production failed (job_id=58091987398) with waitForNotSSOLoginUrl timeout stuck on Authelia login URL (not /2fa/one-time-password).",
                 "Production validation v1.0.235: validate-production failed (job_id=58103768958); unauthenticated SSO assertions failed because isSSOLoginUrl did not match auth.ai-cv-evaluator.web.id/?rd=...&workflow=openid_connect; performApiLogin also returned 401 from /api/firstfactor.",
-                "Mitigation queued for v1.0.236: focus validate-production Playwright run on sso-gate.spec.ts; broaden isSSOLoginUrl to include auth.ai-cv-evaluator.web.id + workflow=openid_connect; require SSO_USERNAME/SSO_PASSWORD in production; improve /api/firstfactor error diagnostics; fix Authelia cookie injection to use cookie.url=AUTHELIA_URL (host-only for auth domain)."
+                "Mitigation queued for v1.0.236: focus validate-production Playwright run on sso-gate.spec.ts; broaden isSSOLoginUrl to include auth.ai-cv-evaluator.web.id + workflow=openid_connect; require SSO_USERNAME/SSO_PASSWORD in production; improve /api/firstfactor error diagnostics; fix Authelia cookie injection to use cookie.url=AUTHELIA_URL (host-only for auth domain).",
+                "Production validation v1.0.236: validate-production failed (run_id=20240442834, job_id=58108595540) with performApiLogin returning 401 from Authelia /api/firstfactor (Authentication failed). No /2fa/one-time-password URL observed.",
+                "Production validation v1.0.237: validate-production failed (run_id=20241482957, job_id=58112032777) with the same Authelia /api/firstfactor 401 despite trimming SSO env vars in tests. Likely cause: repository secrets SSO_USERNAME/SSO_PASSWORD do not match deployed Authelia users_database (admin/admin123)."
             ]
         }
     ]
