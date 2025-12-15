@@ -62,6 +62,10 @@ export const ensureAutheliaUp = async (page: Page): Promise<void> => {
 export const performApiLogin = async (page: Page): Promise<void> => {
   await ensureAutheliaUp(page);
 
+  if (!SSO_USERNAME) {
+    throw new Error('SSO_USERNAME environment variable is required for SSO login tests');
+  }
+
   if (!SSO_PASSWORD) {
     throw new Error('SSO_PASSWORD environment variable is required for SSO login tests');
   }
@@ -88,11 +92,13 @@ export const performApiLogin = async (page: Page): Promise<void> => {
       const status = loginResp.status();
       recordAutheliaLoginAttempt(false);
 
+      const bodySnippet = await loginResp.text().catch(() => '');
+
       if (attempt < maxAttempts && [429, 502, 503, 504].includes(status)) {
         continue;
       }
 
-      throw new Error(`API Login failed with status ${status}`);
+      throw new Error(`API Login failed with status ${status}${bodySnippet ? `: ${bodySnippet.slice(0, 300)}` : ''}`);
     }
 
     const headers = loginResp.headers();
