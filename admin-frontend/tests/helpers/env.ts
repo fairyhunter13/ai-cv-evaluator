@@ -8,7 +8,7 @@ export const IS_DEV = !IS_PRODUCTION;
 
 // Credentials: Use env vars, with sensible defaults for dev
 // In production CI, set SSO_USERNAME and SSO_PASSWORD secrets
-export const SSO_USERNAME = process.env.SSO_USERNAME || 'admin';
+export const SSO_USERNAME = process.env.SSO_USERNAME || (IS_PRODUCTION ? '' : 'admin');
 export const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123');
 
 // Authelia Configuration
