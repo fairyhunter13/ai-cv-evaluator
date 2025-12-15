@@ -606,10 +606,10 @@ const jobDetailsError = ref('')
 // Auto-refresh
 const autoRefreshEnabled = ref(true)
 const autoRefreshInterval = ref(config.autoRefreshInterval) // From environment config
-let refreshInterval: NodeJS.Timeout | null = null
+let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Debounced search
-let searchTimeout: NodeJS.Timeout | null = null
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
 const debouncedSearch = () => {
   if (searchTimeout) {
     clearTimeout(searchTimeout)
@@ -653,7 +653,8 @@ const toggleAutoRefresh = () => {
   }
 }
 
-const loadJobs = async (silent = false) => {
+const loadJobs = async (silentOrEvent: boolean | Event = false) => {
+  const silent = typeof silentOrEvent === 'boolean' ? silentOrEvent : false
   loading.value = true
   error.value = ''
 

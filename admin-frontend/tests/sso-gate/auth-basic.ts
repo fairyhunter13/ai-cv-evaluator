@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { AUTHELIA_URL, PORTAL_PATH } from '../helpers/env.ts';
-import { ensureAutheliaUp, performApiLogin } from '../helpers/authelia.ts';
+import { ensureAutheliaUp, performApiLogin, recordAutheliaLoginAttempt, waitForAutheliaLoginRateLimit } from '../helpers/authelia.ts';
 import { gotoWithRetry } from '../helpers/navigation.ts';
 import { isSSOLoginUrl } from '../helpers/sso.ts';
 
@@ -11,10 +11,18 @@ export const registerAuthBasicTests = (): void => {
     await gotoWithRetry(page, PORTAL_PATH);
 
     // API Login with bad creds
-    const loginResp = await page.request.post(`${AUTHELIA_URL}/api/firstfactor`, {
-      data: { username: 'admin', password: 'wrongpassword' },
-      headers: { 'Content-Type': 'application/json' }
-    });
+    await waitForAutheliaLoginRateLimit(page);
+    let loginResp;
+    try {
+      loginResp = await page.request.post(`${AUTHELIA_URL}/api/firstfactor`, {
+        data: { username: 'admin', password: 'wrongpassword' },
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      recordAutheliaLoginAttempt(false);
+      throw error;
+    }
+    recordAutheliaLoginAttempt(false);
 
     expect(loginResp.status()).toBe(401);
   });

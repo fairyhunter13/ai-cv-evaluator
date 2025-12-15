@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { recordAutheliaLoginAttempt, waitForAutheliaLoginRateLimit } from './helpers/authelia.ts';
+import { assertNotAutheliaOneTimePasswordUrl, waitForNotSSOLoginUrl } from './helpers/sso.ts';
 
 const PORTAL_PATH = '/';
 
@@ -45,6 +47,7 @@ const gotoWithRetry = async (page: Page, path: string): Promise<void> => {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      assertNotAutheliaOneTimePasswordUrl(page.url());
       return;
     } catch (err) {
       const message = String(err);
@@ -64,6 +67,7 @@ const loginViaSSO = async (page: Page): Promise<void> => {
   // Retry login up to 3 times to handle transient SSO issues
   const maxLoginAttempts = 3;
   for (let attempt = 1; attempt <= maxLoginAttempts; attempt += 1) {
+    let didSubmit = false;
     try {
       await gotoWithRetry(page, PORTAL_PATH);
       if (!isSSOLoginUrl(page.url())) return;
@@ -76,6 +80,8 @@ const loginViaSSO = async (page: Page): Promise<void> => {
       await passwordInput.fill(SSO_PASSWORD);
       
       const submitButton = page.locator('#sign-in-button, button[type="submit"], input[type="submit"]');
+      await waitForAutheliaLoginRateLimit(page);
+      didSubmit = true;
       if ((await submitButton.count()) > 0) {
         await submitButton.first().click();
       } else {
@@ -84,9 +90,19 @@ const loginViaSSO = async (page: Page): Promise<void> => {
       
       await handleAutheliaConsent(page);
       await completeKeycloakProfileUpdate(page);
-      await page.waitForURL((url) => !isSSOLoginUrl(url), { timeout: 30000 });
+      await waitForNotSSOLoginUrl(page, isSSOLoginUrl, 30000);
+      recordAutheliaLoginAttempt(true);
       return;
     } catch (err) {
+      const message = String(err);
+      if (message.includes('Authelia requires two-factor authentication')) {
+        throw err;
+      }
+
+      if (didSubmit) {
+        recordAutheliaLoginAttempt(false);
+      }
+
       if (attempt === maxLoginAttempts) throw err;
       await page.waitForTimeout(2000);
     }
