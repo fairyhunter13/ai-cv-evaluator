@@ -1371,10 +1371,10 @@ jobs:
           echo "Base URL: $E2E_BASE_URL"
           
           # Check if SSO credentials are available
-          if [ -z "$SSO_PASSWORD" ]; then
-            echo "⚠ SSO_PASSWORD not set, skipping Playwright E2E tests"
+          if [ -z "$SSO_USERNAME" ] || [ -z "$SSO_PASSWORD" ]; then
+            echo "SSO_USERNAME and SSO_PASSWORD are required to run production Playwright validation"
             echo "To enable: Add SSO_USERNAME and SSO_PASSWORD secrets to GitHub repository"
-            exit 0
+            exit 1
           fi
           
           FAILED=0

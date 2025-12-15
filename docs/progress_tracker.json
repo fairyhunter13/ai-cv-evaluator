@@ -9,7 +9,7 @@
         "workspace": "fairyhunter13/ai-cv-evaluator",
         "owner": "hafiz",
         "created_at": "2025-12-12T17:20:00Z",
-        "last_updated": "2025-12-15T12:26:51Z"
+        "last_updated": "2025-12-15T16:49:29Z"
     },
     "references": {
         "retrieved_at": "2025-12-13",
@@ -1158,16 +1158,9 @@
                 "Updated .github/workflows/deploy.yml validate-production Playwright step to run all Playwright spec files (all *.spec.ts under admin-frontend/tests) and fail the job if any spec fails.",
                 "Pre-production git state captured: branch main at 6d59fbd; latest semver tag v1.0.230; working tree contains uncommitted changes for deploy.yml + Playwright spec updates + new helpers/sso-gate modules.",
                 "Triggered production validation v1.0.231: validate-production failed (run_id=20211520463, job_id=58018527993) with real-eval.spec.ts portal 'Open Frontend' click TimeoutError and cascading comprehensive-e2e.spec.ts failures.",
-                "Mitigation: after Cloudflare proxy disable, override CI runner /etc/hosts to map ai-cv-evaluator.web.id, dashboard.ai-cv-evaluator.web.id, auth.ai-cv-evaluator.web.id to origin IP (SSH_HOST secret) to avoid runner DNS caching/Cloudflare WAF during Playwright.",
-                "Updated .github/workflows/deploy.yml validate-production to upload admin-frontend/test-results as a workflow artifact (playwright-test-results) for production failure debugging.",
-                "Triggered production validation v1.0.232: validate-production was cancelled (run_id=20214290227, job_id=58025258527) after hitting the 30m job timeout; Playwright traces show net::ERR_CERT_COMMON_NAME_INVALID on auth.ai-cv-evaluator.web.id when bypassing Cloudflare to origin (origin cert SANs missing auth subdomain).",
-                "Mitigation: increase validate-production timeout-minutes to 60 and enable Playwright ignoreHTTPSErrors for validate-production via PLAYWRIGHT_IGNORE_HTTPS_ERRORS=1.",
-                "Refined Authelia Playwright login helpers to only use username/password: added shared client-side throttling/backoff (exponential with min interval) and applied it to performApiLogin + UI login submissions.",
-                "Added Authelia OTP (2FA) fail-fast: detect /2fa/one-time-password and throw a clear error; integrated into gotoWithRetry/navigation and SSO login completion waits.",
-                "Refactored sso-gate tests to reuse performApiLogin where applicable and to use waitForNotSSOLoginUrl for post-login redirect completion.",
-                "Updated spec-local login helpers (comprehensive-e2e, ui-flow, ui-edge, ui-comprehensive-edge, real-eval, grafana) to respect shared backoff and OTP fail-fast logic.",
-                "Validation: admin-frontend npm run type-check => PASS (2025-12-15).",
-                "Validation: admin-frontend Playwright (chromium) sso-gate portal login test => PASS (npm run test:e2e -- --project=chromium tests/sso-gate.spec.ts -g \"single sign-on via portal allows access to dashboards\")."
+                "Production validation v1.0.234: validate-production failed (job_id=58091987398) with waitForNotSSOLoginUrl timeout stuck on Authelia login URL (not /2fa/one-time-password).",
+                "Production validation v1.0.235: validate-production failed (job_id=58103768958); unauthenticated SSO assertions failed because isSSOLoginUrl did not match auth.ai-cv-evaluator.web.id/?rd=...&workflow=openid_connect; performApiLogin also returned 401 from /api/firstfactor.",
+                "Mitigation queued for v1.0.236: focus validate-production Playwright run on sso-gate.spec.ts; broaden isSSOLoginUrl to include auth.ai-cv-evaluator.web.id + workflow=openid_connect; require SSO_USERNAME/SSO_PASSWORD in production; improve /api/firstfactor error diagnostics; fix Authelia cookie injection to use cookie.url=AUTHELIA_URL (host-only for auth domain)."
             ]
         }
     ]

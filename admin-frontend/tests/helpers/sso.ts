@@ -2,7 +2,14 @@ import type { Page } from '@playwright/test';
 
 export const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
-  return url.includes('/oauth2/') || url.includes('/realms/aicv') || url.includes(':9091') || url.includes('/api/oidc/authorization') || url.includes('/login/oauth/authorize');
+  return url.includes('/oauth2/') ||
+    url.includes('/realms/aicv') ||
+    url.includes(':9091') ||
+    url.includes('/api/oidc/authorization') ||
+    url.includes('/api/oidc/authorize') ||
+    url.includes('/login/oauth/authorize') ||
+    url.includes('auth.ai-cv-evaluator.web.id') ||
+    url.includes('workflow=openid_connect');
 };
 
 export const isAutheliaOneTimePasswordUrl = (input: string | URL): boolean => {
