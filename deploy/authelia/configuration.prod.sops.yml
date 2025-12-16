@@ -57,6 +57,7 @@ identity_providers:
                 - ENC[AES256_GCM,data:4IkRnsmR,iv:U9F+mDiv1SZadJwgiMAZa6rmhZWeU4OaCjUXYvpt4BU=,tag:Ud8kRu3cL0f3S7FtbQClAQ==,type:str]
                 - ENC[AES256_GCM,data:vLtpJWk=,iv:35q198c4f4clcdwLLygfjiFjsWoYoEF8CYqA/Nj0DOU=,tag:T9DZN5sDRhrc+YShSinGvA==,type:str]
               userinfo_signed_response_alg: ENC[AES256_GCM,data:CD7g5A==,iv:szQfQDDSTkJE+Re/GsA8BO5YqybQ6ryJ92XktaxpHDQ=,tag:fRBuezi15JC+O3M0AQnL5Q==,type:str]
+              authorization_policy: ENC[AES256_GCM,data:uGmhTyJ7mtVZ5g==,iv:aL/xR8CTw7JQI0cuIfmimfesUsB8UzKjshagYRfi5hs=,tag:Z7lwabG6bpDmwfqbnnHx4g==,type:str]
 sops:
     age:
         - recipient: age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u
@@ -68,7 +69,7 @@ sops:
             ejFWMzN0Tnl5b0Naek5NQTRpRzZnMGsKoPFY78mDOv0bLvQy1sapUKaBOHfXyVCL
             d8dNQaX2xjtiyw1QwmFtpAOIdlzLzk/MNhXNU7E4AhKtDhAck5GVEQ==
             -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2025-12-12T12:30:53Z"
-    mac: ENC[AES256_GCM,data:eKCdvT75vcGq1Wc5ZFEEIMvM2e9cVlhlaKouII29unXXetL3JvkaCJqaWlYfpucagHMvIbTRX/qZT5kUS5tvaZ8yw2bkwJtcMH+trJrLUen25LbkFxy9ujLULe4HLGxSBAK0Dnl2mPyhbWSpcXMjB6taZVE29laxz8kIjJobM/Q=,iv:xZ56DPlw47EWX3O73E8TjLaDxYKJD+vrzi33PPQPIPY=,tag:dBNMpks7xwDPHCmyulbW0g==,type:str]
+    lastmodified: "2025-12-16T01:19:55Z"
+    mac: ENC[AES256_GCM,data:QIo5QiUSY33s9YEGBORq6BvveYh+8POJyP48NbHtJ2U2UehSr6T9/G8e6HEIKg+HLArBhamUbt6BxlOSyE5u/MoKiEvmM+GSWqjksLh03hnNdOEAuq5AKFg1uKWPo9erBfdoPMgZudtZstGl0ZSM7m/n4RdkZTRkllMyW5JFbyI=,iv:qAbhZQNE2Ns9lvSvw9+juGcy9eoMDh/KmbXDe14+jak=,tag:TBehyoemk3+b/VKV1REMGQ==,type:str]
     unencrypted_suffix: _unencrypted
     version: 3.11.0
