@@ -28,7 +28,7 @@ This `docs/` tree documents the current architecture and workflows of the **ai-c
 
 ## Security
 
-- [🔐 SSO & Rate Limiting](./security/SSO_RATE_LIMITING.md) - Keycloak SSO configuration and brute force protection
+- [🔐 SSO & Rate Limiting](./security/SSO_RATE_LIMITING.md) - Authelia SSO configuration and brute force protection
 
 ## Testing
 

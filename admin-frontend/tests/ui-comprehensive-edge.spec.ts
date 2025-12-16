@@ -14,7 +14,7 @@ const SSO_PASSWORD = process.env.SSO_PASSWORD || (IS_PRODUCTION ? '' : 'admin123
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
-  return url.includes('/oauth2/') || url.includes('/realms/aicv') || url.includes(':9091') || url.includes('auth.ai-cv-evaluator.web.id') || url.includes('workflow=openid_connect') || url.includes('/api/oidc/authorization') || url.includes('/api/oidc/authorize') || url.includes('/login/oauth/authorize');
+  return url.includes('/oauth2/') || url.includes(':9091') || url.includes('auth.ai-cv-evaluator.web.id') || url.includes('workflow=openid_connect') || url.includes('/api/oidc/authorization') || url.includes('/api/oidc/authorize') || url.includes('/login/oauth/authorize');
 };
 
 const handleAutheliaConsent = async (page: Page): Promise<void> => {
@@ -29,7 +29,7 @@ const handleAutheliaConsent = async (page: Page): Promise<void> => {
   } catch (_error) {}
 };
 
-const completeKeycloakProfileUpdate = async (page: Page): Promise<void> => {
+const completeProfileUpdateIfNeeded = async (page: Page): Promise<void> => {
   const heading = page.getByRole('heading', { name: /Update Account Information/i });
   const visible = await heading.isVisible().catch(() => false);
   if (!visible) return;
@@ -89,7 +89,7 @@ const loginViaSSO = async (page: Page): Promise<void> => {
       }
       
       await handleAutheliaConsent(page);
-      await completeKeycloakProfileUpdate(page);
+      await completeProfileUpdateIfNeeded(page);
       await waitForNotSSOLoginUrl(page, isSSOLoginUrl, 30000);
       recordAutheliaLoginAttempt(true);
       return;

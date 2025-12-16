@@ -102,8 +102,6 @@ dig ai-cv-evaluator.web.id
 | `dashboard` | A | VPS IP | Admin dashboard |
 | `auth` | A | VPS IP | **NEW** - Authelia SSO |
 
-**Note**: `keycloak.ai-cv-evaluator.web.id` is **intentionally removed** (migrated to Authelia).
-
 ### Rollback
 
 If you need to revert changes:

@@ -8,7 +8,7 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 
 - **Production site**: https://ai-cv-evaluator.web.id
 - **Admin Dashboard**: https://ai-cv-evaluator.web.id/app/dashboard
-- **SSO Login** (Keycloak):
+- **SSO Login** (Authelia):
   - Username: `admin`
   - Password: `admin123`
 
@@ -182,8 +182,7 @@ This repository uses SOPS (with age) to encrypt sensitive files so they can be c
   - `secrets/project.md.sops` and `secrets/project.md.enc` – encrypted study case project brief
   - `secrets/rfc/**.sops` – encrypted RFC submission markdowns
   - `secrets/cv/**.sops` – encrypted CV files (optimized + original)
-  - `secrets/deploy/keycloak/realm-aicv.json.sops` – encrypted Keycloak realm config (SSO + brute force settings)
-- Plaintext counterparts such as `.env`, `.env.production`, `submissions/**` (CVs, RFCs, project.md) and `deploy/keycloak/realm-aicv.json` are **gitignored** and should not be committed.
+- Plaintext counterparts such as `.env`, `.env.production`, and `submissions/**` (CVs, RFCs, project.md) are **gitignored** and should not be committed.
 
 ### Local prerequisites
 - Install `sops` and `age`.

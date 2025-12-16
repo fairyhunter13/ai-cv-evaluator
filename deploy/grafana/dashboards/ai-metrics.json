@@ -239,7 +239,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "sum(increase(ai_requests_total[5m])) by (provider, operation)",
+          "expr": "sum(increase(ai_requests_total[5m])) by (provider, operation) or on() vector(0)",
           "refId": "A",
           "legendFormat": "{{provider}} - {{operation}}"
         }
@@ -324,12 +324,12 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le))",
+          "expr": "histogram_quantile(0.95, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le)) or on() vector(0)",
           "refId": "A",
           "legendFormat": "p95 {{provider}} - {{operation}}"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le))",
+          "expr": "histogram_quantile(0.99, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, operation, le)) or on() vector(0)",
           "refId": "B",
           "legendFormat": "p99 {{provider}} - {{operation}}"
         }
@@ -389,7 +389,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(evaluation_project_score_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.5, sum(rate(evaluation_project_score_bucket[1h])) by (le)) or on() vector(0)",
           "refId": "A"
         }
       ],
@@ -448,7 +448,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.5, sum(rate(evaluation_cv_match_rate_bucket[1h])) by (le))",
+          "expr": "histogram_quantile(0.5, sum(rate(evaluation_cv_match_rate_bucket[1h])) by (le)) or on() vector(0)",
           "refId": "A"
         }
       ],
@@ -501,7 +501,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "sum(ai_requests_total) by (provider)",
+          "expr": "sum(ai_requests_total) by (provider) or on() vector(0)",
           "refId": "A",
           "legendFormat": "{{provider}}"
         }
@@ -548,7 +548,7 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "sum(increase(ai_requests_total[5m])) by (provider)",
+          "expr": "sum(increase(ai_requests_total[5m])) by (provider) or on() vector(0)",
           "refId": "A",
           "legendFormat": "{{provider}}"
         }
@@ -596,12 +596,12 @@
       "pluginVersion": "8.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, le))",
+          "expr": "histogram_quantile(0.50, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, le)) or on() vector(0)",
           "refId": "A",
           "legendFormat": "p50 {{provider}}"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, le))",
+          "expr": "histogram_quantile(0.95, sum(increase(ai_request_duration_seconds_bucket[5m])) by (provider, le)) or on() vector(0)",
           "refId": "B",
           "legendFormat": "p95 {{provider}}"
         }

@@ -63,7 +63,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(rate(container_cpu_usage_seconds_total{id=~\"/.*docker.*\"}[1m]), \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) * 100",
+                    "expr": "sum(label_replace(rate(container_cpu_usage_seconds_total{id=~\"/.*docker.*\"}[1m]), \"match_id\", \"$1\", \"id\", \".*/docker[-/]([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) * 100",
                     "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
@@ -115,7 +115,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
+                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker[-/]([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
                     "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
@@ -163,7 +163,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) / sum(label_replace(container_spec_memory_limit_bytes{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) * 100",
+                    "expr": "sum(label_replace(container_memory_usage_bytes{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker[-/]([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) / sum(label_replace(container_spec_memory_limit_bytes{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker[-/]([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service) * 100",
                     "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
@@ -212,7 +212,7 @@
             },
             "targets": [
                 {
-                    "expr": "time() - min(label_replace(container_start_time_seconds{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
+                    "expr": "time() - min(label_replace(container_start_time_seconds{id=~\"/.*docker.*\"}, \"match_id\", \"$1\", \"id\", \".*/docker[-/]([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
                     "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }
@@ -255,7 +255,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(label_replace(changes(container_start_time_seconds{id=~\"/.*docker.*\"}[1h]), \"match_id\", \"$1\", \"id\", \".*/docker-([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
+                    "expr": "sum(label_replace(changes(container_start_time_seconds{id=~\"/.*docker.*\"}[1h]), \"match_id\", \"$1\", \"id\", \".*/docker[-/]([a-f0-9]{12}).*\") * on(match_id) group_left(com_docker_compose_service) label_replace(container_meta_info, \"match_id\", \"$1\", \"id\", \"(.*)\")) by (com_docker_compose_service)",
                     "legendFormat": "{{com_docker_compose_service}}",
                     "refId": "A"
                 }

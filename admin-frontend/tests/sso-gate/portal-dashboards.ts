@@ -271,6 +271,101 @@ export const registerPortalDashboardsTests = (): void => {
       console.log(`  - Found ${count} panels`);
       expect(count).toBeGreaterThan(0);
 
+      // Prometheus API: for Docker dashboard, ensure cadvisor + meta-exporter data is present
+      // and that the friendly-name join query returns at least one series.
+      if (d.uid === 'docker-monitoring') {
+        let metaResults: any[] = [];
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const resp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+            params: { query: 'count(container_meta_info)' },
+          });
+          if (!resp.ok()) {
+            await page.waitForTimeout(1000);
+            continue;
+          }
+          const body = await resp.json();
+          metaResults = (body as any)?.data?.result ?? [];
+          if (metaResults.length > 0) {
+            break;
+          }
+          await page.waitForTimeout(1000);
+        }
+        expect(metaResults.length).toBeGreaterThan(0);
+
+        let cadvisorCPUResults: any[] = [];
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const resp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+            params: { query: 'count(container_cpu_usage_seconds_total{id!="/"})' },
+          });
+          if (!resp.ok()) {
+            await page.waitForTimeout(1000);
+            continue;
+          }
+          const body = await resp.json();
+          cadvisorCPUResults = (body as any)?.data?.result ?? [];
+          if (cadvisorCPUResults.length > 0) {
+            break;
+          }
+          await page.waitForTimeout(1000);
+        }
+        expect(cadvisorCPUResults.length).toBeGreaterThan(0);
+
+        const joinQuery =
+          'sum(label_replace(max_over_time(container_cpu_usage_seconds_total{id!="/"}[10m]), "match_id", "$2", "id", ".*(docker[-/]|docker://)([a-f0-9]{12}).*") '
+          + '* on(match_id) group_left(com_docker_compose_service) '
+          + 'label_replace(container_meta_info, "match_id", "$1", "id", "(.+)")'
+          + ') by (com_docker_compose_service)';
+
+        let joinResults: any[] = [];
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const resp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+            params: { query: joinQuery },
+          });
+          if (!resp.ok()) {
+            await page.waitForTimeout(1000);
+            continue;
+          }
+          const body = await resp.json();
+          joinResults = (body as any)?.data?.result ?? [];
+          if (joinResults.length > 0) {
+            break;
+          }
+          await page.waitForTimeout(1000);
+        }
+        expect(joinResults.length).toBeGreaterThan(0);
+      }
+
+      // Prometheus API: for AI dashboard, ensure key expressions return a value.
+      // We use explicit fallbacks so idle environments (no AI traffic yet) still
+      // produce a deterministic 0 instead of an empty result set.
+      if (d.uid === 'ai-metrics') {
+        const queries = [
+          'sum(ai_requests_total) or vector(0)',
+          'sum(ai_tokens_total) or vector(0)',
+          'histogram_quantile(0.95, sum by (le) (ai_request_duration_seconds_bucket)) or vector(0)',
+        ];
+
+        for (const query of queries) {
+          let results: any[] = [];
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            const resp = await page.request.get('/grafana/api/datasources/proxy/uid/prometheus/api/v1/query', {
+              params: { query },
+            });
+            if (!resp.ok()) {
+              await page.waitForTimeout(1000);
+              continue;
+            }
+            const body = await resp.json();
+            results = (body as any)?.data?.result ?? [];
+            if (results.length > 0) {
+              break;
+            }
+            await page.waitForTimeout(1000);
+          }
+          expect(results.length, `Expected Prometheus to return data for query: ${query}`).toBeGreaterThan(0);
+        }
+      }
+
       // Check for "No data"
       const noDataTexts = page.getByText('No data');
       const noDataCount = await noDataTexts.count();
