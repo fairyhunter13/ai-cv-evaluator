@@ -9,7 +9,7 @@
     "workspace": "fairyhunter13/ai-cv-evaluator",
     "owner": "",
     "created_at": "2025-12-15",
-    "last_updated": "2025-12-15"
+    "last_updated": "2025-12-16"
   },
   "references": {
     "retrieved_at": "2025-12-15",
@@ -46,11 +46,11 @@
     "notes": ""
   },
   "overall_status": {
-    "completion_percentage": 70,
+    "completion_percentage": 80,
     "status": "IN_PROGRESS",
-    "current_blocker": "Production GitHub Secrets SSO_USERNAME/SSO_PASSWORD appear to not match deployed Authelia users_database.yml; /api/firstfactor returns 401.",
+    "current_blocker": "Pending redeploy/validate after updating Authelia OIDC oauth2-proxy client authorization_policy to one_factor to prevent OTP/2FA redirects.",
     "risk_level": "MEDIUM",
-    "summary": "Code changes are in place; production validation is blocked on credentials mismatch causing Authelia /api/firstfactor 401."
+    "summary": "CI now derives SSO credentials from production SOPS env. Remaining production validation failures appear driven by Authelia OIDC client policy leading to OTP/2FA; fix applied in encrypted prod Authelia config and needs redeploy validation."
   },
   "architecture": {
     "status": "NOT_STARTED",
@@ -108,7 +108,7 @@
       "priority": "HIGH",
       "status": "IN_PROGRESS",
       "owner": "",
-      "notes": "v1.0.236 and v1.0.237 validate-production failed due to /api/firstfactor 401 Authentication failed.",
+      "notes": "Earlier runs failed with /api/firstfactor 401. Latest failures include redirects to Authelia OTP/2FA page; production Authelia OIDC oauth2-proxy client authorization_policy was missing and has been added as one_factor in configuration.prod.sops.yml.",
       "links": [
         "https://github.com/fairyhunter13/ai-cv-evaluator/actions/runs/20240442834",
         "https://github.com/fairyhunter13/ai-cv-evaluator/actions/runs/20241482957"
@@ -118,12 +118,12 @@
         "process": "GitHub Actions validate-production",
         "commands": ["npx playwright test sso-gate.spec.ts"],
         "expected_result": "All SSO gate tests pass",
-        "actual_result": "Authelia /api/firstfactor returns 401; multiple tests fail",
+        "actual_result": "Production validation fails; observed SSO login and OTP/2FA redirects",
         "evidence": [
           "v1.0.236 run_id=20240442834 job_id=58108595540",
           "v1.0.237 run_id=20241482957 job_id=58112032777"
         ],
-        "notes": "No /2fa/one-time-password observed in logs."
+        "notes": "SSO credentials are now derived from secrets/env.production.sops.yaml in CI; remaining failures are consistent with Authelia enforcing OTP/2FA for oauth2-proxy when client authorization_policy is not explicitly one_factor."
       },
       "validation_status": {
         "status": "IN_PROGRESS",
@@ -134,10 +134,10 @@
       },
       "issue_status": {
         "status": "OPEN",
-        "issue_summary": "Authelia API login returns 401 in production validation",
+        "issue_summary": "Production validation redirected to Authelia OTP/2FA despite intended one_factor policy",
         "impact": "Blocks Deploy workflow completion",
-        "root_cause": "Likely SSO_USERNAME/SSO_PASSWORD secrets do not match deployed Authelia users_database.yml (shows user admin / comment admin123).",
-        "how_to_solve": "Align GitHub Secrets to deployed credentials or rotate Authelia users_database to match intended secrets.",
+        "root_cause": "Authelia OIDC oauth2-proxy client configuration in deploy/authelia/configuration.prod.sops.yml did not explicitly set authorization_policy: one_factor.",
+        "how_to_solve": "Set authorization_policy: one_factor on oauth2-proxy client in encrypted prod Authelia config, deploy, and re-run validate-production.",
         "notes": ""
       },
       "investigation_status": {
@@ -181,18 +181,18 @@
   },
   "validation_summary": {
     "core_validation_status": "IN_PROGRESS",
-    "summary": "Blocked on production credentials mismatch (Authelia /api/firstfactor 401).",
+    "summary": "Pending redeploy/validation after updating prod Authelia OIDC client policy to one_factor.",
     "evidence": [],
     "notes": ""
   },
   "issues_summary": [
     {
       "id": "ISSUE-SSO-401",
-      "title": "Production validate-production failing due to Authelia /api/firstfactor 401",
+      "title": "Production validate-production failing due to Authelia OTP/2FA redirect",
       "status": "OPEN",
       "impact": "Deploy workflow fails",
-      "root_cause": "Likely GitHub Secrets credentials mismatch",
-      "resolution": "Align secrets to deployed users_database or rotate users_database",
+      "root_cause": "Authelia OIDC oauth2-proxy client authorization_policy not explicitly one_factor in prod encrypted config",
+      "resolution": "Add authorization_policy: one_factor in deploy/authelia/configuration.prod.sops.yml and redeploy",
       "notes": ""
     }
   ],
@@ -205,16 +205,16 @@
   "deployment_readiness": {
     "code_ready": true,
     "tests_passed": false,
-    "config_ready": false,
+    "config_ready": true,
     "documentation_ready": true,
     "prod_scenario_validated": false,
     "local_services_running": false,
     "local_e2e_status": "NOT_STARTED",
     "core_validation_complete": false,
-    "recommendation": "Update GitHub Secrets to match deployed Authelia users_database credentials, then cut a new tag to rerun Deploy validate-production.",
+    "recommendation": "Cut a new semver tag to redeploy Authelia with oauth2-proxy authorization_policy=one_factor, then monitor validate-production for absence of /2fa/one-time-password.",
     "next_steps": [
-      "Set repository secrets SSO_USERNAME/SSO_PASSWORD to match deployed Authelia users_database.yml",
-      "Cut v1.0.238 tag and monitor Deploy validate-production"
+      "Cut a new semver tag and monitor Deploy validate-production",
+      "If validate-production still hits /2fa/one-time-password, inspect Authelia logs and confirm the deployed configuration.yml includes authorization_policy: one_factor"
     ]
   },
   "documentation": {
@@ -234,6 +234,13 @@
       "version": "v1.0.237",
       "date": "2025-12-15",
       "changes": ["Deploy validate-production failed again with Authelia /api/firstfactor 401."]
+    },
+    {
+      "version": "unreleased",
+      "date": "2025-12-16",
+      "changes": [
+        "Added authorization_policy: one_factor to Authelia prod encrypted config (deploy/authelia/configuration.prod.sops.yml) for oauth2-proxy client to prevent OTP/2FA redirects."
+      ]
     }
   ]
 }
