@@ -818,7 +818,7 @@ jobs:
 
 
             echo "Bringing up backend_$NEXT_COLOR, worker, frontend, nginx, and oauth2-proxy services..."
-            docker compose up -d "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
+            docker compose up -d "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor node-exporter mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
 
             echo "Waiting for backend_$NEXT_COLOR service to be running..."
             for i in {1..30}; do
@@ -1251,6 +1251,14 @@ jobs:
           TARGETS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/targets' 2>/dev/null || echo "")
           echo "Prometheus targets:"
           echo "$TARGETS" | head -c 500
+
+          echo "Checking node-exporter scrape health..."
+          NODE_EXPORTER_UP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=up%7Bjob%3D%22node-exporter%22%7D' 2>/dev/null || echo "")
+          echo "$NODE_EXPORTER_UP" | head -c 300
+          if ! echo "$NODE_EXPORTER_UP" | grep -Eq '"value"[[:space:]]*:[[:space:]]*\[[^\]]*,[[:space:]]*"1"\]'; then
+            echo "ERROR: node-exporter is not up/scraped by Prometheus (up{job=\"node-exporter\"} != 1)."
+            exit 1
+          fi
           
           echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
           ALERT_FIRING=0
