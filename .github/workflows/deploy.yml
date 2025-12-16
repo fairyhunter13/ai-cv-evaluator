@@ -1256,28 +1256,28 @@ jobs:
           NODE_EXPORTER_UP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=up%7Bjob%3D%22node-exporter%22%7D' 2>/dev/null || echo "")
           echo "$NODE_EXPORTER_UP" | head -c 300
           if ! NODE_EXPORTER_UP="$NODE_EXPORTER_UP" python3 - <<'PY'
-import json
-import os
-import sys
-
-s = os.environ.get("NODE_EXPORTER_UP", "").strip()
-try:
-  payload = json.loads(s) if s else {}
-except Exception:
-  sys.exit(1)
-
-results = payload.get("data", {}).get("result", [])
-ok = False
-for r in results:
-  if not isinstance(r, dict):
-    continue
-  v = r.get("value")
-  if isinstance(v, list) and len(v) >= 2 and str(v[1]) == "1":
-    ok = True
-    break
-
-sys.exit(0 if ok else 1)
-PY
+          import json
+          import os
+          import sys
+          
+          s = os.environ.get("NODE_EXPORTER_UP", "").strip()
+          try:
+            payload = json.loads(s) if s else {}
+          except Exception:
+            sys.exit(1)
+          
+          results = payload.get("data", {}).get("result", [])
+          ok = False
+          for r in results:
+            if not isinstance(r, dict):
+              continue
+            v = r.get("value")
+            if isinstance(v, list) and len(v) >= 2 and str(v[1]) == "1":
+              ok = True
+              break
+          
+          sys.exit(0 if ok else 1)
+          PY
           ; then
             echo "ERROR: node-exporter is not up/scraped by Prometheus (up{job=\"node-exporter\"} != 1)."
             exit 1
