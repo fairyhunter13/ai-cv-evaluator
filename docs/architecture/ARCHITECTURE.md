@@ -14,19 +14,19 @@ High-level components:
 - **Database**: PostgreSQL.
 - **Observability**: OTEL collector, Prometheus, Grafana, Jaeger.
 - **Admin Frontend**: Vue 3 + Vite app served behind nginx.
-- **SSO**: Keycloak + oauth2-proxy.
+- **SSO**: Authelia + oauth2-proxy.
 - **Portal**: Static HTML landing page linking to dashboards and admin UI.
 
 ## SSO and Portal as Single Gate
 
 ### Identity Provider
 
-- **Keycloak** realm `aicv` (see `deploy/keycloak/realm-aicv*.json`).
+- **Authelia** (OIDC provider) configured under `deploy/authelia/`.
 - Default dev admin user: `admin` / `admin123`.
 
 ### Front Auth (oauth2-proxy)
 
-- oauth2-proxy is configured as an OIDC client of Keycloak.
+- oauth2-proxy is configured as an OIDC client of Authelia.
 - Nginx uses `auth_request` to call oauth2-proxy for all protected routes.
 - On 401, nginx redirects to `/oauth2/start?rd=...`.
 

@@ -102,8 +102,6 @@ dig example.com
 | `dashboard` | A | VPS IP | Admin dashboard |
 | `auth` | A | VPS IP | **NEW** - Authelia SSO |
 
-**Note**: `keycloak.example.com` is **intentionally removed** (migrated to Authelia).
-
 ### Rollback
 
 If you need to revert changes:

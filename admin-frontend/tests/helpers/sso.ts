@@ -3,7 +3,6 @@ import type { Page } from '@playwright/test';
 export const isSSOLoginUrl = (input: string | URL): boolean => {
   const url = typeof input === 'string' ? input : input.toString();
   return url.includes('/oauth2/') ||
-    url.includes('/realms/aicv') ||
     url.includes(':9091') ||
     url.includes('/api/oidc/authorization') ||
     url.includes('/api/oidc/authorize') ||
@@ -63,7 +62,7 @@ export const handleAutheliaConsent = async (page: Page): Promise<void> => {
   }
 };
 
-export const completeKeycloakProfileUpdate = async (page: Page): Promise<void> => {
+export const completeProfileUpdateIfNeeded = async (page: Page): Promise<void> => {
   const heading = page.getByRole('heading', { name: /Update Account Information/i });
   const visible = await heading.isVisible().catch(() => false);
   if (!visible) {

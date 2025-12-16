@@ -6,7 +6,7 @@ This document briefly captures the main migration steps that were performed in t
 
 - Migrated to a split architecture with dedicated `server`, `worker`, and `frontend` containers.
 - Consolidated worker logic into a single worker handling all Redpanda partitions, tuned for free-tier-safe concurrency by default (`CONSUMER_MAX_CONCURRENCY=1`, can be increased in higher-capacity environments).
-- Introduced Keycloak + oauth2-proxy SSO in front of all dashboards and admin/frontend routes.
+- Introduced Authelia + oauth2-proxy SSO in front of all dashboards and admin/frontend routes.
 - Added a portal page behind SSO that acts as a single entry point to:
   - Admin frontend (`/app/`)
   - Backend API (`/v1/`)

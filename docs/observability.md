@@ -15,7 +15,7 @@ This document describes the observability stack, dashboards, and operational pro
 
 ## Accessing Observability UIs
 
-All observability UIs are protected by SSO. After authenticating via Keycloak:
+All observability UIs are protected by SSO. After authenticating via Authelia:
 
 1. **Grafana** - Primary entry point for metrics, logs, and alerts
 2. **Jaeger** - For deep-dive into request traces
