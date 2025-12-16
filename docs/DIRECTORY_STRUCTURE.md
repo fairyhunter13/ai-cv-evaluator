@@ -12,11 +12,10 @@ High-level layout of the repository:
   - `tests/` – Playwright E2E tests for SSO gate semantics.
 - `deploy/` – deployment-related configuration:
   - `nginx/` – dev and prod nginx vhost templates, including SSO/portal configuration.
-  - `keycloak/` – Keycloak realm exports for dev/prod.
   - `portal/` – static portal HTML served behind SSO.
   - `grafana/`, `prometheus/`, `redpanda/`, etc. – observability configuration.
   - `docker/` – Dockerfiles for server, worker, migrate, and frontend images (dev/prod variants).
-- `secrets/` – SOPS-encrypted artifacts (env files, project brief, CV/RFC submissions, Keycloak realm, etc.).
+- `secrets/` – SOPS-encrypted artifacts (env files, project brief, CV/RFC submissions, etc.).
 - `test/e2e/` – Go-based E2E tests that exercise the full upload → evaluate → result pipeline.
 - `.github/workflows/` – GitHub Actions for CI, security scanning, deploy, SSH checks, Cloudflare DNS sync.
 - `docker-compose.yml` – local dev stack (including dev-nginx + SSO + dashboards).

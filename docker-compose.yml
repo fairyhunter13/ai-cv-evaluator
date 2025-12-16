@@ -267,7 +267,6 @@ services:
       - "--housekeeping_interval=30s"
       - "--max_housekeeping_interval=35s"
       - "--global_housekeeping_interval=2m"
-      - "--docker_only=true"
       - "--disable_metrics=percpu,sched,tcp,udp,advtcp"
       - "--store_container_labels=true"
     restart: unless-stopped

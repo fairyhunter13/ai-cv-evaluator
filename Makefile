@@ -89,7 +89,7 @@ endef
 # - Reduced code duplication by 60%
 
 .PHONY: all deps fmt lint vet vuln test test-e2e cover run build docker-build docker-build-ci docker-run migrate tools generate seed-rag \
-	encrypt-env decrypt-env encrypt-env-production decrypt-env-production encrypt-keycloak-realm decrypt-keycloak-realm \
+	encrypt-env decrypt-env encrypt-env-production decrypt-env-production \
 	verify-project-sops encrypt-project decrypt-project \
 	encrypt-rfcs decrypt-rfcs encrypt-cv decrypt-cv encrypt-cv-original backup-rfcs backup-cv verify-cv decrypt-test-cv clean-test-cv \
 	ci-test openapi-validate build-matrix verify-test-placement gosec-sarif license-scan \
@@ -158,8 +158,6 @@ lint-infra:
 				touch "$$TEMP_ENV_PROD_CREATED"; \
 				ln -s "$$TEMP_ENV_PROD_CREATED" .env.production; \
 			fi; \
-			KEYCLOAK_ADMIN=dummy-admin \
-			KEYCLOAK_ADMIN_PASSWORD=dummy-password \
 			OAUTH2_PROXY_CLIENT_SECRET=dummy-client-secret \
 			OAUTH2_PROXY_COOKIE_SECRET=dummy-cookie-secret \
 			OAUTH2_PROXY_EMAIL_DOMAINS=example.com \
@@ -230,22 +228,6 @@ decrypt-env-production:
 	$(call check_sops_key)
 	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type yaml --output-type dotenv secrets/env.production.sops.yaml > .env.production
 	@echo "Decrypted secrets/env.production.sops.yaml -> .env.production"
-
-# Encrypt deploy/keycloak/realm-aicv.json -> secrets/deploy/keycloak/realm-aicv.json.sops
-encrypt-keycloak-realm:
-	$(call check_file_exists,deploy/keycloak/realm-aicv.json)
-	$(call check_sops_key)
-	@mkdir -p secrets/deploy/keycloak
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --encrypt --input-type json --output-type json deploy/keycloak/realm-aicv.json > secrets/deploy/keycloak/realm-aicv.json.sops
-	@echo "Encrypted deploy/keycloak/realm-aicv.json -> secrets/deploy/keycloak/realm-aicv.json.sops"
-
-# Decrypt secrets/deploy/keycloak/realm-aicv.json.sops -> deploy/keycloak/realm-aicv.json
-decrypt-keycloak-realm:
-	$(call check_file_exists,secrets/deploy/keycloak/realm-aicv.json.sops)
-	$(call check_sops_key)
-	@mkdir -p deploy/keycloak
-	SOPS_AGE_KEY_FILE=$(SOPS_AGE_KEY_FILE) sops --decrypt --input-type json --output-type json secrets/deploy/keycloak/realm-aicv.json.sops > deploy/keycloak/realm-aicv.json
-	@echo "Decrypted secrets/deploy/keycloak/realm-aicv.json.sops -> deploy/keycloak/realm-aicv.json"
 
 # Encrypt submissions/project.md -> secrets/project.md.enc (Binary)
 encrypt-project:

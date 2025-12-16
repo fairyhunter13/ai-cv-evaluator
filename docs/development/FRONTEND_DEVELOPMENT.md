@@ -18,7 +18,7 @@ When running the full dev stack via `make dev-full`, nginx (`dev-nginx`) proxies
 
 ## Authentication and SSO Integration
 
-- All admin/frontend routes are behind SSO via oauth2-proxy + Keycloak.
+- All admin/frontend routes are behind SSO via oauth2-proxy + Authelia.
 - The auth store (`admin-frontend/src/stores/auth.ts`) provides:
   - `login` / `loginWithSSO(redirectTo?)`: triggers `/oauth2/start?rd=...`.
   - `logout`: redirects to `/oauth2/sign_out?rd=/` and clears local state.
@@ -52,5 +52,5 @@ npm run test:e2e
 The SSO tests assert that:
 
 - Unauthenticated users are redirected into SSO when hitting `/app/`, `/grafana/`, `/prometheus/`, `/jaeger/`, `/redpanda/`, `/admin/`.
-- After successful SSO login (Keycloak), the user lands on the portal root and can open dashboards without re-authenticating.
+- After successful SSO login (Authelia), the user lands on the portal root and can open dashboards without re-authenticating.
 - `/logout` revokes SSO and protected URLs again require login.

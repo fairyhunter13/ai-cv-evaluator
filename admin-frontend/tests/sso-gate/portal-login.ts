@@ -4,7 +4,7 @@ import { PORTAL_PATH } from '../helpers/env.ts';
 import { ensureAutheliaUp, performApiLogin } from '../helpers/authelia.ts';
 import { gotoWithRetry } from '../helpers/navigation.ts';
 import {
-  completeKeycloakProfileUpdate,
+  completeProfileUpdateIfNeeded,
   handleAutheliaConsent,
   isSSOLoginUrl,
   waitForNotSSOLoginUrl,
@@ -27,10 +27,10 @@ export const registerPortalLoginTests = (): void => {
     await gotoWithRetry(page, PORTAL_PATH);
 
     await handleAutheliaConsent(page);
-    await completeKeycloakProfileUpdate(page);
+    await completeProfileUpdateIfNeeded(page);
 
     // Wait until we have returned from the SSO flow (no longer on oauth2-proxy
-    // or Keycloak realm URLs) so that the oauth2-proxy session cookie is set.
+    // or OIDC provider URLs) so that the oauth2-proxy session cookie is set.
     await waitForNotSSOLoginUrl(page, isSSOLoginUrl, 30000);
     // After successful login (and any required profile update), navigate directly
     // to representative dashboards and assert we do not get bounced back to SSO.

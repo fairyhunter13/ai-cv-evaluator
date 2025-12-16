@@ -28,7 +28,5 @@ output "dns_summary" {
     - Main App:     ${cloudflare_record.app.hostname} -> ${cloudflare_record.app.content}
     - Dashboard:    ${cloudflare_record.dashboard.hostname} -> ${cloudflare_record.dashboard.content}
     - Auth (NEW):   ${cloudflare_record.auth.hostname} -> ${cloudflare_record.auth.content}
-    
-    Note: keycloak.example.com removed (migrated to Authelia)
   EOT
 }
