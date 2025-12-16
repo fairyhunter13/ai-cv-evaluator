@@ -815,10 +815,8 @@ jobs:
             docker compose stop authelia 2>/dev/null || true
             docker compose rm -f authelia 2>/dev/null || true
 
-
-
             echo "Bringing up backend_$NEXT_COLOR, worker, frontend, nginx, and oauth2-proxy services..."
-            docker compose up -d "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor node-exporter mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
+            docker compose up -d --remove-orphans "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor node-exporter mailpit redpanda-console meta-exporter || { echo "Docker compose up failed!"; exit 1; }
 
             echo "Waiting for backend_$NEXT_COLOR service to be running..."
             for i in {1..30}; do
