@@ -25,7 +25,7 @@ This brings up:
 - API server (`app`) on internal port 8080
 - Worker (`worker`) processing queue jobs
 - Postgres, Redpanda, Qdrant, Tika, OTEL collector
-- **Keycloak** (IdP) on host port `8089`
+- **Authelia** (IdP) on host port `9091`
 - **oauth2-proxy** in front of nginx
 - **dev-nginx** on host `http://localhost:8088` acting as a single SSO gate
 - Portal UI under `/` with links to:
@@ -33,7 +33,7 @@ This brings up:
   - Backend API (`/v1/`)
   - Grafana, Prometheus, Jaeger, Redpanda console
 
-All dashboards and admin/API endpoints are protected by SSO via oauth2-proxy + Keycloak.
+All dashboards and admin/API endpoints are protected by SSO via oauth2-proxy + Authelia.
 
 ## Testing
 

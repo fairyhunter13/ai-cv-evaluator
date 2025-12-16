@@ -169,27 +169,8 @@ make encrypt-env-production
    ```
 4. Redeploy affected services:
    ```bash
-   docker compose -f docker-compose.prod.yml up -d backend worker keycloak oauth2-proxy-app oauth2-proxy-dashboard
+   docker compose -f docker-compose.prod.yml up -d backend worker authelia oauth2-proxy-app oauth2-proxy-dashboard
    ```
-
-### Keycloak Realm (SSO)
-
-The Keycloak realm configuration is managed via SOPS:
-
-- Canonical encrypted file: `secrets/deploy/keycloak/realm-aicv.json.sops`
-- Decrypted runtime file (gitignored): `deploy/keycloak/realm-aicv.json`
-
-To update the realm config safely:
-
-```bash
-# Decrypt to plaintext JSON
-make decrypt-keycloak-realm
-
-# Edit deploy/keycloak/realm-aicv.json as needed
-
-# Re-encrypt back to secrets/deploy/keycloak/realm-aicv.json.sops
-make encrypt-keycloak-realm
-```
 
 ## Scaling
 
@@ -426,8 +407,8 @@ The GitHub Actions deployment pipeline enforces strict quality gates:
 | `OPENAI_API_KEY` | OpenAI API key for embeddings |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token for DNS updates |
 | `CLOUDFLARE_ZONE_ID` | Cloudflare zone ID for DNS updates |
-| `SSO_USERNAME` | Keycloak SSO username for E2E tests |
-| `SSO_PASSWORD` | Keycloak SSO password for E2E tests |
+| `SSO_USERNAME` | Authelia username for E2E SSO login |
+| `SSO_PASSWORD` | Authelia password for E2E SSO login |
 | `ADMIN_USERNAME` | Backend admin username |
 | `ADMIN_PASSWORD` | Backend admin password |
 

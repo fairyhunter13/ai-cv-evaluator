@@ -12,7 +12,7 @@ const SSO_PASSWORD = process.env.SSO_PASSWORD || process.env.ADMIN_PASSWORD || (
 
 const isSSOLoginUrl = (input: string | URL): boolean => {
     const url = typeof input === 'string' ? input : input.toString();
-    return url.includes('/oauth2/') || url.includes('/realms/aicv') || url.includes(':9091') || url.includes('auth.ai-cv-evaluator.web.id') || url.includes('workflow=openid_connect') || url.includes('/api/oidc/authorization') || url.includes('/api/oidc/authorize') || url.includes('/login/oauth/authorize');
+    return url.includes('/oauth2/') || url.includes(':9091') || url.includes('auth.ai-cv-evaluator.web.id') || url.includes('workflow=openid_connect') || url.includes('/api/oidc/authorization') || url.includes('/api/oidc/authorize') || url.includes('/login/oauth/authorize');
 };
 
 const handleAutheliaConsent = async (page: Page): Promise<void> => {
@@ -99,18 +99,6 @@ test.describe('Grafana Dashboard Verification', () => {
             }
         } catch (e) {
             // Ignore, likely already logged in or using OAuth
-        }
-
-        // Handle Keycloak login if redirected there
-        try {
-            if (await page.getByLabel('Username').isVisible({ timeout: 3000 })) {
-                console.log('Logging in via Keycloak...');
-                await page.getByLabel('Username').fill(process.env.SSO_USERNAME || process.env.ADMIN_USERNAME || 'admin');
-                await page.getByLabel('Password').fill(process.env.SSO_PASSWORD || process.env.ADMIN_PASSWORD || 'admin123');
-                await page.getByRole('button', { name: 'Sign In' }).click();
-            }
-        } catch (e) {
-            // Ignore
         }
 
         // Wait for Grafana title

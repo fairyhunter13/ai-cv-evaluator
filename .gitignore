@@ -4,8 +4,6 @@
 docs/project.md
 docs/rfc/
 docs/rfc.backups/
-# Keycloak realm config (decrypted from SOPS, contains sensitive data)
-deploy/keycloak/realm-aicv.json
 # Generated files and directories
 coverage/
 logs/

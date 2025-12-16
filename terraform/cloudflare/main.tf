@@ -49,7 +49,7 @@ resource "cloudflare_record" "dashboard" {
   allow_overwrite = true  # Allow updating existing records
 }
 
-# Authelia SSO subdomain (NEW - replaces Keycloak)
+# Authelia SSO subdomain
 resource "cloudflare_record" "auth" {
   zone_id        = data.cloudflare_zone.main.id
   name           = "auth"
@@ -60,6 +60,3 @@ resource "cloudflare_record" "auth" {
   comment        = "Authelia SSO authentication subdomain"
   allow_overwrite = true  # Allow updating existing records
 }
-
-# NOTE: keycloak.ai-cv-evaluator.web.id intentionally removed
-# Migration from Keycloak to Authelia completed
