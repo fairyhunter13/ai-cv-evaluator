@@ -1191,15 +1191,6 @@ jobs:
             fi
 
             echo ""
-            echo "Checking Redpanda Console..."
-            REDPANDA=$(curl -sfk https://localhost/redpanda/ 2>/dev/null | head -c 100)
-            if [ -n "$REDPANDA" ]; then
-              echo "✓ Redpanda Console accessible"
-            else
-              echo "⚠ Redpanda Console check failed"
-            fi
-
-            echo ""
             echo "✓ Service validation completed"
           '
 
