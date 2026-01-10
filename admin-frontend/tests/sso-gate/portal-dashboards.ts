@@ -41,13 +41,7 @@ export const registerPortalDashboardsTests = (): void => {
         pathPrefix: '/jaeger/',
         expectText: /Jaeger/i,
       },
-      // Redpanda Console was removed from production deployment (docker-compose.prod.yml)
-      // Only include it in dev mode where docker-compose.yml still has the service
-      ...(IS_DEV ? [{
-        linkName: /Open Redpanda/i,
-        pathPrefix: '/redpanda/',
-        expectText: /Redpanda|Redpanda Console/i,
-      }] : []),
+      // Note: Redpanda Console is NOT in the portal HTML - no "Open Redpanda" link exists
     ];
 
     for (const { linkName, pathPrefix, expectText: _expectText } of dashboards) {
@@ -61,12 +55,7 @@ export const registerPortalDashboardsTests = (): void => {
       expect(!isSSOLoginUrl(url)).toBeTruthy();
       expect(url).toContain(pathPrefix);
 
-      if (pathPrefix === '/redpanda/') {
-        // For Redpanda Console, assert routing/SSO and that we land on Redpanda
-        await expect(page).toHaveTitle(/Redpanda/i);
-        // Accept either /redpanda/ or /redpanda/overview depending on version
-        expect(url).toContain('/redpanda/');
-      } else if (pathPrefix === '/app/') {
+      if (pathPrefix === '/app/') {
         // For the main frontend, just assert we stayed on the /app/ path after SSO.
         await expect(page).toHaveURL(/\/app\//);
       } else if (pathPrefix === '/grafana/') {

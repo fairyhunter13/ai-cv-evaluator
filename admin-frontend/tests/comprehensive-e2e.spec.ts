@@ -223,10 +223,9 @@ test.describe('Portal Page', () => {
     await expect(page.getByRole('link', { name: /Open API/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Health/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Open Grafana/i })).toBeVisible();
-    // Mailpit and Redpanda Console only available in dev
+    // Mailpit only available in dev (Redpanda Console link not in portal HTML)
     if (IS_DEV) {
       await expect(page.getByRole('link', { name: /Open Mailpit/i })).toBeVisible();
-      await expect(page.getByRole('link', { name: /Open Redpanda/i })).toBeVisible();
     }
     await expect(page.getByRole('link', { name: /Open Jaeger/i })).toBeVisible();
   });
