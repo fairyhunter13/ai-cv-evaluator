@@ -16,4 +16,5 @@ export const AUTHELIA_URL =
   process.env.AUTHELIA_URL || (IS_PRODUCTION ? 'https://auth.ai-cv-evaluator.web.id' : 'http://localhost:9091');
 
 // Services that may not be available in all environments
-export const DEV_ONLY_SERVICES = ['/mailpit/'];
+// Redpanda Console was removed from production deployment (docker-compose.prod.yml)
+export const DEV_ONLY_SERVICES = ['/mailpit/', '/redpanda/'];

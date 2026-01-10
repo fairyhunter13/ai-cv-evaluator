@@ -4,6 +4,7 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { recordAutheliaLoginAttempt, waitForAutheliaLoginRateLimit } from './helpers/authelia.ts';
 import { assertNotAutheliaOneTimePasswordUrl, waitForNotSSOLoginUrl } from './helpers/sso.ts';
+import { IS_DEV } from './helpers/env.ts';
 
 const PORTAL_PATH = '/';
 
@@ -222,12 +223,12 @@ test.describe('Portal Page', () => {
     await expect(page.getByRole('link', { name: /Open API/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Health/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Open Grafana/i })).toBeVisible();
-    // Mailpit only available in dev
+    // Mailpit and Redpanda Console only available in dev
     if (IS_DEV) {
       await expect(page.getByRole('link', { name: /Open Mailpit/i })).toBeVisible();
+      await expect(page.getByRole('link', { name: /Open Redpanda/i })).toBeVisible();
     }
     await expect(page.getByRole('link', { name: /Open Jaeger/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Open Redpanda/i })).toBeVisible();
   });
 
   test('portal page has proper title and branding', async ({ page, baseURL }) => {
@@ -964,7 +965,9 @@ test.describe('Observability Dashboards', () => {
     expect(resp.status()).toBeLessThan(500);
   });
 
+  // Redpanda Console was removed from production deployment
   test('Redpanda Console is accessible', async ({ page, baseURL }) => {
+    test.skip(!IS_DEV, 'Redpanda Console not available in production');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -991,7 +994,9 @@ test.describe('Observability Dashboards', () => {
     expect(redpandaLoaded).toBeTruthy();
   });
 
+  // Redpanda Console was removed from production deployment
   test('Redpanda Console topics page is accessible', async ({ page }) => {
+    test.skip(!IS_DEV, 'Redpanda Console not available in production');
     test.setTimeout(60000);
     await loginViaSSO(page);
 
@@ -1732,10 +1737,12 @@ test.describe('Jaeger Tracing Validation', () => {
 
 // =============================================================================
 // REDPANDA CONSOLE VALIDATION
+// Redpanda Console was removed from production deployment (docker-compose.prod.yml)
 // =============================================================================
 
 test.describe('Redpanda Console Validation', () => {
   test('Redpanda shows topics and consumer groups', async ({ page }) => {
+    test.skip(!IS_DEV, 'Redpanda Console not available in production');
     await loginViaSSO(page);
 
     // Navigate to Redpanda topics
@@ -1752,6 +1759,7 @@ test.describe('Redpanda Console Validation', () => {
   });
 
   test('Redpanda consumer groups page loads', async ({ page }) => {
+    test.skip(!IS_DEV, 'Redpanda Console not available in production');
     await loginViaSSO(page);
 
     await gotoWithRetry(page, '/redpanda/groups');
@@ -2979,7 +2987,9 @@ test.describe('Protected Dashboards After Logout', () => {
     }
   });
 
+  // Redpanda Console was removed from production deployment
   test('Redpanda Console requires login after logout', async ({ page, browser }) => {
+    test.skip(!IS_DEV, 'Redpanda Console not available in production');
     await loginViaSSO(page);
 
     // Verify we can access Redpanda while logged in

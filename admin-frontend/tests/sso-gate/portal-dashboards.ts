@@ -41,11 +41,13 @@ export const registerPortalDashboardsTests = (): void => {
         pathPrefix: '/jaeger/',
         expectText: /Jaeger/i,
       },
-      {
+      // Redpanda Console was removed from production deployment (docker-compose.prod.yml)
+      // Only include it in dev mode where docker-compose.yml still has the service
+      ...(IS_DEV ? [{
         linkName: /Open Redpanda/i,
         pathPrefix: '/redpanda/',
         expectText: /Redpanda|Redpanda Console/i,
-      },
+      }] : []),
     ];
 
     for (const { linkName, pathPrefix, expectText: _expectText } of dashboards) {
