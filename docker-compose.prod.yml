@@ -42,6 +42,12 @@ services:
       tika:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -183,36 +189,6 @@ services:
         reservations:
           memory: 1536M
           cpus: '1.0'
-
-  redpanda-console:
-    image: docker.redpanda.com/redpandadata/console:v2.7.2
-    entrypoint: /bin/sh
-    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
-    environment:
-      CONFIG_FILEPATH: /tmp/config.yml
-      CONSOLE_CONFIG_FILE: |
-        server:
-          basePath: /redpanda
-        kafka:
-          brokers: ["redpanda:9092"]
-          schemaRegistry:
-            enabled: true
-            urls: ["http://redpanda:8081"]
-        redpanda:
-          adminApi:
-            enabled: true
-            urls: ["http://redpanda:9644"]
-    depends_on:
-      - redpanda
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -602,6 +578,33 @@ services:
           cpus: '0.25'
         reservations:
           memory: 128M
+          cpus: '0.05'
+
+  # Health monitor - checks backend health and triggers failover via GitHub Actions
+  health-monitor:
+    build:
+      context: ./deploy/health-monitor
+      dockerfile: Dockerfile
+    container_name: ai-cv-evaluator-health-monitor
+    restart: unless-stopped
+    environment:
+      - NGINX_URL=https://nginx
+      - BACKEND_HEALTH_PATH=/healthz
+      - CHECK_INTERVAL=30
+      - FAILURE_THRESHOLD=2
+      - GITHUB_REPO=fairyhunter13/ai-cv-evaluator
+      - GH_PAT_TOKEN=${GH_PAT_TOKEN}
+    networks:
+      - default
+    depends_on:
+      - nginx
+    deploy:
+      resources:
+        limits:
+          memory: 16M
+          cpus: '0.1'
+        reservations:
+          memory: 8M
           cpus: '0.05'
 
 volumes:

@@ -894,6 +894,11 @@ jobs:
               sleep 5
             done
 
+            # Stop the old backend to free memory (it will be restarted by auto-failover if needed)
+            echo "Stopping old backend_$CURRENT_COLOR to free memory..."
+            docker compose -f docker-compose.prod.yml stop "backend_$CURRENT_COLOR" || echo "Warning: Failed to stop backend_$CURRENT_COLOR"
+            echo "backend_$CURRENT_COLOR stopped. Auto-failover will restart it if the active backend becomes unhealthy."
+
             echo "=== docker compose ps ==="
             docker compose -f docker-compose.prod.yml ps
           '

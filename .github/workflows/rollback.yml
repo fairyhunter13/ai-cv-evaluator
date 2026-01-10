@@ -73,20 +73,57 @@ jobs:
             echo "Target rollback color: $PREV_COLOR"
 
             PREV_SERVICE="backend_${PREV_COLOR}"
+            CURRENT_SERVICE="backend_${CURRENT_COLOR}"
 
-            CID=$(docker compose -f docker-compose.prod.yml ps -q "$PREV_SERVICE" || true)
-            if [ -z "$CID" ]; then
-              echo "No existing container found for $PREV_SERVICE; cannot rollback safely" >&2
-              exit 1
+            # Load production env for docker compose
+            if [ -f .env.production ]; then
+              set -a
+              source .env.production
+              set +a
             fi
 
-            if ! docker inspect -f "{{.State.Running}}" "$CID" 2>/dev/null | grep -q true; then
-              echo "Starting existing container $PREV_SERVICE ($CID) ..."
-              docker start "$CID"
-            fi
+            # Start the previous backend (may be stopped to save memory)
+            echo "Starting $PREV_SERVICE..."
+            docker compose -f docker-compose.prod.yml up -d "$PREV_SERVICE"
+
+            # Wait for previous backend to become healthy
+            echo "Waiting for $PREV_SERVICE to become healthy..."
+            for i in {1..24}; do
+              HEALTH=$(docker inspect --format="{{.State.Health.Status}}" "ai-cv-evaluator-${PREV_SERVICE}-1" 2>/dev/null || echo "starting")
+              echo "Attempt $i/24: Health status = $HEALTH"
+
+              if [ "$HEALTH" = "healthy" ]; then
+                echo "$PREV_SERVICE is healthy!"
+                break
+              fi
+
+              # Also try direct HTTP check
+              if docker compose -f docker-compose.prod.yml exec -T "$PREV_SERVICE" curl -fsS --max-time 5 "http://localhost:8080/healthz" >/dev/null 2>&1; then
+                echo "$PREV_SERVICE responding to HTTP!"
+                break
+              fi
+
+              if [ $i -eq 24 ]; then
+                echo "ERROR: $PREV_SERVICE failed to become healthy after 2 minutes"
+                exit 1
+              fi
+
+              sleep 5
+            done
 
             echo "Switching Nginx upstream to $PREV_SERVICE..."
-            sed -i "s|upstream app_upstream { server .*:8080; }|upstream app_upstream { server ${PREV_SERVICE}:8080; }|" deploy/nginx/nginx.conf
+
+            # Update nginx configs using templates
+            if [ -f deploy/nginx/prod-conf.d/app-https.conf.template ]; then
+              sed "s|set \$backend_host \"backend_.*:8080\";|set \$backend_host \"${PREV_SERVICE}:8080\";|" \
+                deploy/nginx/prod-conf.d/app-https.conf.template > deploy/nginx/prod-conf.d/app-https.conf
+            fi
+
+            if [ -f deploy/nginx/prod-conf.d/dashboard.conf.template ]; then
+              sed "s|set \$backend_host \"backend_.*:8080\";|set \$backend_host \"${PREV_SERVICE}:8080\";|" \
+                deploy/nginx/prod-conf.d/dashboard.conf.template > deploy/nginx/prod-conf.d/dashboard.conf
+            fi
+
             echo "$PREV_COLOR" > "$COLOR_FILE"
 
             echo "Reloading Nginx..."
@@ -97,13 +134,17 @@ jobs:
 
             echo "Waiting for health via Nginx..."
             for i in {1..30}; do
-              if curl -f http://localhost/healthz >/dev/null 2>&1; then
+              if docker compose -f docker-compose.prod.yml exec -T nginx curl -fk https://localhost/healthz >/dev/null 2>&1; then
                 echo "Rollback backend is healthy via Nginx"
                 break
               fi
               echo "Attempt $i: waiting for /healthz during rollback..."
               sleep 10
             done
+
+            # Stop the current (failed) backend to free memory
+            echo "Stopping $CURRENT_SERVICE to free memory..."
+            docker compose -f docker-compose.prod.yml stop "$CURRENT_SERVICE" || echo "Warning: Failed to stop $CURRENT_SERVICE"
 
             echo "=== docker compose ps (after rollback) ==="
             docker compose -f docker-compose.prod.yml ps
