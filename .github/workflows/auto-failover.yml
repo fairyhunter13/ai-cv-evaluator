@@ -1,0 +1,212 @@
+name: Auto Failover
+
+on:
+  # Triggered by health monitor container
+  repository_dispatch:
+    types: [backend-unhealthy]
+
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      force_failover:
+        description: 'Force failover regardless of health status'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write
+
+# Prevent concurrent runs
+concurrency:
+  group: auto-failover
+  cancel-in-progress: false
+
+env:
+  DEPLOY_PATH: ~/ai-cv-evaluator
+
+jobs:
+  health-check:
+    name: Verify and Get State
+    runs-on: ubuntu-latest
+    outputs:
+      is_healthy: ${{ steps.check.outputs.is_healthy }}
+      active_color: ${{ steps.check.outputs.active_color }}
+      inactive_color: ${{ steps.check.outputs.inactive_color }}
+      should_failover: ${{ steps.decide.outputs.should_failover }}
+
+    steps:
+      - name: Set up SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf %s "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check backend health and get active color
+        id: check
+        run: |
+          # Get active color
+          ACTIVE_COLOR=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cat $DEPLOY_PATH/.active_color 2>/dev/null | tr -d ' \t\r\n' || echo 'blue'")
+          echo "active_color=$ACTIVE_COLOR" >> $GITHUB_OUTPUT
+
+          if [ "$ACTIVE_COLOR" = "blue" ]; then
+            INACTIVE_COLOR="green"
+          else
+            INACTIVE_COLOR="blue"
+          fi
+          echo "inactive_color=$INACTIVE_COLOR" >> $GITHUB_OUTPUT
+
+          echo "Current active backend: $ACTIVE_COLOR"
+          echo "Backup backend: $INACTIVE_COLOR"
+
+          # Verify health (double-check before failover)
+          # Check via nginx container to test the full path
+          HTTP_STATUS=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "docker exec ai-cv-evaluator-nginx-1 curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/healthz 2>/dev/null || echo '000'")
+
+          echo "Health check status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "is_healthy=true" >> $GITHUB_OUTPUT
+            echo "::notice::Backend $ACTIVE_COLOR is healthy (HTTP $HTTP_STATUS)"
+          else
+            echo "is_healthy=false" >> $GITHUB_OUTPUT
+            echo "::warning::Backend $ACTIVE_COLOR is unhealthy (HTTP $HTTP_STATUS)"
+          fi
+
+      - name: Decide if failover is needed
+        id: decide
+        run: |
+          if [ "${{ github.event.inputs.force_failover }}" = "true" ]; then
+            echo "Forced failover requested"
+            echo "should_failover=true" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.check.outputs.is_healthy }}" = "false" ]; then
+            echo "Health check confirmed failure"
+            echo "should_failover=true" >> $GITHUB_OUTPUT
+          else
+            echo "Backend recovered, no failover needed"
+            echo "should_failover=false" >> $GITHUB_OUTPUT
+          fi
+
+  failover:
+    name: Execute Failover
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: needs.health-check.outputs.should_failover == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf %s "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Execute failover
+        env:
+          ACTIVE_COLOR: ${{ needs.health-check.outputs.active_color }}
+          INACTIVE_COLOR: ${{ needs.health-check.outputs.inactive_color }}
+        run: |
+          echo "::group::Initiating failover from $ACTIVE_COLOR to $INACTIVE_COLOR"
+
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOFSCRIPT'
+          set -e
+          cd ~/ai-cv-evaluator
+
+          ACTIVE_COLOR="${{ env.ACTIVE_COLOR }}"
+          INACTIVE_COLOR="${{ env.INACTIVE_COLOR }}"
+          COMPOSE_FILE="docker-compose.prod.yml"
+
+          # Load production env
+          if [ -f .env.production ]; then
+            set -a
+            source .env.production
+            set +a
+          fi
+
+          echo "=== Starting backup backend_$INACTIVE_COLOR ==="
+          docker compose -f $COMPOSE_FILE up -d "backend_$INACTIVE_COLOR"
+
+          echo "=== Waiting for backend_$INACTIVE_COLOR to become healthy ==="
+          for i in {1..24}; do
+            HEALTH=$(docker inspect --format='{{.State.Health.Status}}' "ai-cv-evaluator-backend_${INACTIVE_COLOR}-1" 2>/dev/null || echo "starting")
+            echo "Attempt $i/24: Health status = $HEALTH"
+
+            if [ "$HEALTH" = "healthy" ]; then
+              echo "backend_$INACTIVE_COLOR is healthy!"
+              break
+            fi
+
+            # Also try direct HTTP check
+            if docker compose -f $COMPOSE_FILE exec -T "backend_$INACTIVE_COLOR" curl -fsS --max-time 5 "http://localhost:8080/healthz" >/dev/null 2>&1; then
+              echo "backend_$INACTIVE_COLOR responding to HTTP!"
+              break
+            fi
+
+            if [ $i -eq 24 ]; then
+              echo "ERROR: backend_$INACTIVE_COLOR failed to become healthy after 2 minutes"
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+          echo "=== Switching nginx to backend_$INACTIVE_COLOR ==="
+
+          # Update nginx configs
+          if [ -f deploy/nginx/prod-conf.d/app-https.conf.template ]; then
+            sed "s|set \$backend_host \"backend_.*:8080\";|set \$backend_host \"backend_${INACTIVE_COLOR}:8080\";|" \
+              deploy/nginx/prod-conf.d/app-https.conf.template > deploy/nginx/prod-conf.d/app-https.conf
+          fi
+
+          if [ -f deploy/nginx/prod-conf.d/dashboard.conf.template ]; then
+            sed "s|set \$backend_host \"backend_.*:8080\";|set \$backend_host \"backend_${INACTIVE_COLOR}:8080\";|" \
+              deploy/nginx/prod-conf.d/dashboard.conf.template > deploy/nginx/prod-conf.d/dashboard.conf
+          fi
+
+          # Reload nginx
+          docker compose -f $COMPOSE_FILE exec -T nginx nginx -s reload || docker compose -f $COMPOSE_FILE restart nginx
+
+          # Update active color file
+          echo "$INACTIVE_COLOR" > .active_color
+          echo "=== Active color updated to $INACTIVE_COLOR ==="
+
+          # Stop the problematic backend to free memory
+          echo "=== Stopping problematic backend_$ACTIVE_COLOR ==="
+          docker compose -f $COMPOSE_FILE stop "backend_$ACTIVE_COLOR"
+
+          echo "=== FAILOVER COMPLETE: Now serving from backend_$INACTIVE_COLOR ==="
+          EOFSCRIPT
+
+          echo "::endgroup::"
+          echo "::notice::Failover completed successfully. Traffic now routed to $INACTIVE_COLOR"
+
+      - name: Verify failover
+        run: |
+          sleep 5
+          HTTP_STATUS=$(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "docker exec ai-cv-evaluator-nginx-1 curl -sk -o /dev/null -w '%{http_code}' --max-time 10 https://localhost/healthz 2>/dev/null || echo '000'")
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "::notice::Failover verified - backend is healthy (HTTP $HTTP_STATUS)"
+          else
+            echo "::error::Failover verification failed (HTTP $HTTP_STATUS)"
+            exit 1
+          fi
+
+      - name: Show current state
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            cd ~/ai-cv-evaluator
+            echo "=== Current State ==="
+            echo "Active color: $(cat .active_color 2>/dev/null || echo "unknown")"
+            echo ""
+            echo "=== Container Status ==="
+            docker compose -f docker-compose.prod.yml ps backend_blue backend_green 2>/dev/null || true
+          '
