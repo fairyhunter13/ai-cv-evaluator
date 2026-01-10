@@ -577,6 +577,73 @@ jobs:
             fi
           '
 
+      - name: Ensure fail2ban is installed and configured
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            set -e
+
+            # Check if fail2ban is already installed
+            if command -v fail2ban-client >/dev/null 2>&1; then
+              echo "fail2ban is already installed"
+              fail2ban-client status || true
+            else
+              echo "fail2ban not found; installing..."
+              export DEBIAN_FRONTEND=noninteractive
+
+              if command -v apt-get >/dev/null 2>&1; then
+                if command -v sudo >/dev/null 2>&1; then
+                  sudo apt-get update -qq
+                  sudo apt-get install -y -qq fail2ban
+                else
+                  apt-get update -qq
+                  apt-get install -y -qq fail2ban
+                fi
+              else
+                echo "Warning: apt-get not found, skipping fail2ban installation" >&2
+                exit 0
+              fi
+
+              echo "fail2ban installed successfully"
+            fi
+
+            # Ensure SSH jail is enabled with aggressive settings
+            JAIL_CONFIG="/etc/fail2ban/jail.d/sshd.conf"
+            if command -v sudo >/dev/null 2>&1; then
+              SUDO_CMD="sudo"
+            else
+              SUDO_CMD=""
+            fi
+
+            # Check if our custom jail config exists and has correct settings
+            if [ ! -f "$JAIL_CONFIG" ] || ! grep -q "maxretry = 3" "$JAIL_CONFIG"; then
+              echo "Configuring fail2ban SSH jail..."
+              $SUDO_CMD tee "$JAIL_CONFIG" > /dev/null << EOF
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+findtime = 600
+bantime = 3600
+banaction = iptables-multiport
+EOF
+
+              # Restart fail2ban to apply changes
+              $SUDO_CMD systemctl restart fail2ban
+              echo "fail2ban SSH jail configured and restarted"
+            else
+              echo "fail2ban SSH jail already configured"
+            fi
+
+            # Ensure fail2ban is enabled on boot
+            $SUDO_CMD systemctl enable fail2ban 2>/dev/null || true
+
+            # Show current status
+            echo "=== fail2ban Status ==="
+            $SUDO_CMD fail2ban-client status sshd || $SUDO_CMD fail2ban-client status || echo "Status check failed"
+          '
+
       - name: Login to GHCR on server
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin"

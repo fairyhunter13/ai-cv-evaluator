@@ -56,3 +56,52 @@ resource "null_resource" "docker_install" {
     ]
   }
 }
+
+# Provisioner to install and configure fail2ban for SSH protection
+resource "null_resource" "fail2ban_install" {
+  triggers = {
+    # Run this if the server IP changes
+    server_ip = var.server_ip
+  }
+
+  connection {
+    type        = "ssh"
+    user        = var.ssh_user
+    private_key = var.ssh_private_key
+    host        = var.server_ip
+    timeout     = "2m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "export DEBIAN_FRONTEND=noninteractive",
+      # Check if fail2ban is already installed to make script idempotent
+      "if ! command -v fail2ban-client >/dev/null 2>&1; then",
+      "  echo 'fail2ban not found. Installing...'",
+      "  apt-get update -qq",
+      "  apt-get install -y -qq fail2ban",
+      "else",
+      "  echo 'fail2ban is already installed. Skipping installation.'",
+      "fi",
+      # Configure SSH jail with aggressive settings
+      "cat > /etc/fail2ban/jail.d/sshd.conf << 'EOF'",
+      "[sshd]",
+      "enabled = true",
+      "port = ssh",
+      "filter = sshd",
+      "logpath = /var/log/auth.log",
+      "maxretry = 3",
+      "findtime = 600",
+      "bantime = 3600",
+      "banaction = iptables-multiport",
+      "EOF",
+      # Enable and restart fail2ban
+      "systemctl enable fail2ban",
+      "systemctl restart fail2ban",
+      "echo 'fail2ban configured and started'",
+      "fail2ban-client status sshd || fail2ban-client status"
+    ]
+  }
+
+  depends_on = [null_resource.docker_install]
+}
