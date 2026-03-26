@@ -9,20 +9,20 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy to (production only)'
+        description: "Environment to deploy to (production only)"
         required: true
-        default: 'production'
+        default: "production"
         type: choice
         options:
           - production
       target_ip:
-        description: 'Override A record target IP for Cloudflare DNS sync (defaults to SSH_HOST secret)'
+        description: "Override A record target IP for Cloudflare DNS sync (defaults to SSH_HOST secret)"
         required: false
-        default: ''
+        default: ""
         type: string
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 concurrency:
   group: deploy-production
@@ -40,7 +40,7 @@ jobs:
       image_tag: ${{ steps.metadata.outputs.image_tag }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Extract metadata
         id: metadata
         run: |
@@ -50,12 +50,12 @@ jobs:
             echo "image_tag=latest" >> $GITHUB_OUTPUT
           fi
           echo "commit_sha=${GITHUB_SHA:0:8}" >> $GITHUB_OUTPUT
-      
+
       - name: Safety checks
         id: safety_check
         run: |
           # Check if this is a production deployment
-          
+
           if [[ "${{ github.event.inputs.environment || 'production' }}" == "production" ]]; then
             # Ensure we're deploying a tagged version to production
             if [[ "${{ github.ref }}" != refs/tags/* ]]; then
@@ -70,7 +70,7 @@ jobs:
             fi
           fi
           echo "should_deploy=true" >> $GITHUB_OUTPUT
- 
+
   security-gate:
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
@@ -325,7 +325,7 @@ jobs:
             echo "Falling back to CI workflow success check (80% coverage enforced in Makefile)."
             return 0
           }
-          
+
           if ! check_codecov_coverage; then
             echo "Codecov coverage check failed; blocking deployment."
             exit 1
@@ -334,7 +334,7 @@ jobs:
           # Soft, non-blocking checks: log latest status for visibility
           print_workflow_status "Security Scans"
           print_workflow_status "Secrets Healthcheck"
- 
+
   e2e-verify:
     runs-on: ubuntu-latest
     needs: pre-deploy-checks
@@ -343,7 +343,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6.1.0
         with:
-          go-version: '1.25.5'
+          go-version: "1.25.5"
           cache: true
       - name: Install SOPS and AGE
         run: |
@@ -427,24 +427,24 @@ jobs:
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf %s "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
+
           # Add server to known_hosts for security
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-          
+
           # Test connection
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} echo "Connection successful"
 
       - name: Create deployment directory
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p ~/ai-cv-evaluator/deploy && sudo chown -R \$(whoami):\$(whoami) ~/ai-cv-evaluator/deploy"
-      
+
       - name: Decrypt production .env and upload compose/configs
         run: |
           # Decrypt .env.production via Makefile target (requires SOPS installed above)
           if [ -f secrets/env.production.sops.yaml ]; then
             make decrypt-env-production
           fi
-          
+
           # Decrypt Authelia configuration (SOPS-encrypted)
           if [ -f deploy/authelia/configuration.prod.sops.yml ]; then
             echo "Decrypting Authelia configuration..."
@@ -465,7 +465,7 @@ jobs:
             chmod 600 deploy/authelia/oidc.key
             echo "Authelia OIDC private key decrypted successfully"
           fi
-          
+
           scp docker-compose.prod.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           # Debug local file content
           echo "=== Local content of app-https.conf ==="
@@ -476,9 +476,9 @@ jobs:
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo chown -R \$USER:\$USER ~/ai-cv-evaluator/deploy/authelia 2>/dev/null || mkdir -p ~/ai-cv-evaluator/deploy/authelia"
           # Also ensure the file itself is writable if it exists
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "sudo rm -rf ~/ai-cv-evaluator/deploy/authelia/configuration.prod.yml ~/ai-cv-evaluator/deploy/authelia/users_database.yml ~/ai-cv-evaluator/deploy/authelia/oidc.key 2>/dev/null || true"
-          
+
           scp -r deploy/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
-          
+
           # Explicitly copy SOPS-decrypted Authelia config (gitignored, not included in scp -r)
           if [ -f deploy/authelia/configuration.prod.yml ]; then
             echo "Copying decrypted Authelia configuration to server..."
@@ -494,7 +494,7 @@ jobs:
             echo "Copying decrypted Authelia OIDC private key to server..."
             scp deploy/authelia/oidc.key ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/deploy/authelia/
           fi
-          
+
           if [ -f .env.production ]; then
             scp .env.production ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/ai-cv-evaluator/
           fi
@@ -515,7 +515,7 @@ jobs:
               chmod -R o+rX deploy/grafana || true
             fi
           '
-      
+
       - name: Debug file content on server
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -617,17 +617,7 @@ jobs:
             # Check if our custom jail config exists and has correct settings
             if [ ! -f "$JAIL_CONFIG" ] || ! grep -q "maxretry = 5" "$JAIL_CONFIG"; then
               echo "Configuring fail2ban SSH jail..."
-              $SUDO_CMD tee "$JAIL_CONFIG" > /dev/null << EOF
-[sshd]
-enabled = true
-port = ssh
-filter = sshd
-logpath = /var/log/auth.log
-maxretry = 5
-findtime = 600
-bantime = 300
-banaction = iptables-multiport
-EOF
+              printf '%s\n' "[sshd]" "enabled = true" "port = ssh" "filter = sshd" "logpath = /var/log/auth.log" "maxretry = 5" "findtime = 600" "bantime = 300" "banaction = iptables-multiport" | $SUDO_CMD tee "$JAIL_CONFIG" > /dev/null
 
               # Restart fail2ban to apply changes
               $SUDO_CMD systemctl restart fail2ban
@@ -700,7 +690,7 @@ EOF
               docker compose -f docker-compose.prod.yml exec -T redpanda rpk cluster health || echo "Warning: Redpanda health check failed"
             fi
           '
-      
+
       - name: Pull and retag images to release tag
         env:
           IMAGE_TAG: ${{ needs.pre-deploy-checks.outputs.image_tag }}
@@ -734,7 +724,7 @@ EOF
               pull_image "${svc}"
             done
           '
-      
+
       - name: Pull and retag migration image to release tag
         env:
           IMAGE_TAG: ${{ needs.pre-deploy-checks.outputs.image_tag }}
@@ -761,7 +751,7 @@ EOF
               sleep "$sleep_seconds"
             done
           '
-      
+
       - name: Run database migrations
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -798,7 +788,7 @@ EOF
             # Run migrations using the dedicated migration container
             docker compose -f docker-compose.prod.yml run --rm migrate
           '
-      
+
       - name: Blue/green deployment (production compose)
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -1022,7 +1012,7 @@ EOF
               docker compose -f docker-compose.prod.yml restart nginx
             fi
           '
-      
+
       - name: Post-deployment verification (production)
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
@@ -1185,8 +1175,8 @@ EOF
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: admin-frontend/package-lock.json
 
       - name: Install dependencies
@@ -1236,15 +1226,15 @@ EOF
       - name: Validate production health endpoints
         run: |
           echo "=== Production Health Validation (via SSH to bypass Cloudflare) ==="
-          
+
           # Health check via SSH
           echo "Checking /healthz..."
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sk https://localhost/healthz' && echo " ✓ /healthz OK"
-          
+
           # Readiness check via SSH
           echo "Checking /readyz..."
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sk https://localhost/readyz' && echo " ✓ /readyz OK"
-          
+
           # OpenAPI spec via SSH
           echo "Checking /openapi.yaml..."
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sk https://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
@@ -1304,21 +1294,21 @@ EOF
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOFSCRIPT'
           set -e
           cd ~/ai-cv-evaluator
-          
+
           # Set up Docker network for internal queries
           NETWORK="ai-cv-evaluator_default"
           docker pull curlimages/curl:latest >/dev/null 2>&1 || true
-          
+
           echo "Clearing all Mailpit messages before test..."
           # DELETE without body clears all messages
           docker run --rm --network "$NETWORK" curlimages/curl -s -X DELETE 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || true
-          
+
           echo "Verifying Mailpit is cleared..."
           INITIAL_RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || echo "")
           INITIAL_TOTAL=$(echo "$INITIAL_RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
           [ -z "$INITIAL_TOTAL" ] && INITIAL_TOTAL=0
           echo "Mailpit message count after clearing: $INITIAL_TOTAL"
-          
+
           echo "Generating HTTP errors to trigger HighHttpErrorRate..."
           # Hit backend via 'app' alias (same as Prometheus scrape target) to ensure metrics are recorded
           echo "Using Docker network: $NETWORK"
@@ -1329,21 +1319,21 @@ EOF
             [ $((i % 10)) -eq 0 ] && echo "Request $i: HTTP $HTTP_CODE"
             sleep 0.5
           done
-          
+
           echo "Waiting 20s for Prometheus to scrape the new error metrics..."
           sleep 20
-          
+
           echo "Checking Prometheus metrics via Docker network (bypassing SSO)..."
           # Query Prometheus directly on internal network to bypass oauth2-proxy SSO
           # Note: Prometheus is configured with --web.route-prefix=/prometheus
           HTTP_METRICS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=http_requests_total' 2>/dev/null || echo "")
           echo "http_requests_total metric sample:"
           echo "$HTTP_METRICS" | head -c 500
-          
+
           ERROR_RATE=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=sum(rate(http_requests_total{status!="OK"}[5m]))' 2>/dev/null || echo "")
           echo "Error rate query result:"
           echo "$ERROR_RATE" | head -c 300
-          
+
           # Check Prometheus scrape targets
           echo "Checking Prometheus targets..."
           TARGETS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/targets' 2>/dev/null || echo "")
@@ -1357,13 +1347,13 @@ EOF
           import json
           import os
           import sys
-          
+
           s = os.environ.get("NODE_EXPORTER_UP", "").strip()
           try:
             payload = json.loads(s) if s else {}
           except Exception:
             sys.exit(1)
-          
+
           results = payload.get("data", {}).get("result", [])
           ok = False
           for r in results:
@@ -1373,14 +1363,14 @@ EOF
             if isinstance(v, list) and len(v) >= 2 and str(v[1]) == "1":
               ok = True
               break
-          
+
           sys.exit(0 if ok else 1)
           PY
           then
             echo "ERROR: node-exporter is not up/scraped by Prometheus (up{job=\"node-exporter\"} != 1)."
             exit 1
           fi
-          
+
           echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
           ALERT_FIRING=0
           for attempt in $(seq 1 15); do
@@ -1396,14 +1386,14 @@ EOF
             echo "Attempt $attempt/15: alert not firing yet, waiting 10s..."
             sleep 10
           done
-          
+
           if [ "$ALERT_FIRING" -ne 1 ]; then
             echo "HighHttpErrorRate alert did not fire within expected time."
             echo "All active alerts:"
             echo "$ALL_ALERTS" | head -c 500
             echo "WARNING: Alert didn't fire, but continuing with deployment..."
           fi
-          
+
           if [ "$ALERT_FIRING" -eq 1 ]; then
             echo "Waiting for alert email to arrive in Mailpit via Docker network..."
             EMAIL_RECEIVED=0
@@ -1432,18 +1422,18 @@ EOF
             echo "Skipping Mailpit email check since alert did not fire."
             echo "Alerting infrastructure validation: PARTIAL (services accessible, alerts need tuning)"
           fi
-          
+
           echo "=== Production alerting validation completed ==="
           EOFSCRIPT
 
       - name: Validate SSL certificates
         run: |
           echo "=== SSL Certificate Validation ==="
-          
+
           # Check main domain
           echo "Checking SSL for ai-cv-evaluator.web.id..."
           echo | openssl s_client -connect ai-cv-evaluator.web.id:443 -servername ai-cv-evaluator.web.id 2>/dev/null | openssl x509 -noout -dates || echo "Warning: SSL check failed"
-          
+
           # Check dashboard domain
           echo "Checking SSL for dashboard.ai-cv-evaluator.web.id..."
           echo | openssl s_client -connect dashboard.ai-cv-evaluator.web.id:443 -servername dashboard.ai-cv-evaluator.web.id 2>/dev/null | openssl x509 -noout -dates || echo "Warning: SSL check failed"
@@ -1451,20 +1441,20 @@ EOF
       - name: Validate DNS records
         run: |
           echo "=== DNS Record Validation ==="
-          
+
           echo "Checking ai-cv-evaluator.web.id..."
           dig +short ai-cv-evaluator.web.id A
-          
+
           echo "Checking dashboard.ai-cv-evaluator.web.id..."
           dig +short dashboard.ai-cv-evaluator.web.id A
-          
+
           echo "Checking auth.ai-cv-evaluator.web.id..."
           dig +short auth.ai-cv-evaluator.web.id A
 
       - name: Check Grafana accessibility
         run: |
           echo "=== Observability Stack Check ==="
-          
+
           # These require SSO, so we just check they return something (not 5xx)
           HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "${{ env.PRODUCTION_URL }}/grafana/")
           if [[ "$HTTP_CODE" == "302" || "$HTTP_CODE" == "200" ]]; then
@@ -1479,15 +1469,15 @@ EOF
           CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
         run: |
           echo "=== Disabling Cloudflare proxy for E2E tests ==="
-          
+
           if [ -z "${CF_API_TOKEN}" ] || [ -z "${CF_ZONE_ID}" ]; then
             echo "⚠ Cloudflare credentials not set, skipping proxy disable"
             exit 0
           fi
-          
+
           api_base="https://api.cloudflare.com/client/v4"
           records=("ai-cv-evaluator.web.id" "dashboard.ai-cv-evaluator.web.id" "auth.ai-cv-evaluator.web.id")
-          
+
           for name in "${records[@]}"; do
             echo "Disabling proxy for ${name}..."
             existing=$(curl -s -X GET "${api_base}/zones/${CF_ZONE_ID}/dns_records?type=A&name=${name}" \
@@ -1506,7 +1496,7 @@ EOF
               echo "✓ Proxy disabled for ${name}"
             fi
           done
-          
+
           # Wait for DNS propagation
           echo "Waiting 30s for DNS propagation..."
           sleep 30
@@ -1527,18 +1517,18 @@ EOF
         working-directory: admin-frontend
         env:
           E2E_BASE_URL: ${{ env.PRODUCTION_URL }}
-          PLAYWRIGHT_IGNORE_HTTPS_ERRORS: '1'
+          PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "1"
         run: |
           echo "=== Running Playwright E2E tests against production ==="
           echo "Base URL: $E2E_BASE_URL"
-          
+
           # Check if SSO credentials are available
           if [ -z "$SSO_USERNAME" ] || [ -z "$SSO_PASSWORD" ]; then
             echo "SSO_USERNAME and SSO_PASSWORD are required to run production Playwright validation"
             echo "Expected: derived from secrets/env.production.sops.yaml (ADMIN_USERNAME/ADMIN_PASSWORD) via SOPS_AGE_KEY"
             exit 1
           fi
-          
+
           FAILED=0
 
           # Focused SSO validation suite. This will fail fast if Authelia enforces OTP/2FA
@@ -1553,7 +1543,7 @@ EOF
             echo "⚠ One or more Playwright specs failed"
             exit 1
           fi
-          
+
           echo "=== Playwright E2E tests completed ==="
 
       - name: Upload Playwright test artifacts
@@ -1572,15 +1562,15 @@ EOF
           CF_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
         run: |
           echo "=== Re-enabling Cloudflare proxy after E2E tests ==="
-          
+
           if [ -z "${CF_API_TOKEN}" ] || [ -z "${CF_ZONE_ID}" ]; then
             echo "⚠ Cloudflare credentials not set, skipping proxy enable"
             exit 0
           fi
-          
+
           api_base="https://api.cloudflare.com/client/v4"
           records=("ai-cv-evaluator.web.id" "dashboard.ai-cv-evaluator.web.id" "auth.ai-cv-evaluator.web.id")
-          
+
           for name in "${records[@]}"; do
             echo "Enabling proxy for ${name}..."
             existing=$(curl -s -X GET "${api_base}/zones/${CF_ZONE_ID}/dns_records?type=A&name=${name}" \
@@ -1599,7 +1589,7 @@ EOF
               echo "✓ Proxy enabled for ${name}"
             fi
           done
-          
+
           echo "Cloudflare proxy re-enabled for all domains"
 
       - name: Generate validation report
@@ -1697,7 +1687,7 @@ EOF
             -H "Authorization: Bearer ${CF_API_TOKEN}" \
             -H "Content-Type: application/json" \
             --data '{"purge_everything":true}')
-          
+
           success=$(echo "$response" | jq -r '.success')
           if [ "$success" = "true" ]; then
             echo "✓ Cloudflare cache purged successfully"
@@ -1712,7 +1702,7 @@ EOF
     needs: pre-deploy-checks
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -1732,7 +1722,7 @@ EOF
     needs: pre-deploy-checks
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -1747,5 +1737,3 @@ EOF
           TF_VAR_ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
         run: terraform apply -auto-approve
         working-directory: terraform/vps
-
-
