@@ -83,16 +83,16 @@ resource "null_resource" "fail2ban_install" {
       "else",
       "  echo 'fail2ban is already installed. Skipping installation.'",
       "fi",
-      # Configure SSH jail with aggressive settings
+      # Configure SSH jail with moderate settings
       "cat > /etc/fail2ban/jail.d/sshd.conf << 'EOF'",
       "[sshd]",
       "enabled = true",
       "port = ssh",
       "filter = sshd",
       "logpath = /var/log/auth.log",
-      "maxretry = 3",
+      "maxretry = 5",
       "findtime = 600",
-      "bantime = 3600",
+      "bantime = 300",
       "banaction = iptables-multiport",
       "EOF",
       # Enable and restart fail2ban
