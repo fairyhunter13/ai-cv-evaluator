@@ -1082,16 +1082,53 @@ EOF
             echo "=== OAuth2 Proxy Health Check ==="
             curl -sI http://localhost/oauth2/start 2>&1 | head -5 || echo "Warning: oauth2 start endpoint check failed"
           '
-      - name: Cleanup old images
+      - name: Cleanup old Docker resources
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            # Remove old images (keep last 3)
-            docker images ghcr.io/${{ github.repository }}-server --format "table {{.Tag}}\t{{.ID}}" | tail -n +4 | awk "{print $2}" | xargs -r docker rmi || true
-            docker images ghcr.io/${{ github.repository }}-worker --format "table {{.Tag}}\t{{.ID}}" | tail -n +4 | awk "{print $2}" | xargs -r docker rmi || true
-            docker images ghcr.io/${{ github.repository }}-frontend --format "table {{.Tag}}\t{{.ID}}" | tail -n +4 | awk "{print $2}" | xargs -r docker rmi || true
-            
-            # Clean up unused images and volumes
-            docker system prune -f
+            echo "=== Docker cleanup ==="
+            echo "Before cleanup:"
+            df -h / | tail -1
+            docker system df
+
+            # Remove ALL unused images (not just dangling) - this is the key fix
+            docker image prune -af --filter "until=1h"
+            # Remove unused volumes
+            docker volume prune -f
+            # Remove build cache
+            docker builder prune -af --keep-storage=1GB 2>/dev/null || true
+
+            echo "After cleanup:"
+            df -h / | tail -1
+            docker system df
+          '
+
+      - name: Configure Docker log rotation
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            DAEMON_JSON="/etc/docker/daemon.json"
+            SUDO_CMD=""
+            command -v sudo >/dev/null 2>&1 && SUDO_CMD="sudo"
+
+            if ! $SUDO_CMD test -f "$DAEMON_JSON" || ! $SUDO_CMD grep -q "max-size" "$DAEMON_JSON" 2>/dev/null; then
+              echo "Configuring Docker log rotation..."
+              echo "{\"log-driver\":\"json-file\",\"log-opts\":{\"max-size\":\"10m\",\"max-file\":\"3\"}}" | $SUDO_CMD tee "$DAEMON_JSON" > /dev/null
+              $SUDO_CMD systemctl reload docker || $SUDO_CMD systemctl restart docker
+              echo "Docker log rotation configured (10MB max, 3 files)"
+            else
+              echo "Docker log rotation already configured"
+            fi
+          '
+
+      - name: Setup periodic Docker cleanup cron
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            CRON_CMD="0 3 * * 0 docker image prune -af --filter until=24h && docker volume prune -f && docker builder prune -af --keep-storage=1GB 2>/dev/null"
+            if ! crontab -l 2>/dev/null | grep -q "docker image prune"; then
+              (crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
+              echo "Weekly Docker cleanup cron installed (Sunday 3am)"
+            else
+              echo "Docker cleanup cron already exists"
+            fi
           '
 
   validate-production:
