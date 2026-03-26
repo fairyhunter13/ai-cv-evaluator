@@ -615,7 +615,7 @@ jobs:
             fi
 
             # Check if our custom jail config exists and has correct settings
-            if [ ! -f "$JAIL_CONFIG" ] || ! grep -q "maxretry = 3" "$JAIL_CONFIG"; then
+            if [ ! -f "$JAIL_CONFIG" ] || ! grep -q "maxretry = 5" "$JAIL_CONFIG"; then
               echo "Configuring fail2ban SSH jail..."
               $SUDO_CMD tee "$JAIL_CONFIG" > /dev/null << EOF
 [sshd]
@@ -623,9 +623,9 @@ enabled = true
 port = ssh
 filter = sshd
 logpath = /var/log/auth.log
-maxretry = 3
+maxretry = 5
 findtime = 600
-bantime = 3600
+bantime = 300
 banaction = iptables-multiport
 EOF
 
