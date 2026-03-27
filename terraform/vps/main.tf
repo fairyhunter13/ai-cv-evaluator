@@ -43,11 +43,11 @@ resource "null_resource" "docker_install" {
       "if ! command -v docker >/dev/null 2>&1; then",
       "  echo 'Docker not found. Installing...'",
       "  curl -fsSL https://get.docker.com -o get-docker.sh",
-      "  sh get-docker.sh",
+      "  sudo sh get-docker.sh",
       "  rm get-docker.sh",
-      "  usermod -aG docker ${var.ssh_user}",
-      "  systemctl enable docker",
-      "  systemctl start docker",
+      "  sudo usermod -aG docker ${var.ssh_user}",
+      "  sudo systemctl enable docker",
+      "  sudo systemctl start docker",
       "else",
       "  echo 'Docker is already installed. Skipping installation.'",
       "fi",
@@ -78,13 +78,13 @@ resource "null_resource" "fail2ban_install" {
       # Check if fail2ban is already installed to make script idempotent
       "if ! command -v fail2ban-client >/dev/null 2>&1; then",
       "  echo 'fail2ban not found. Installing...'",
-      "  apt-get update -qq",
-      "  apt-get install -y -qq fail2ban",
+      "  sudo apt-get update -qq",
+      "  sudo apt-get install -y -qq fail2ban",
       "else",
       "  echo 'fail2ban is already installed. Skipping installation.'",
       "fi",
       # Configure SSH jail with moderate settings
-      "cat > /etc/fail2ban/jail.d/sshd.conf << 'EOF'",
+      "sudo tee /etc/fail2ban/jail.d/sshd.conf > /dev/null << 'EOF'",
       "[sshd]",
       "enabled = true",
       "port = ssh",
@@ -96,10 +96,10 @@ resource "null_resource" "fail2ban_install" {
       "banaction = iptables-multiport",
       "EOF",
       # Enable and restart fail2ban
-      "systemctl enable fail2ban",
-      "systemctl restart fail2ban",
+      "sudo systemctl enable fail2ban",
+      "sudo systemctl restart fail2ban",
       "echo 'fail2ban configured and started'",
-      "fail2ban-client status sshd || fail2ban-client status"
+      "sudo fail2ban-client status sshd || sudo fail2ban-client status"
     ]
   }
 
