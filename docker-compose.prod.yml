@@ -29,7 +29,7 @@ services:
     networks:
       default:
         aliases:
-          - app  # Alias for Prometheus to scrape using the same name as dev environment
+          - app # Alias for Prometheus to scrape using the same name as dev environment
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -51,11 +51,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '1.0'
+          memory: 128M
+          cpus: "1.0"
         reservations:
-          memory: 256M
-          cpus: '0.25'
+          memory: 32M
+          cpus: "0.25"
 
   backend_green:
     <<: *backend_base
@@ -69,10 +69,10 @@ services:
       resources:
         limits:
           memory: 256M
-          cpus: '0.5'
+          cpus: "0.5"
         reservations:
           memory: 128M
-          cpus: '0.1'
+          cpus: "0.1"
 
   nginx:
     image: nginx:alpine
@@ -96,10 +96,10 @@ services:
       resources:
         limits:
           memory: 256M
-          cpus: '0.5'
+          cpus: "0.5"
         reservations:
           memory: 64M
-          cpus: '0.1'
+          cpus: "0.1"
 
   worker:
     image: ghcr.io/fairyhunter13/ai-cv-evaluator-worker:latest
@@ -126,11 +126,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '1.0'
+          memory: 128M
+          cpus: "1.0"
         reservations:
-          memory: 512M
-          cpus: '0.25'
+          memory: 32M
+          cpus: "0.25"
       replicas: 1
 
   db:
@@ -142,7 +142,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     restart: unless-stopped
-    command: postgres -c shared_buffers=256MB -c work_mem=16MB -c max_connections=100
+    command: postgres -c shared_buffers=64MB -c work_mem=4MB -c max_connections=50 -c effective_cache_size=128MB
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -151,11 +151,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '1.0'
+          memory: 192M
+          cpus: "1.0"
         reservations:
-          memory: 512M
-          cpus: '0.5'
+          memory: 64M
+          cpus: "0.25"
 
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v24.3.1
@@ -169,14 +169,16 @@ services:
       - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
       - --rpc-addr redpanda:33145
       - --advertise-rpc-addr redpanda:33145
-      - --smp 2
-      - --memory 1536M
+      - --smp 1
+      - --memory 256M
+      - --reserve-memory=0M
       - --default-log-level=info
     volumes:
       - redpanda_data:/var/lib/redpanda/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      test:
+        ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
       interval: 15s
       timeout: 3s
       retries: 5
@@ -184,11 +186,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: '2.0'
+          memory: 384M
+          cpus: "1.0"
         reservations:
-          memory: 1536M
-          cpus: '1.0'
+          memory: 64M
+          cpus: "0.25"
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -198,11 +200,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '1.0'
+          memory: 128M
+          cpus: "0.5"
         reservations:
-          memory: 512M
-          cpus: '0.25'
+          memory: 16M
+          cpus: "0.1"
     healthcheck:
       test: ["CMD-SHELL", "exit 0"]
       interval: 30s
@@ -215,11 +217,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '1.0'
+          memory: 192M
+          cpus: "0.5"
         reservations:
-          memory: 256M
-          cpus: '0.25'
+          memory: 64M
+          cpus: "0.1"
     healthcheck:
       test: ["CMD-SHELL", "exit 0"]
       interval: 30s
@@ -232,16 +234,16 @@ services:
     volumes:
       - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     environment:
-      - GOMEMLIMIT=400MiB
+      - GOMEMLIMIT=80MiB
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
+          memory: 96M
+          cpus: "0.25"
         reservations:
-          memory: 256M
-          cpus: '0.1'
+          memory: 16M
+          cpus: "0.05"
     healthcheck:
       test: ["CMD-SHELL", "exit 0"]
       interval: 30s
@@ -251,30 +253,38 @@ services:
     image: jaegertracing/all-in-one:1.57
     environment:
       - QUERY_BASE_PATH=/jaeger
-      - MEMORY_MAX_TRACES=5000
+      - MEMORY_MAX_TRACES=2000
       - SPAN_STORAGE_TYPE=memory
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
+          memory: 128M
+          cpus: "0.25"
         reservations:
-          memory: 256M
-          cpus: '0.25'
+          memory: 32M
+          cpus: "0.05"
     restart: unless-stopped
 
   mailpit:
     image: axllent/mailpit:latest
-    command: ["--smtp", "0.0.0.0:1025", "--listen", "0.0.0.0:8025", "--webroot", "/mailpit/"]
+    command:
+      [
+        "--smtp",
+        "0.0.0.0:1025",
+        "--listen",
+        "0.0.0.0:8025",
+        "--webroot",
+        "/mailpit/",
+      ]
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 128M
-          cpus: '0.25'
+          cpus: "0.25"
         reservations:
           memory: 64M
-          cpus: '0.05'
+          cpus: "0.05"
 
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -284,8 +294,8 @@ services:
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=7d"
-      - "--storage.tsdb.retention.size=2GB"
+      - "--storage.tsdb.retention.time=3d"
+      - "--storage.tsdb.retention.size=512MB"
       - "--web.console.libraries=/usr/share/prometheus/console_libraries"
       - "--web.console.templates=/usr/share/prometheus/consoles"
       - "--web.external-url=/prometheus/"
@@ -294,11 +304,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G
-          cpus: '0.5'
+          memory: 192M
+          cpus: "0.5"
         reservations:
-          memory: 512M
-          cpus: '0.25'
+          memory: 64M
+          cpus: "0.1"
 
   node-exporter:
     image: prom/node-exporter:v1.8.1
@@ -307,19 +317,19 @@ services:
       - /sys:/host/sys:ro
       - /:/rootfs:ro
     command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--path.rootfs=/rootfs'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
     restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 64M
-          cpus: '0.2'
+          cpus: "0.2"
         reservations:
           memory: 32M
-          cpus: '0.1'
+          cpus: "0.1"
 
   # Docker Meta Exporter - Helper for Friendly Names
   meta-exporter:
@@ -334,7 +344,7 @@ services:
       resources:
         limits:
           memory: 128M
-          cpus: '0.2'
+          cpus: "0.2"
 
   grafana:
     image: grafana/grafana:11.1.0
@@ -365,11 +375,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
+          memory: 192M
+          cpus: "0.5"
         reservations:
-          memory: 256M
-          cpus: '0.1'
+          memory: 64M
+          cpus: "0.1"
 
   # Authelia (Identity Provider)
   authelia:
@@ -390,10 +400,10 @@ services:
       resources:
         limits:
           memory: 256M
-          cpus: '0.5'
+          cpus: "0.5"
         reservations:
           memory: 128M
-          cpus: '0.1'
+          cpus: "0.1"
     healthcheck:
       test: ["CMD-SHELL", "authelia healthcheck"]
       interval: 30s
@@ -438,10 +448,10 @@ services:
       resources:
         limits:
           memory: 128M
-          cpus: '0.25'
+          cpus: "0.25"
         reservations:
           memory: 64M
-          cpus: '0.05'
+          cpus: "0.05"
 
   # oauth2-proxy for dashboard subdomain
   oauth2-proxy-dashboard:
@@ -481,10 +491,10 @@ services:
       resources:
         limits:
           memory: 128M
-          cpus: '0.25'
+          cpus: "0.25"
         reservations:
           memory: 64M
-          cpus: '0.05'
+          cpus: "0.05"
 
   certbot:
     image: certbot/certbot:latest
@@ -508,10 +518,10 @@ services:
       resources:
         limits:
           memory: 128M
-          cpus: '0.25'
+          cpus: "0.25"
         reservations:
           memory: 64M
-          cpus: '0.05'
+          cpus: "0.05"
 
   # cAdvisor - Container monitoring
   cadvisor:
@@ -531,11 +541,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
           memory: 128M
-          cpus: '0.1'
+          cpus: "0.5"
+        reservations:
+          memory: 32M
+          cpus: "0.1"
 
   # Centralized logging with Loki
   loki:
@@ -548,11 +558,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
           memory: 256M
-          cpus: '0.1'
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
     healthcheck:
       test: ["CMD-SHELL", "exit 0"]
       interval: 15s
@@ -574,11 +584,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.25'
+          memory: 96M
+          cpus: "0.25"
         reservations:
-          memory: 128M
-          cpus: '0.05'
+          memory: 32M
+          cpus: "0.05"
 
   # Health monitor - checks backend health and triggers failover via GitHub Actions
   health-monitor:
@@ -602,10 +612,10 @@ services:
       resources:
         limits:
           memory: 16M
-          cpus: '0.1'
+          cpus: "0.1"
         reservations:
           memory: 8M
-          cpus: '0.05'
+          cpus: "0.05"
 
 volumes:
   db_data:
