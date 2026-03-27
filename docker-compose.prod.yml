@@ -42,12 +42,8 @@ services:
       tika:
         condition: service_healthy
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+    # Health monitored by health-monitor container via nginx /healthz
+    # (distroless image has no curl/shell for Docker health checks)
     deploy:
       resources:
         limits:
@@ -244,11 +240,7 @@ services:
         reservations:
           memory: 16M
           cpus: "0.05"
-    healthcheck:
-      test: ["CMD-SHELL", "exit 0"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+    # Distroless image has no /bin/sh for CMD-SHELL health checks
   jaeger:
     image: jaegertracing/all-in-one:1.57
     environment:
