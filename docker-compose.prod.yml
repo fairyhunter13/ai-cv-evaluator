@@ -20,7 +20,6 @@ services:
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
       - TIKA_URL=http://tika:9998
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
       - OPENROUTER_MIN_INTERVAL=5s
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
@@ -106,7 +105,6 @@ services:
       - DB_URL=postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-app}?sslmode=disable
       - KAFKA_BROKERS=redpanda:9092
       - QDRANT_URL=http://qdrant:6333
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
       - CONSUMER_MAX_CONCURRENCY=1
       - OPENROUTER_MIN_INTERVAL=5s
     depends_on:
