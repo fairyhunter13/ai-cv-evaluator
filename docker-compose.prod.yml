@@ -225,6 +225,7 @@ services:
       retries: 3
 
   otel-collector:
+    profiles: ["observability"]
     image: otel/opentelemetry-collector:0.98.0
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
@@ -242,6 +243,7 @@ services:
           cpus: "0.05"
     # Distroless image has no /bin/sh for CMD-SHELL health checks
   jaeger:
+    profiles: ["observability"]
     image: jaegertracing/all-in-one:1.57
     environment:
       - QUERY_BASE_PATH=/jaeger
@@ -258,6 +260,7 @@ services:
     restart: unless-stopped
 
   mailpit:
+    profiles: ["observability"]
     image: axllent/mailpit:latest
     command:
       [
@@ -279,6 +282,7 @@ services:
           cpus: "0.05"
 
   prometheus:
+    profiles: ["observability"]
     image: prom/prometheus:v2.53.0
     volumes:
       - ./deploy/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
@@ -303,6 +307,7 @@ services:
           cpus: "0.1"
 
   node-exporter:
+    profiles: ["observability"]
     image: prom/node-exporter:v1.8.1
     volumes:
       - /proc:/host/proc:ro
@@ -325,6 +330,7 @@ services:
 
   # Docker Meta Exporter - Helper for Friendly Names
   meta-exporter:
+    profiles: ["observability"]
     build: ./deploy/exporter
     container_name: ai-cv-evaluator-meta-exporter
     volumes:
@@ -339,6 +345,7 @@ services:
           cpus: "0.2"
 
   grafana:
+    profiles: ["observability"]
     image: grafana/grafana:11.1.0
     volumes:
       - ./deploy/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
@@ -517,6 +524,7 @@ services:
 
   # cAdvisor - Container monitoring
   cadvisor:
+    profiles: ["observability"]
     image: gcr.io/cadvisor/cadvisor:v0.47.0
     container_name: ai-cv-evaluator-cadvisor
     volumes:
@@ -541,6 +549,7 @@ services:
 
   # Centralized logging with Loki
   loki:
+    profiles: ["observability"]
     image: grafana/loki:3.0.0
     command: ["-config.file=/etc/loki/config.yml"]
     volumes:
@@ -563,6 +572,7 @@ services:
 
   # Log shipper - collects container logs and sends to Loki
   promtail:
+    profiles: ["observability"]
     image: grafana/promtail:3.0.0
     command: ["-config.file=/etc/promtail/config.yml"]
     volumes:
@@ -584,6 +594,7 @@ services:
 
   # Health monitor - checks backend health and triggers failover via GitHub Actions
   health-monitor:
+    profiles: ["observability"]
     build:
       context: ./deploy/health-monitor
       dockerfile: Dockerfile
