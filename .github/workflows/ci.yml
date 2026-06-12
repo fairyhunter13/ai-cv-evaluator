@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ["1.25.5"]
+        go: ["1.25.11"]
     steps:
       - uses: actions/checkout@v4
       - name: Install SOPS and AGE
@@ -67,7 +67,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
       - name: Install frontend dependencies
         run: |
           cd admin-frontend
@@ -169,7 +169,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install Playwright and frontend dependencies
         run: |
