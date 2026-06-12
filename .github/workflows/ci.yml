@@ -175,7 +175,7 @@ jobs:
         run: |
           cd admin-frontend
           npm ci
-          npx playwright install --with-deps
+          npx playwright install --with-deps chromium
 
       - name: Start observability stack (docker-compose)
         run: |
