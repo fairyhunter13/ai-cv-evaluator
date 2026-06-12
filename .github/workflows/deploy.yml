@@ -873,7 +873,7 @@ jobs:
             docker compose rm -f authelia 2>/dev/null || true
 
             echo "Bringing up backend_$NEXT_COLOR, worker, frontend, nginx, and oauth2-proxy services..."
-            docker compose up -d --remove-orphans "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia jaeger grafana prometheus loki promtail otel-collector cadvisor node-exporter mailpit meta-exporter health-monitor || { echo "Docker compose up failed!"; exit 1; }
+            docker compose up -d --remove-orphans "backend_$NEXT_COLOR" worker frontend nginx oauth2-proxy-app oauth2-proxy-dashboard authelia || { echo "Docker compose up failed!"; exit 1; }
 
             echo "Waiting for backend_$NEXT_COLOR service to be running..."
             for i in {1..30}; do
@@ -907,10 +907,7 @@ jobs:
 
             echo "Force restarting oauth2-proxy services to ensure new configuration is applied..."
             docker compose -f docker-compose.prod.yml restart oauth2-proxy-app oauth2-proxy-dashboard || echo "Warning: oauth2-proxy restart failed"
-            
-            echo "Force restarting Grafana to ensure new dashboards are loaded..."
-            docker compose -f docker-compose.prod.yml restart grafana || echo "Warning: grafana restart failed"
-            
+
             echo "Waiting for oauth2-proxy services to be ready..."
             sleep 10
             for i in {1..10}; do
@@ -1239,193 +1236,6 @@ jobs:
           echo "Checking /openapi.yaml..."
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'docker exec ai-cv-evaluator-nginx-1 curl -sk https://localhost/openapi.yaml | head -5' && echo " ✓ /openapi.yaml OK"
 
-      - name: Validate services via SSH (Grafana, Prometheus, Mailpit)
-        run: |
-          echo "=== Service Validation via SSH ==="
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
-            cd ~/ai-cv-evaluator
-            
-            echo "Checking running containers..."
-            docker compose -f docker-compose.prod.yml ps --format "table {{.Name}}\t{{.Status}}" | head -20
-            
-            echo ""
-            echo "Checking Grafana alerting rules..."
-            RULES=$(curl -sfk https://localhost/grafana/api/v1/provisioning/alert-rules 2>/dev/null | head -c 100)
-            if [ -n "$RULES" ]; then
-              echo "✓ Grafana alerting rules accessible"
-            else
-              echo "⚠ Grafana alerting rules check failed"
-            fi
-            
-            echo ""
-            echo "Checking Prometheus..."
-            PROM=$(curl -sfk https://localhost/prometheus/api/v1/status/config 2>/dev/null | head -c 100)
-            if [ -n "$PROM" ]; then
-              echo "✓ Prometheus accessible"
-            else
-              echo "⚠ Prometheus check failed"
-            fi
-            
-            echo ""
-            echo "Checking Mailpit..."
-            MAIL=$(curl -sfk https://localhost/mailpit/api/v1/messages 2>/dev/null | head -c 100)
-            if [ -n "$MAIL" ]; then
-              echo "✓ Mailpit accessible"
-            else
-              echo "⚠ Mailpit check failed"
-            fi
-            
-            echo ""
-            echo "Checking Jaeger..."
-            JAEGER=$(curl -sfk https://localhost/jaeger/search 2>/dev/null | head -c 100)
-            if [ -n "$JAEGER" ]; then
-              echo "✓ Jaeger accessible"
-            else
-              echo "⚠ Jaeger check failed"
-            fi
-
-            echo ""
-            echo "✓ Service validation completed"
-          '
-
-      - name: Trigger test alert and verify Mailpit via SSH
-        run: |
-          echo "=== Triggering test alert and verifying Mailpit via SSH ==="
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'bash -s' << 'EOFSCRIPT'
-          set -e
-          cd ~/ai-cv-evaluator
-
-          # Set up Docker network for internal queries
-          NETWORK="ai-cv-evaluator_default"
-          docker pull curlimages/curl:latest >/dev/null 2>&1 || true
-
-          echo "Clearing all Mailpit messages before test..."
-          # DELETE without body clears all messages
-          docker run --rm --network "$NETWORK" curlimages/curl -s -X DELETE 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || true
-
-          echo "Verifying Mailpit is cleared..."
-          INITIAL_RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || echo "")
-          INITIAL_TOTAL=$(echo "$INITIAL_RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
-          [ -z "$INITIAL_TOTAL" ] && INITIAL_TOTAL=0
-          echo "Mailpit message count after clearing: $INITIAL_TOTAL"
-
-          echo "Generating HTTP errors to trigger HighHttpErrorRate..."
-          # Hit backend via 'app' alias (same as Prometheus scrape target) to ensure metrics are recorded
-          echo "Using Docker network: $NETWORK"
-          # Generate errors over a longer period to ensure Prometheus captures them across multiple scrapes
-          # Prometheus scrapes every 15s, so we generate errors for ~30s
-          for i in $(seq 1 60); do
-            HTTP_CODE=$(docker run --rm --network "$NETWORK" curlimages/curl -s -o /dev/null -w "%{http_code}" "http://app:8080/v1/__nonexistent_path_for_errors" 2>/dev/null || echo "000")
-            [ $((i % 10)) -eq 0 ] && echo "Request $i: HTTP $HTTP_CODE"
-            sleep 0.5
-          done
-
-          echo "Waiting 20s for Prometheus to scrape the new error metrics..."
-          sleep 20
-
-          echo "Checking Prometheus metrics via Docker network (bypassing SSO)..."
-          # Query Prometheus directly on internal network to bypass oauth2-proxy SSO
-          # Note: Prometheus is configured with --web.route-prefix=/prometheus
-          HTTP_METRICS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=http_requests_total' 2>/dev/null || echo "")
-          echo "http_requests_total metric sample:"
-          echo "$HTTP_METRICS" | head -c 500
-
-          ERROR_RATE=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=sum(rate(http_requests_total{status!="OK"}[5m]))' 2>/dev/null || echo "")
-          echo "Error rate query result:"
-          echo "$ERROR_RATE" | head -c 300
-
-          # Check Prometheus scrape targets
-          echo "Checking Prometheus targets..."
-          TARGETS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/targets' 2>/dev/null || echo "")
-          echo "Prometheus targets:"
-          echo "$TARGETS" | head -c 500
-
-          echo "Checking node-exporter scrape health..."
-          NODE_EXPORTER_UP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/query?query=up%7Bjob%3D%22node-exporter%22%7D' 2>/dev/null || echo "")
-          echo "$NODE_EXPORTER_UP" | head -c 300
-          if ! NODE_EXPORTER_UP="$NODE_EXPORTER_UP" python3 - <<'PY'
-          import json
-          import os
-          import sys
-
-          s = os.environ.get("NODE_EXPORTER_UP", "").strip()
-          try:
-            payload = json.loads(s) if s else {}
-          except Exception:
-            sys.exit(1)
-
-          results = payload.get("data", {}).get("result", [])
-          ok = False
-          for r in results:
-            if not isinstance(r, dict):
-              continue
-            v = r.get("value")
-            if isinstance(v, list) and len(v) >= 2 and str(v[1]) == "1":
-              ok = True
-              break
-
-          sys.exit(0 if ok else 1)
-          PY
-          then
-            echo "ERROR: node-exporter is not up/scraped by Prometheus (up{job=\"node-exporter\"} != 1)."
-            exit 1
-          fi
-
-          echo "Waiting for HighHttpErrorRate alert to fire in Prometheus..."
-          ALERT_FIRING=0
-          for attempt in $(seq 1 15); do
-            # Use /api/v1/alerts endpoint which shows all active alerts with their state
-            ALL_ALERTS=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://prometheus:9090/prometheus/api/v1/alerts' 2>/dev/null || echo "")
-            # Check if HighHttpErrorRate is in firing state
-            if echo "$ALL_ALERTS" | grep -q '"alertname":"HighHttpErrorRate"' && echo "$ALL_ALERTS" | grep -q '"state":"firing"'; then
-              ALERT_FIRING=1
-              echo "HighHttpErrorRate is firing (attempt $attempt)."
-              echo "$ALL_ALERTS" | head -c 500
-              break
-            fi
-            echo "Attempt $attempt/15: alert not firing yet, waiting 10s..."
-            sleep 10
-          done
-
-          if [ "$ALERT_FIRING" -ne 1 ]; then
-            echo "HighHttpErrorRate alert did not fire within expected time."
-            echo "All active alerts:"
-            echo "$ALL_ALERTS" | head -c 500
-            echo "WARNING: Alert didn't fire, but continuing with deployment..."
-          fi
-
-          if [ "$ALERT_FIRING" -eq 1 ]; then
-            echo "Waiting for alert email to arrive in Mailpit via Docker network..."
-            EMAIL_RECEIVED=0
-            for attempt in $(seq 1 18); do
-              RESP=$(docker run --rm --network "$NETWORK" curlimages/curl -s 'http://mailpit:8025/mailpit/api/v1/messages' 2>/dev/null || echo "")
-              TOTAL=$(echo "$RESP" | grep -o '"total":[0-9]*' | head -1 | sed 's/[^0-9]//g')
-              [ -z "$TOTAL" ] && TOTAL=0
-              if [ "$TOTAL" -gt "$INITIAL_TOTAL" ]; then
-                EMAIL_RECEIVED=1
-                echo "Mailpit message count increased from $INITIAL_TOTAL to $TOTAL"
-                echo "Sample messages payload:"
-                echo "$RESP" | head -c 500 || true
-                break
-              fi
-              echo "Attempt $attempt/18: no new emails yet (total=$TOTAL), waiting 10s..."
-              sleep 10
-            done
-            
-            if [ "$EMAIL_RECEIVED" -ne 1 ]; then
-              echo "WARNING: Alert fired but no email arrived in Mailpit within expected time."
-              echo "This may indicate SMTP configuration issues."
-            else
-              echo "SUCCESS: Alert pipeline verified end-to-end (HighHttpErrorRate -> Grafana -> Mailpit)."
-            fi
-          else
-            echo "Skipping Mailpit email check since alert did not fire."
-            echo "Alerting infrastructure validation: PARTIAL (services accessible, alerts need tuning)"
-          fi
-
-          echo "=== Production alerting validation completed ==="
-          EOFSCRIPT
-
       - name: Validate SSL certificates
         run: |
           echo "=== SSL Certificate Validation ==="
@@ -1450,18 +1260,6 @@ jobs:
 
           echo "Checking auth.ai-cv-evaluator.web.id..."
           dig +short auth.ai-cv-evaluator.web.id A
-
-      - name: Check Grafana accessibility
-        run: |
-          echo "=== Observability Stack Check ==="
-
-          # These require SSO, so we just check they return something (not 5xx)
-          HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "${{ env.PRODUCTION_URL }}/grafana/")
-          if [[ "$HTTP_CODE" == "302" || "$HTTP_CODE" == "200" ]]; then
-            echo "✓ Grafana endpoint responding (HTTP $HTTP_CODE)"
-          else
-            echo "⚠ Grafana returned unexpected code: $HTTP_CODE"
-          fi
 
       - name: Disable Cloudflare proxy for E2E tests
         env:
