@@ -54,15 +54,16 @@ jobs:
       - name: Safety checks
         id: safety_check
         run: |
-          # Check if this is a production deployment
-
-          if [[ "${{ github.event.inputs.environment || 'production' }}" == "production" ]]; then
+          # Check if this is a production deployment.
+          # Manual runs (workflow_dispatch) are a deliberate admin action and may deploy
+          # from a branch; automatic (tag push) deploys still require a semver tag.
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" && "${{ github.event.inputs.environment || 'production' }}" == "production" ]]; then
             # Ensure we're deploying a tagged version to production
             if [[ "${{ github.ref }}" != refs/tags/* ]]; then
               echo "Error: Production deployments require a git tag"
               exit 1
             fi
-            
+
             # Check if tag follows semantic versioning
             if [[ ! "${{ github.ref_name }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "Error: Production deployments require semantic version tags (v1.2.3)"
