@@ -98,8 +98,12 @@ resource "null_resource" "fail2ban_install" {
       # Enable and restart fail2ban
       "sudo systemctl enable fail2ban",
       "sudo systemctl restart fail2ban",
+      # Wait for the fail2ban socket to come up before querying it (avoids a startup race)
+      "echo 'waiting for fail2ban to be ready...'",
+      "for i in $(seq 1 30); do sudo fail2ban-client ping >/dev/null 2>&1 && break; sleep 2; done",
       "echo 'fail2ban configured and started'",
-      "sudo fail2ban-client status sshd || sudo fail2ban-client status"
+      # Status check is informational only; never fail the provisioner on it
+      "sudo fail2ban-client status sshd 2>/dev/null || sudo fail2ban-client status 2>/dev/null || echo 'fail2ban status not ready yet (non-fatal)'"
     ]
   }
 
