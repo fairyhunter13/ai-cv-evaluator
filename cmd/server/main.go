@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	ai "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/freemodels"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/real"
 	httpserver "github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/httpserver"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/queue/redpanda"
@@ -110,13 +110,12 @@ func main() {
 	// Global Redis/Postgres rate limiting has been removed; the AI client now
 	// relies solely on provider headers and its in-process rate limit cache for
 	// cooldown behavior.
-	freeModelWrapper := freemodels.NewFreeModelWrapper(cfg)
-	slog.Info("AI client initialized with free models support")
+	aiClient := real.New(cfg)
 
 	// AI client is ready for use
 	slog.Info("AI client initialized successfully")
 	// Embedding cache wrapper (safe for accuracy; caches embeddings only)
-	aicl := ai.NewEmbedCache(freeModelWrapper, cfg.EmbedCacheSize)
+	aicl := ai.NewEmbedCache(aiClient, cfg.EmbedCacheSize)
 	// Qdrant client (shared)
 	var qcli *qdrantcli.Client
 	if cfg.QdrantURL != "" {

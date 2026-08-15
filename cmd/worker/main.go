@@ -13,7 +13,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/freemodels"
+	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/real"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/observability"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/queue/redpanda"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/repo/postgres"
@@ -82,8 +82,7 @@ func main() {
 	// Global Redis/Postgres rate limiting has been removed; the AI client now
 	// relies solely on provider headers and its in-process rate limit cache for
 	// cooldown behavior.
-	freeModelWrapper := freemodels.NewFreeModelWrapper(cfg)
-	slog.Info("initialized AI client with free models support")
+	aiClient := real.New(cfg)
 
 	// Repositories
 	jobRepo := postgres.NewJobRepo(pool)
@@ -147,7 +146,7 @@ func main() {
 		jobRepo,
 		upRepo,
 		resRepo,
-		freeModelWrapper,
+		aiClient,
 		qcli,
 		minWorkers,
 		maxWorkers,
@@ -168,7 +167,7 @@ func main() {
 
 	// Bootstrap Qdrant collections (idempotent)
 	ctx := context.Background()
-	app.EnsureDefaultCollections(ctx, qcli, freeModelWrapper)
+	app.EnsureDefaultCollections(ctx, qcli, aiClient)
 
 	sweeperMaxProcessingAge := 10 * time.Minute
 	if v := os.Getenv("E2E_AI_TIMEOUT"); v != "" {
