@@ -291,12 +291,6 @@ func (sm *SessionManager) ValidateSession(sessionValue string) (*SessionData, er
 	}, nil
 }
 
-// SetSessionCookie deprecated; no-op for JWT-only auth
-func (sm *SessionManager) SetSessionCookie(_ http.ResponseWriter, _ string) {}
-
-// ClearSessionCookie deprecated; no-op for JWT-only auth
-func (sm *SessionManager) ClearSessionCookie(_ http.ResponseWriter) {}
-
 // GenerateCSRFCookieValue creates a random CSRF token value (URL-safe base64)
 func GenerateCSRFCookieValue() string {
 	b := make([]byte, 32)

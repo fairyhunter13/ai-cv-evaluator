@@ -270,7 +270,7 @@ func (c *Consumer) scaleWorkers(ctx context.Context) {
 
 	// Scale up: Add workers when queue has jobs and we have capacity
 	if queueLen > 0 && activeWorkers < c.maxWorkers {
-		workersToAdd := minInt(queueLen, c.maxWorkers-activeWorkers)
+		workersToAdd := min(queueLen, c.maxWorkers-activeWorkers)
 		if workersToAdd > 0 {
 			// FIXED: Track workers properly and ensure we don't exceed max
 			for i := 0; i < workersToAdd; i++ {
@@ -293,7 +293,7 @@ func (c *Consumer) scaleWorkers(ctx context.Context) {
 		workersToRemove := activeWorkers - c.minWorkers
 		if queueLen > 0 && activeWorkers > queueLen {
 			// If we have more workers than jobs, remove excess workers
-			workersToRemove = minInt(workersToRemove, activeWorkers-queueLen)
+			workersToRemove = min(workersToRemove, activeWorkers-queueLen)
 		}
 
 		if workersToRemove > 0 {
@@ -577,14 +577,6 @@ func (c *Consumer) decrementActiveWorkers() {
 	}
 }
 
-// Helper function for min
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // processRecord processes a single Kafka record with the evaluation logic.
 func (c *Consumer) processRecord(ctx context.Context, record *kgo.Record) error {
 	slog.Info("processRecord started",
@@ -609,7 +601,7 @@ func (c *Consumer) processRecord(ctx context.Context, record *kgo.Record) error 
 	if err := json.Unmarshal(record.Value, &payload); err != nil {
 		slog.Error("failed to unmarshal payload",
 			slog.Any("error", err),
-			slog.String("value_preview", string(record.Value[:minInt(100, len(record.Value))])),
+			slog.String("value_preview", string(record.Value[:min(100, len(record.Value))])),
 			slog.Int("value_length", len(record.Value)))
 		return fmt.Errorf("unmarshal payload: %w", err)
 	}

@@ -21,18 +21,6 @@ func newTestClient() *Client {
 	}
 }
 
-func TestClient_BlockAndCheckOpenRouterGlobal(t *testing.T) {
-	c := newTestClient()
-
-	require.False(t, c.isOpenRouterBlocked())
-
-	c.blockOpenRouter(10 * time.Millisecond)
-	require.True(t, c.isOpenRouterBlocked())
-
-	time.Sleep(20 * time.Millisecond)
-	require.False(t, c.isOpenRouterBlocked())
-}
-
 func TestClient_BlockAndCheckOpenRouterAccounts(t *testing.T) {
 	c := newTestClient()
 

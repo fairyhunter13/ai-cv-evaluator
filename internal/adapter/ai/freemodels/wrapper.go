@@ -8,15 +8,12 @@ import (
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/adapter/ai/real"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/config"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/domain"
-	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/freemodels"
 	"github.com/fairyhunter13/ai-cv-evaluator/internal/service/ratelimiter"
 )
 
 // FreeModelWrapper wraps the real AI client to use free models automatically.
 type FreeModelWrapper struct {
-	client        domain.AIClient
-	freeModelsSvc *freemodels.Service
-	cfg           config.Config
+	client domain.AIClient
 }
 
 // NewFreeModelWrapper creates a new wrapper that automatically uses free models.
@@ -26,23 +23,7 @@ func NewFreeModelWrapper(cfg config.Config) *FreeModelWrapper {
 
 // NewFreeModelWrapperWithLimiter creates a new wrapper with a custom rate limiter.
 func NewFreeModelWrapperWithLimiter(cfg config.Config, lim ratelimiter.Limiter) *FreeModelWrapper {
-	// Create the underlying real client
-	realClient := real.NewWithLimiter(cfg, lim)
-
-	// Create free models service with configurable refresh interval.
-	// Prefer primary OpenRouter key but fall back to OPENROUTER_API_KEY_2 when
-	// only the secondary key is configured.
-	openRouterKey := cfg.OpenRouterAPIKey
-	if openRouterKey == "" {
-		openRouterKey = cfg.OpenRouterAPIKey2
-	}
-	freeModelsSvc := freemodels.NewService(openRouterKey, cfg.OpenRouterBaseURL, cfg.FreeModelsRefresh)
-
-	return &FreeModelWrapper{
-		client:        realClient,
-		freeModelsSvc: freeModelsSvc,
-		cfg:           cfg,
-	}
+	return &FreeModelWrapper{client: real.NewWithLimiter(cfg, lim)}
 }
 
 // ChatJSON implements domain.AIClient using free models with automatic fallback.

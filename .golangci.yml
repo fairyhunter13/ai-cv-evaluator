@@ -31,14 +31,6 @@ linters:
       - path: internal/adapter/textextractor/tika/tika\.go
         text: 'G304:'
       - linters:
-          - unused
-        path: internal/adapter/ai/real/client\.go
-        text: providerCounter|chatJSONWithEnhancedModelSwitching|isOpenRouterBlocked
-      - linters:
-          - unused
-        path: internal/adapter/queue/redpanda/integrated_evaluation_handler\.go
-        text: extractStructuredCVInfo|compareWithJobRequirements|summarizeProjectContent|generateScoringPrompt
-      - linters:
           - gocyclo
         path: internal/adapter/ai/real/client\.go
       - linters:
