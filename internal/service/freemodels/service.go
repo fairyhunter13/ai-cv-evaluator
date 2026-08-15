@@ -439,7 +439,7 @@ func (s *Service) GetCheapestPaidModels(ctx context.Context, limit int) ([]Model
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].cost < list[j].cost })
 
-	out := make([]Model, 0, minInt(limit, len(list)))
+	out := make([]Model, 0, min(limit, len(list)))
 	for i := 0; i < len(list) && len(out) < limit; i++ {
 		out = append(out, list[i].m)
 	}
@@ -495,11 +495,4 @@ func effectivePrice(p Pricing) float64 {
 		return req
 	}
 	return parsePrice(p.Prompt) + parsePrice(p.Completion)
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

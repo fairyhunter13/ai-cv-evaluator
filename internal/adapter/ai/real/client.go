@@ -44,14 +44,12 @@ type Client struct {
 	embedHC              *http.Client
 	freeModelsSvc        *freemodels.Service
 	modelCounter         int64                     // Counter for round-robin model selection
-	providerCounter      int64                     //nolint:unused // Counter to balance load between Groq and OpenRouter when both are available
 	rlc                  *aiadapter.RateLimitCache // Client-side rate-limit model cache
 	limiter              ratelimiter.Limiter
 	lastORCall           atomic.Int64 // unix nano timestamp of last OpenRouter call (client-level throttle)
 	lastGroqCall         atomic.Int64 // unix nano timestamp of last Groq call (client-level throttle)
 	groq1Blocked         atomic.Int64 // unix nano timestamp until which Groq primary key is blocked due to 429
 	groq2Blocked         atomic.Int64 // unix nano timestamp until which Groq secondary key is blocked due to 429
-	openRouterBlocked    atomic.Int64 // unix nano timestamp until which OpenRouter is blocked (legacy provider-level block)
 	openRouterKeyCounter int64
 	openRouter1Blocked   atomic.Int64 // unix nano timestamp until which OpenRouter primary key is blocked due to 429
 	openRouter2Blocked   atomic.Int64 // unix nano timestamp until which OpenRouter secondary key is blocked due to 429
@@ -639,7 +637,6 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 				if c.rlc != nil {
 					c.rlc.RecordRateLimit(model, retryAfter)
 				}
-				c.blockOpenRouter(retryAfter)
 				c.updateOpenRouterLimiterFromRetryAfter(openRouterKey, retryAfter)
 				return fmt.Errorf("rate limited: 429")
 			}
@@ -906,14 +903,6 @@ func (c *Client) ChatJSONWithRetry(ctx domain.Context, systemPrompt, userPrompt 
 	// Neither provider is configured
 	slog.Error("no AI providers configured (Groq/OpenRouter)")
 	return "", fmt.Errorf("%w: no AI providers configured", domain.ErrInvalidArgument)
-}
-
-// chatJSONWithEnhancedModelSwitching implements intelligent model switching with timeout handling.
-//
-//nolint:unused // Kept for future use.
-func (c *Client) chatJSONWithEnhancedModelSwitching(ctx domain.Context, systemPrompt, userPrompt string, maxTokens int, freeModels []freemodels.Model) (string, error) {
-	apiKey := c.getOpenRouterAPIKey()
-	return c.chatJSONWithEnhancedModelSwitchingForKey(ctx, apiKey, systemPrompt, userPrompt, maxTokens, freeModels)
 }
 
 // chatJSONWithEnhancedModelSwitchingForKey implements intelligent model switching with timeout
@@ -1678,23 +1667,6 @@ func (c *Client) markOpenRouterCall() {
 	c.lastORCall.Store(time.Now().UnixNano())
 }
 
-func (c *Client) isOpenRouterBlocked() bool {
-	blockedUntil := c.openRouterBlocked.Load()
-	if blockedUntil == 0 {
-		return false
-	}
-	return time.Now().UnixNano() < blockedUntil
-}
-
-func (c *Client) blockOpenRouter(d time.Duration) {
-	if d <= 0 {
-		d = 60 * time.Second
-	}
-	c.openRouterBlocked.Store(time.Now().Add(d).UnixNano())
-	slog.Warn("blocking OpenRouter due to rate limit",
-		slog.Duration("block_duration", d))
-}
-
 // isOpenRouterAccountBlocked returns true if the given OpenRouter API key is currently
 // blocked due to a recent 429 response. This enables per-account fallback between
 // primary and secondary OpenRouter keys.
@@ -2265,7 +2237,6 @@ Original response to clean:
 			if c.rlc != nil {
 				c.rlc.RecordRateLimit(cleaningModel.ID, retryAfter)
 			}
-			c.blockOpenRouter(retryAfter)
 			c.updateOpenRouterLimiterFromRetryAfter(openRouterKey, retryAfter)
 			return fmt.Errorf("rate limited: 429")
 		}
@@ -2389,7 +2360,7 @@ func isRefusalByPattern(response string) bool {
 	// Responses that start with apologies
 	trimmed := strings.TrimSpace(response)
 	if len(trimmed) > 10 {
-		firstWords := strings.ToLower(trimmed[:minInt(50, len(trimmed))])
+		firstWords := strings.ToLower(trimmed[:min(50, len(trimmed))])
 		apologyStarters := []string{
 			"i'm sorry", "i apologize", "unfortunately", "i'm afraid",
 		}
@@ -2413,14 +2384,6 @@ func isRefusalByPattern(response string) bool {
 	}
 
 	return false
-}
-
-// min returns the minimum of two integers
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // detectRefusalWithValidation performs comprehensive refusal detection using multiple methods.

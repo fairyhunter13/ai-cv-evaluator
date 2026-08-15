@@ -61,16 +61,14 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 
 ## 📚 Documentation
 
-All documentation is organized in the [`docs/`](docs/) directory:
-
-- **[📖 Documentation Index](docs/README.md)** - Complete documentation overview
-- **[🚀 Developer Quick Reference](docs/DEVELOPER_QUICK_REFERENCE.md)** - Get started quickly
-- **[🏗️ System Architecture](docs/architecture/ARCHITECTURE.md)** - System design and architecture
-- **[💻 Frontend Development](docs/development/FRONTEND_DEVELOPMENT.md)** - Frontend development guide
-- **[🔄 Migration Status](docs/migration/MIGRATION_SUMMARY.md)** - Current migration status
-- **[📁 Directory Structure](docs/DIRECTORY_STRUCTURE.md)** - Project structure overview
-
-- **[🌐 Provider Documentation](docs/providers/README.md)** - External AI provider APIs, models, and rate limits used by this service
+| Document | What it covers |
+|---|---|
+| [Architecture](docs/architecture/ARCHITECTURE.md) | System design, layering, the evaluation pipeline |
+| [Frontend development](docs/development/FRONTEND_DEVELOPMENT.md) | Admin frontend setup and workflow |
+| [Operations](docs/operations.md) | Running it in production |
+| [Observability](docs/observability.md) | Metrics, traces, dashboards |
+| [Data retention](docs/data-retention.md) | What is stored, for how long |
+| [SSO rate limiting](docs/security/SSO_RATE_LIMITING.md) | Auth gate behaviour |
 
 ## Quick Start
 

@@ -293,18 +293,3 @@ func TestIntegratedEvaluationHandler_EvaluateProjectDeliverables_UsesFastPathWit
 		t.Fatalf("expected non-empty response from evaluateProjectDeliverables")
 	}
 }
-
-func TestIntegratedEvaluationHandler_CompareWithJobRequirements_NoRAG(t *testing.T) {
-	ai := &fakeAI{chatRetryResp: `{"cv_match_rate":0.8,"cv_feedback":"ok","project_score":8,"project_feedback":"ok","overall_summary":"ok"}`}
-	h := &IntegratedEvaluationHandler{ai: ai}
-
-	ctx := context.Background()
-
-	resp, err := h.compareWithJobRequirements(ctx, "extracted", "job", "job-1")
-	if err != nil {
-		t.Fatalf("compareWithJobRequirements returned error: %v", err)
-	}
-	if resp == "" {
-		t.Fatalf("expected non-empty response from compareWithJobRequirements")
-	}
-}

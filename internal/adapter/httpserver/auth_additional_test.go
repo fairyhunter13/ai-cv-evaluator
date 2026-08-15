@@ -153,19 +153,6 @@ func TestAdminBearerRequired_UnauthorizedWithoutAuth(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rec.Result().StatusCode)
 }
 
-func TestSessionManager_SetAndClearSessionCookie_NoOp(t *testing.T) {
-	cfg := config.Config{AdminSessionSecret: "secret"}
-	sm := NewSessionManager(cfg)
-
-	rec := httptest.NewRecorder()
-	sm.SetSessionCookie(rec, "value")
-	sm.ClearSessionCookie(rec)
-
-	// Deprecated methods are no-ops; they should not set any cookies
-	resp := rec.Result()
-	require.Empty(t, resp.Cookies())
-}
-
 func TestSessionManager_AuthRequired_PassesThrough(t *testing.T) {
 	cfg := config.Config{AdminSessionSecret: "secret"}
 	sm := NewSessionManager(cfg)
@@ -262,34 +249,6 @@ func TestValidateJWT_ValidToken(t *testing.T) {
 	sub, err := sm.ValidateJWT(token)
 	require.NoError(t, err)
 	require.Equal(t, "testuser", sub)
-}
-
-func TestSetSessionCookie_NoOp(t *testing.T) {
-	t.Parallel()
-
-	cfg := config.Config{AdminSessionSecret: "secret"}
-	sm := NewSessionManager(cfg)
-
-	rec := httptest.NewRecorder()
-	sm.SetSessionCookie(rec, "test-value")
-
-	// Should be a no-op, no cookies set
-	cookies := rec.Result().Cookies()
-	require.Empty(t, cookies)
-}
-
-func TestClearSessionCookie_NoOp(t *testing.T) {
-	t.Parallel()
-
-	cfg := config.Config{AdminSessionSecret: "secret"}
-	sm := NewSessionManager(cfg)
-
-	rec := httptest.NewRecorder()
-	sm.ClearSessionCookie(rec)
-
-	// Should be a no-op, no cookies set
-	cookies := rec.Result().Cookies()
-	require.Empty(t, cookies)
 }
 
 func TestGenerateCSRFCookieValue_Length(t *testing.T) {

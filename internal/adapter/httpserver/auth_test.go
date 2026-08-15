@@ -61,22 +61,6 @@ func Test_parseUint32(t *testing.T) {
 	}
 }
 
-func Test_SessionManager_SetSessionCookie(_ *testing.T) {
-	sm := &SessionManager{}
-	w := httptest.NewRecorder()
-	// Should be a no-op, just ensure it doesn't panic
-	sm.SetSessionCookie(w, "test-session-id")
-	// No cookie should be set since it's a no-op
-}
-
-func Test_SessionManager_ClearSessionCookie(_ *testing.T) {
-	sm := &SessionManager{}
-	w := httptest.NewRecorder()
-	// Should be a no-op, just ensure it doesn't panic
-	sm.ClearSessionCookie(w)
-	// No cookie should be set since it's a no-op
-}
-
 func Test_GenerateCSRFCookieValue(t *testing.T) {
 	// Generate multiple values and ensure they're unique
 	values := make(map[string]bool)

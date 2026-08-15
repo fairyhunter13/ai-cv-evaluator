@@ -44,8 +44,8 @@ func TestConsumer_WorkerHelpers_IncrementDecrementActiveWorkers(t *testing.T) {
 }
 
 func TestConsumer_MinIntHelper(t *testing.T) {
-	require.Equal(t, 1, minInt(1, 5))
-	require.Equal(t, 2, minInt(10, 2))
+	require.Equal(t, 1, min(1, 5))
+	require.Equal(t, 2, min(10, 2))
 }
 
 func TestConsumer_GetHealthStatus_WithNilObservableClient(t *testing.T) {
