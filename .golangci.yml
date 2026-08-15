@@ -1,77 +1,73 @@
-# golangci-lint v1.x configuration
-version: 2
-run:
-  timeout: 5m
-
+version: "2"
 linters:
   enable:
-    - errcheck
-    - gosec
-    - govet
-    - staticcheck
-    - revive
-    - ineffassign
-    - misspell
     - gocyclo
-    - unused
-
-linters-settings:
-  gocyclo:
-    min-complexity: 30
-
-issues:
-  exclude-dirs:
-    - internal/adapter/repo/postgres/mocks
-    - internal/domain/mocks
-  exclude-rules:
-    # Exclude some linters from running on tests files.
-    - path: _test\.go
-      linters:
-        - gocyclo
-    # Exclude vendor and mock files
-    - path: vendor/|mock_
-      linters:
-        - errcheck
-        - gosec
-    # Exclude typecheck on generated Postgres mocks (mockery output)
-    - path: internal/adapter/repo/postgres/mocks/
-      linters:
-        - typecheck
-    # Exclude Tika file path issue
-    - path: internal/adapter/textextractor/tika/tika\.go
-      text: "G304:"
-    # Legacy AI client functions kept for reference/future use
-    - path: internal/adapter/ai/real/client\.go
-      linters:
-        - unused
-      text: "providerCounter|chatJSONWithEnhancedModelSwitching|isOpenRouterBlocked"
-    # Legacy evaluation handler functions kept for reference
-    - path: internal/adapter/queue/redpanda/integrated_evaluation_handler\.go
-      linters:
-        - unused
-      text: "extractStructuredCVInfo|compareWithJobRequirements|summarizeProjectContent|generateScoringPrompt"
-    # Accept high cyclomatic complexity in core AI/evaluation functions
-    - path: internal/adapter/ai/real/client\.go
-      linters:
-        - gocyclo
-    - path: internal/adapter/queue/redpanda/evaluation_handler\.go
-      linters:
-        - gocyclo
-    # G101 false positives for variable names containing "key", "token", etc.
-    - linters:
-        - gosec
-      text: "G101:"
-    # G114 http serve without timeout - acceptable for internal worker process
-    - path: cmd/worker/main\.go
-      linters:
-        - gosec
-      text: "G114:"
-    # G404 weak random for non-crypto use in middleware
-    - path: internal/adapter/httpserver/middleware\.go
-      linters:
-        - gosec
-      text: "G404:"
-    # QF1003 tagged switch suggestion - low priority style issue
-    - linters:
-        - staticcheck
-      text: "QF1003:"
+    - gosec
+    - misspell
+    - revive
+  settings:
+    gocyclo:
+      min-complexity: 30
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gocyclo
+        path: _test\.go
+      # G124 targets Set-Cookie; a request-side AddCookie cannot carry these attributes.
+      - linters:
+          - gosec
+        path: _test\.go
+        text: 'G124:'
+      - linters:
+          - errcheck
+          - gosec
+        path: vendor/|mock_
+      - path: internal/adapter/textextractor/tika/tika\.go
+        text: 'G304:'
+      - linters:
+          - unused
+        path: internal/adapter/ai/real/client\.go
+        text: providerCounter|chatJSONWithEnhancedModelSwitching|isOpenRouterBlocked
+      - linters:
+          - unused
+        path: internal/adapter/queue/redpanda/integrated_evaluation_handler\.go
+        text: extractStructuredCVInfo|compareWithJobRequirements|summarizeProjectContent|generateScoringPrompt
+      - linters:
+          - gocyclo
+        path: internal/adapter/ai/real/client\.go
+      - linters:
+          - gocyclo
+        path: internal/adapter/queue/redpanda/evaluation_handler\.go
+      - linters:
+          - gosec
+        text: 'G101:'
+      - linters:
+          - gosec
+        path: cmd/worker/main\.go
+        text: 'G114:'
+      - linters:
+          - gosec
+        path: internal/adapter/httpserver/middleware\.go
+        text: 'G404:'
+      - linters:
+          - staticcheck
+        text: 'QF1003:'
+    paths:
+      - internal/adapter/repo/postgres/mocks
+      - internal/domain/mocks
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

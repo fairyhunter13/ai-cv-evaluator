@@ -214,9 +214,11 @@ func (rm *RetryManager) ProcessDLQJob(ctx context.Context, dlqJob domain.DLQJob)
 			slog.Info("DLQ cooling in effect for upstream rate limit/timeout",
 				slog.String("job_id", dlqJob.JobID),
 				slog.Duration("cooling_remaining", delay))
+			// Detached, not Background: the requeue outlives this call, but must keep ctx's trace.
+			cooldownCtx := context.WithoutCancel(ctx)
 			go func(job domain.DLQJob, d time.Duration) {
 				time.Sleep(d)
-				if err := rm.requeueFromDLQ(context.Background(), job); err != nil {
+				if err := rm.requeueFromDLQ(cooldownCtx, job); err != nil {
 					slog.Error("failed to requeue cooled DLQ job",
 						slog.String("job_id", job.JobID),
 						slog.Any("error", err))

@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -224,14 +225,14 @@ func TestJobRepo_List(t *testing.T) {
 
 	mockRows.On("Scan", mock.Anything).Run(func(args mock.Arguments) {
 		dest := args[0].([]any)
-		jobID := "job-" + string(rune('0'+jobCount))
+		jobID := "job-" + strconv.Itoa(jobCount)
 		*(dest[0].(*string)) = jobID
 		*(dest[1].(*domain.JobStatus)) = domain.JobCompleted
 		*(dest[2].(*string)) = ""
 		*(dest[3].(*time.Time)) = time.Now().UTC()
 		*(dest[4].(*time.Time)) = time.Now().UTC()
-		*(dest[5].(*string)) = "cv-" + string(rune('0'+jobCount))
-		*(dest[6].(*string)) = "proj-" + string(rune('0'+jobCount))
+		*(dest[5].(*string)) = "cv-" + strconv.Itoa(jobCount)
+		*(dest[6].(*string)) = "proj-" + strconv.Itoa(jobCount)
 		*(dest[7].(**string)) = nil
 	}).Return(nil).Times(2)
 
