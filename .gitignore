@@ -61,3 +61,6 @@ deploy/authelia/configuration.prod.yml
 
 # SOPS AGE private keys (NEVER commit these!)
 .sops/
+
+# Claude Code runtime state (.claude/skills/ is tracked content)
+.claude/failures.json
