@@ -94,7 +94,7 @@ endef
 	encrypt-rfcs decrypt-rfcs encrypt-cv decrypt-cv encrypt-cv-original backup-rfcs backup-cv verify-cv decrypt-test-cv clean-test-cv \
 	ci-test openapi-validate build-matrix verify-test-placement gosec-sarif license-scan \
 	freemodels-test frontend-dev frontend-install frontend-build frontend-clean frontend-help run-e2e-tests docker-cleanup e2e-help
-.PHONY: lint-backend lint-frontend lint-infra lint-docs lint-all install-git-hooks
+.PHONY: lint-backend lint-frontend lint-infra lint-docs lint-knowledge lint-all install-git-hooks
 
 all: fmt lint vet test
 
@@ -189,7 +189,16 @@ lint-docs:
 		fi; \
 	fi
 
-lint-all: lint-backend lint-frontend lint-infra lint-docs
+lint-knowledge:
+	@if [ ! -d knowledge ]; then \
+		echo "No knowledge/ bundle; skipping"; \
+	elif command -v okf >/dev/null 2>&1; then \
+		okf check knowledge; \
+	else \
+		echo "okf not installed (go install github.com/fairyhunter13/okf/cmd/okf@latest); skipping"; \
+	fi
+
+lint-all: lint-backend lint-frontend lint-infra lint-docs lint-knowledge
 
 install-git-hooks:
 	git config core.hooksPath .githooks

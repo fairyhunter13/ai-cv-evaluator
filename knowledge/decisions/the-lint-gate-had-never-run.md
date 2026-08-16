@@ -1,0 +1,36 @@
+---
+type: Decision
+resource: .golangci.yml
+title: The lint gate had never run
+description: A v2 version key over v1 directives, plus a pinned binary that was installed and then not invoked, meant golangci-lint never executed on this module until 2026-08-15.
+tags: [lint, ci, toolchain]
+status: stable
+generated: {by: claude-opus-5, at: 2026-08-17}
+---
+
+# Two independent faults, each sufficient
+
+`.golangci.yml` declared `version: 2` while every directive in it used the v1 schema. Separately,
+the lint target installed a pinned binary into `./bin` and then invoked the bare name from `PATH`,
+so whatever global `golangci-lint` happened to exist ran instead. v1 also cannot typecheck a
+go1.25 module — it reported `undefined: pgx` in code `go build` compiles cleanly, which is the kind
+of output that trains a reader to stop believing the tool [^1].
+
+Fixed by migrating the config to v2, pinning v2.12.2, and invoking the pinned path.
+
+# What the first real run found
+
+Five gosec findings, all first-time reports. Two are worth keeping:
+
+- The DLQ cooldown requeue uses `context.WithoutCancel`, not `context.Background`: it must outlive
+  the call that scheduled it, but should keep the caller's trace.
+- G124 is excluded for `_test.go`. It targets `Set-Cookie` attributes, and a request-side
+  `AddCookie` cannot carry them.
+
+# The general lesson
+
+A pinned tool that is installed and then invoked by bare name is not pinned. The install and the
+invocation have to name the same path, and a green lint on a config the linter cannot parse looks
+exactly like a green lint on clean code.
+
+[^1]: commit `5c122fb`, `ci: make the lint gate actually run`.
