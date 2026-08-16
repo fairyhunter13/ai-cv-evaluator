@@ -59,59 +59,14 @@ func TestReadSnippet(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(_ *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			var reader io.Reader
 			if tt.input != "" {
 				reader = strings.NewReader(tt.input)
 			}
 
-			result := readSnippet(reader, tt.n)
-			// Note: readSnippet may not work as expected in all cases due to limitedReader implementation
-			// We'll just test that it doesn't panic
-			_ = result
-		})
-	}
-}
-
-func TestLimitedReader(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		n        int64
-		expected string
-	}{
-		{"normal case", "hello world", 5, "hello"},
-		{"exact length", "hello", 5, "hello"},
-		{"zero limit", "hello", 0, ""},
-		{"negative limit", "hello", -1, ""},
-		{"longer than input", "hi", 10, "hi"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(_ *testing.T) {
-			reader := &limitedReader{
-				R: strings.NewReader(tt.input),
-				N: tt.n,
-			}
-
-			buf := make([]byte, 100)
-			n, err := reader.Read(buf)
-
-			if tt.n <= 0 {
-				if err != io.EOF {
-					t.Errorf("Expected EOF, got %v", err)
-				}
-				if n != 0 {
-					t.Errorf("Expected 0 bytes read, got %d", n)
-				}
-			} else {
-				if err != nil && err != io.EOF {
-					t.Errorf("Unexpected error: %v", err)
-				}
-				result := string(buf[:n])
-				if result != tt.expected {
-					t.Errorf("Expected %q, got %q", tt.expected, result)
-				}
+			if got := readSnippet(reader, tt.n); got != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, got)
 			}
 		})
 	}
