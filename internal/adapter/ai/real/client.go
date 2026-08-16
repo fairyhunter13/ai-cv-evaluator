@@ -64,31 +64,13 @@ type Client struct {
 	obsCotClean       *intobs.IntegratedObservableClient
 }
 
-// readSnippet reads up to n bytes from r and returns it as a string, non-destructively where possible.
+// readSnippet reads up to n bytes from r and returns it as a string.
 func readSnippet(r io.Reader, n int) string {
 	if r == nil || n <= 0 {
 		return ""
 	}
-	buf := make([]byte, n)
-	m, _ := io.ReadAtLeast(&limitedReader{R: r, N: int64(n)}, buf, 0)
-	return string(buf[:m])
-}
-
-type limitedReader struct {
-	R io.Reader
-	N int64
-}
-
-func (l *limitedReader) Read(p []byte) (int, error) {
-	if l.N <= 0 {
-		return 0, io.EOF
-	}
-	if int64(len(p)) > l.N {
-		p = p[:l.N]
-	}
-	n, err := l.R.Read(p)
-	l.N -= int64(n)
-	return n, err
+	buf, _ := io.ReadAll(io.LimitReader(r, int64(n)))
+	return string(buf)
 }
 
 // readSSEChatStream parses a text/event-stream response from OpenAI-compatible
@@ -642,11 +624,7 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 			}
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 				// Client error: non-retryable
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				bodySnippet := string(bodyBytes)
-				if len(bodySnippet) > 512 {
-					bodySnippet = bodySnippet[:512]
-				}
+				bodySnippet := readSnippet(resp.Body, 512)
 				slog.Warn("ai provider 4xx", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
 				slog.Error("OpenRouter API 4xx error details", slog.String("response_body", bodySnippet), slog.String("request_body", string(b)))
 				if c.rlc != nil {
@@ -656,11 +634,7 @@ func (c *Client) ChatJSON(ctx domain.Context, systemPrompt, userPrompt string, m
 			}
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 				// 5xx and others: retryable
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				bodySnippet := string(bodyBytes)
-				if len(bodySnippet) > 512 {
-					bodySnippet = bodySnippet[:512]
-				}
+				bodySnippet := readSnippet(resp.Body, 512)
 				slog.Error("ai provider non-2xx", slog.String("provider", "openrouter"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
 				if c.rlc != nil {
 					c.rlc.RecordFailure(model)
@@ -1265,11 +1239,7 @@ func (c *Client) callOpenRouterWithModelForKey(ctx domain.Context, apiKey, model
 				return fmt.Errorf("rate limited: 429")
 			}
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				bodySnippet := string(bodyBytes)
-				if len(bodySnippet) > 512 {
-					bodySnippet = bodySnippet[:512]
-				}
+				bodySnippet := readSnippet(resp.Body, 512)
 				slog.Warn("ai provider 4xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
 				if c.rlc != nil {
 					c.rlc.RecordFailure(model)
@@ -1277,11 +1247,7 @@ func (c *Client) callOpenRouterWithModelForKey(ctx domain.Context, apiKey, model
 				return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
 			}
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				bodySnippet := string(bodyBytes)
-				if len(bodySnippet) > 512 {
-					bodySnippet = bodySnippet[:512]
-				}
+				bodySnippet := readSnippet(resp.Body, 512)
 				slog.Error("ai provider non-2xx", slog.String("provider", "openrouter"), slog.String("op", "chat_retry"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", c.cfg.OpenRouterBaseURL+"/chat/completions"), slog.String("x_request_id", resp.Header.Get("X-Request-Id")), slog.String("body", bodySnippet))
 				if c.rlc != nil {
 					c.rlc.RecordFailure(model)
@@ -1520,20 +1486,12 @@ func (c *Client) callGroqChatWithModel(ctx domain.Context, apiKey, model, system
 				return backoff.Permanent(fmt.Errorf("rate limited: %d", resp.StatusCode))
 			}
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				bodySnippet := string(bodyBytes)
-				if len(bodySnippet) > 512 {
-					bodySnippet = bodySnippet[:512]
-				}
+				bodySnippet := readSnippet(resp.Body, 512)
 				lg.Warn("ai provider 4xx", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", endpoint), slog.String("body", bodySnippet))
 				return backoff.Permanent(fmt.Errorf("chat status %d", resp.StatusCode))
 			}
 			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				bodyBytes, _ := io.ReadAll(resp.Body)
-				bodySnippet := string(bodyBytes)
-				if len(bodySnippet) > 512 {
-					bodySnippet = bodySnippet[:512]
-				}
+				bodySnippet := readSnippet(resp.Body, 512)
 				lg.Error("ai provider non-2xx", slog.String("provider", "groq"), slog.String("op", "chat"), slog.Int("status", resp.StatusCode), slog.String("model", model), slog.String("endpoint", endpoint), slog.String("body", bodySnippet))
 				return fmt.Errorf("chat status %d", resp.StatusCode)
 			}
