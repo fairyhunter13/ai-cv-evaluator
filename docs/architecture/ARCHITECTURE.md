@@ -12,7 +12,7 @@ High-level components:
 - **Vector DB**: Qdrant.
 - **Text Extraction**: Apache Tika.
 - **Database**: PostgreSQL.
-- **Observability**: OTEL collector, Prometheus, Grafana, Jaeger.
+- **Observability**: OTEL collector, Prometheus, Grafana, Jaeger; Loki + Promtail for logs.
 - **Admin Frontend**: Vue 3 + Vite app served behind nginx.
 - **SSO**: Authelia + oauth2-proxy.
 - **Portal**: Static HTML landing page linking to dashboards and admin UI.
@@ -26,7 +26,11 @@ High-level components:
 
 ### Front Auth (oauth2-proxy)
 
-- oauth2-proxy is configured as an OIDC client of Authelia.
+- oauth2-proxy is configured as an OIDC client of Authelia. Prod runs two of them —
+  `oauth2-proxy-app` fronts the app host, `oauth2-proxy-dashboard` the dashboard host. They are one
+  session, not two: same client id, same `OAUTH2_PROXY_COOKIE_SECRET`, and a cookie domain of
+  `.ai-cv-evaluator.web.id`. That shared secret is what makes the portal hop below credential-free,
+  so rotating it for one instance and not the other logs everyone out of the other host.
 - Nginx uses `auth_request` to call oauth2-proxy for all protected routes.
 - On 401, nginx redirects to `/oauth2/start?rd=...`.
 
@@ -93,3 +97,17 @@ Health endpoints (`/healthz`, `/readyz`) and ACME challenge paths are intentiona
 - **Dev**: `docker-compose.yml` + `make dev-full`.
 - **Prod**: `docker-compose.prod.yml` and GitHub Actions `deploy.yml`.
 - Public entrypoint is always nginx; backend and worker containers are not exposed directly.
+
+### Blue/green
+
+Prod runs two backends, `backend_blue` and `backend_green`. Which one serves is not a load-balancer
+decision: `deploy.yml` reads the colour from a `.active_color` file on the host, renders
+`deploy/nginx/prod-conf.d/*.conf` from its `.template` siblings with `$backend_host` bound to that
+colour, and reloads nginx. Editing a rendered `.conf` by hand is therefore undone by the next deploy —
+change the template.
+
+Failover is automatic and runs through GitHub. The `health-monitor` container polls nginx and the
+backend health path; on repeated failure it POSTs a `backend-unhealthy` `repository_dispatch`, which
+triggers `auto-failover.yml` to re-render against the other colour. `rollback.yml` is the manual
+equivalent. A failover consequently needs a working GitHub token on the host and cannot complete while
+Actions is unreachable.
