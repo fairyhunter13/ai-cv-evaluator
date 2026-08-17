@@ -192,10 +192,12 @@ lint-docs:
 lint-knowledge:
 	@if [ ! -d knowledge ]; then \
 		echo "No knowledge/ bundle; skipping"; \
+	elif [ -x $(PWD)/bin/okf ]; then \
+		$(PWD)/bin/okf check knowledge; \
 	elif command -v okf >/dev/null 2>&1; then \
 		okf check knowledge; \
 	else \
-		echo "okf not installed (go install github.com/fairyhunter13/okf/cmd/okf@latest); skipping"; \
+		echo "okf not installed; run make tools"; exit 1; \
 	fi
 
 lint-all: lint-backend lint-frontend lint-infra lint-docs lint-knowledge
@@ -788,6 +790,7 @@ docker-build-ci:
 	GOBIN=$(PWD)/bin $(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 	GOBIN=$(PWD)/bin $(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	GOBIN=$(PWD)/bin $(GO) install gotest.tools/gotestsum@latest
+	GOBIN=$(PWD)/bin $(GO) install github.com/fairyhunter13/okf/cmd/okf@latest
 
 
 # Security scan: gosec with SARIF output
