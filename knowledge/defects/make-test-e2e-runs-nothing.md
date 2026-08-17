@@ -30,3 +30,11 @@ human running the command the README documents.
 Renaming the filter to the real test is not sufficient on its own. A target whose test selector can
 silently match nothing will do this again; the durable form asserts a non-zero test count, or drops
 `-run` and lets the build tag do the selecting.
+
+# The same shape in the knowledge gate
+
+`lint-knowledge` had it too, found 2026-08-17: it ran `okf check knowledge` only when `okf` was on
+PATH and printed "skipping" otherwise, and `make tools` never installed `okf`. Every hosted CI run
+logged the skip and passed, so the bundle was gated only on developer machines that happened to have
+the binary. Fixed by installing `okf` in `tools` and exiting 1 when it is still absent. A gate whose
+tool is optional is not a gate, which is the same lesson as a selector that can match nothing.

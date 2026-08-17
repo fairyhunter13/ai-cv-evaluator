@@ -7,6 +7,8 @@ title: ai-cv-evaluator knowledge history
 
 ## 2026-08-17
 
+- `defects/make-test-e2e-runs-nothing.md` extended: `lint-knowledge` skipped whenever `okf` was
+  absent, and `make tools` never installed it, so the bundle gate had never run on hosted CI.
 - **Creation**: nine concepts, each harvested from a commit body or from a live code path that
   documents what it does but not why it matters. Sixteen candidates were surveyed; seven were left
   alone because they already carry their reason at the site that needs it — `otelpgx`'s
