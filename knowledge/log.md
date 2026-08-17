@@ -7,6 +7,9 @@ title: ai-cv-evaluator knowledge history
 
 ## 2026-08-17
 
+- **Update**: index entries now carry the concept's own `description`. `make lint-knowledge-strict`
+  runs the `-Werror` lane and always exits 0; CI runs it `continue-on-error` beside `lint-all`,
+  because a forward link to an unwritten concept is legitimate and must not decide a build.
 - **Update**: `defects/make-test-e2e-runs-nothing.md` extended again — `tools` installed `okf`
   `@latest`, so the gate ran but its verdict was not reproducible. Pinned to `v0.1.0`.
 - `defects/make-test-e2e-runs-nothing.md` extended: `lint-knowledge` skipped whenever `okf` was

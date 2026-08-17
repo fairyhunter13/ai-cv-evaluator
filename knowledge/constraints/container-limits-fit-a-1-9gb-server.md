@@ -21,6 +21,10 @@ Two server-level settings belong to the same decision: `vm.swappiness=10` and
 
 # The rule this leaves
 
+Memory is not the only exhaustible resource on this host: the disk filled too, and the pruning
+that was supposed to prevent it had never deleted anything — see
+[the disk-full outage](../defects/the-disk-full-outage.md).
+
 **A new limit is derived from a measurement on this host, not from a default.** The service
 defaults are all one to two orders of magnitude above what these workloads use, and the sum, not
 any single limit, is what breaks. Adding a service means re-checking the total against 1.9 GB.

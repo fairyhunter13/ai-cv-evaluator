@@ -45,4 +45,5 @@ Making `okf` mandatory left one thing unfixed: `tools` installed it `@latest`, s
 `lint-knowledge` reports could change between two runs of the same commit, decided by a push to a
 different repo. Pinned to `v0.1.0` 2026-08-17. The three failures on this page are one failure —
 a green that does not mean what a reader takes it to mean — reached by a missing test, a missing
-tool, and an unnamed version.
+tool, and an unnamed version. The fourth instance is
+[the lint gate that had never run](../decisions/the-lint-gate-had-never-run.md).

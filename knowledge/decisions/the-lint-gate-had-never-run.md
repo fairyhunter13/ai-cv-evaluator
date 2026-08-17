@@ -32,5 +32,8 @@ Five gosec findings, all first-time reports. Two are worth keeping:
 A pinned tool that is installed and then invoked by bare name is not pinned. The install and the
 invocation have to name the same path, and a green lint on a config the linter cannot parse looks
 exactly like a green lint on clean code.
+The same green appears one directory over in
+[make test-e2e runs zero tests](../defects/make-test-e2e-runs-nothing.md), reached by a selector
+that can match nothing.
 
 [^1]: commit `5c122fb`, `ci: make the lint gate actually run`.
