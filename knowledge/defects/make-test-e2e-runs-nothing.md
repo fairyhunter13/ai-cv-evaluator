@@ -38,3 +38,11 @@ PATH and printed "skipping" otherwise, and `make tools` never installed `okf`. E
 logged the skip and passed, so the bundle was gated only on developer machines that happened to have
 the binary. Fixed by installing `okf` in `tools` and exiting 1 when it is still absent. A gate whose
 tool is optional is not a gate, which is the same lesson as a selector that can match nothing.
+
+# And the version it installed was floating
+
+Making `okf` mandatory left one thing unfixed: `tools` installed it `@latest`, so the verdict
+`lint-knowledge` reports could change between two runs of the same commit, decided by a push to a
+different repo. Pinned to `v0.1.0` 2026-08-17. The three failures on this page are one failure —
+a green that does not mean what a reader takes it to mean — reached by a missing test, a missing
+tool, and an unnamed version.

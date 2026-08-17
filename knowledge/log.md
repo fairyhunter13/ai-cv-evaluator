@@ -7,6 +7,8 @@ title: ai-cv-evaluator knowledge history
 
 ## 2026-08-17
 
+- **Update**: `defects/make-test-e2e-runs-nothing.md` extended again — `tools` installed `okf`
+  `@latest`, so the gate ran but its verdict was not reproducible. Pinned to `v0.1.0`.
 - `defects/make-test-e2e-runs-nothing.md` extended: `lint-knowledge` skipped whenever `okf` was
   absent, and `make tools` never installed it, so the bundle gate had never run on hosted CI.
 - **Creation**: nine concepts, each harvested from a commit body or from a live code path that

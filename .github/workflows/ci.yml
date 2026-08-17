@@ -80,7 +80,7 @@ jobs:
         run: |
           test -d admin-frontend/dist || {
             echo "Frontend build missing" >&2; exit 1; }
-      - name: Lint (backend/frontend/infra/docs)
+      - name: Lint (backend/frontend/infra/docs/knowledge)
         run: make lint-all
       - name: Vet
         run: make vet
