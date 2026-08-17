@@ -11,7 +11,7 @@ they already cover — architecture and blue/green, day-2 operations, data reten
 limiting, frontend development — and `internal/adapter/ai/real/README.md` keeps the AI backoff
 write-up. Nothing here restates them.
 
-Four of the eight concern one subject: **nothing stored with a score says how it was produced.**
+Four of the nine concern one subject: **nothing stored with a score says how it was produced.**
 Start at [Candidate evaluation](computations/candidate-evaluation.md).
 
 # Attested Computation
