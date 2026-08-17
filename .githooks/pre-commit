@@ -14,5 +14,5 @@ if ! command -v make >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "Running make lint-all (backend/frontend/infra/docs) before commit..."
+echo "Running make lint-all (backend/frontend/infra/docs/knowledge) before commit..."
 make lint-all
