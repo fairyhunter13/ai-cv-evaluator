@@ -7,6 +7,7 @@ title: ai-cv-evaluator knowledge history
 
 ## 2026-08-21
 
+- **Update**: the checker's module path changes and nothing else does. `okfrules` and `okf` merged into one module at okf `v0.3.0` -- the fleet rules are now the package `okf/rules` and the binary is built from `cmd/okfrules` in the okf module -- so `make tools`, `lint-knowledge` and the gate test install from the new path. Same binary name, same `Standard()` rules, same verdict on this bundle: `check -Werror` is silent before and after. The old module's tags stay resolvable on the proxy, so nothing pinned to them breaks.
 - **Update**: the checker pin moves to `okfrules` v0.2.1, where `NoIntraBundleWikilinks` joins `Standard()`. It was `-strict`-only while one fleet bundle still carried bare wikilinks; that conversion finished and all ten bundles measured zero, so the rule now runs in every pinned repo rather than only the two that build their own checker. `Strict()` adds `LogVerbs` alone.
 
 ## 2026-08-20
