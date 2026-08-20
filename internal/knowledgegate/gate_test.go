@@ -1,6 +1,6 @@
 // Package knowledgegate holds no code. It exists so `go test ./...` asserts that the
-// knowledge/ bundle is actually gated on this checkout -- the bundle passing okf says
-// nothing about whether anything runs okf.
+// knowledge/ bundle is actually gated on this checkout -- the bundle passing the
+// checker says nothing about whether anything runs it.
 package knowledgegate
 
 import (
@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-const okfPin = "github.com/fairyhunter13/okf/cmd/okf@v0.1.0"
+const okfPin = "github.com/fairyhunter13/okfrules/cmd/okfrules@v0.2.0"
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
@@ -97,20 +97,20 @@ func TestThePinIsWrittenOnce(t *testing.T) {
 
 func TestTheCheckerRejectsSomething(t *testing.T) {
 	root := repoRoot(t)
-	okf := filepath.Join(root, "bin", "okf")
+	okf := filepath.Join(root, "bin", "okfrules")
 	if _, err := os.Stat(okf); err != nil {
-		found, err := exec.LookPath("okf")
+		found, err := exec.LookPath("okfrules")
 		if err != nil {
-			t.Fatalf("no okf in bin/ or on PATH, so lint-knowledge would fail every build: make tools")
+			t.Fatalf("no okfrules in bin/ or on PATH, so lint-knowledge would fail every build: make tools")
 		}
 		okf = found
 	}
-	// Without this, everything above passes just as well against an okf that exits 0 on anything.
+	// Without this, everything above passes just as well against a checker that exits 0 on anything.
 	bad := t.TempDir()
 	if err := os.WriteFile(filepath.Join(bad, "broken.md"), []byte("---\ntitle: no type key\n---\n\nbody\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if exec.Command(okf, "check", bad).Run() == nil {
-		t.Fatal("okf accepted a concept with no type key")
+		t.Fatal("okfrules accepted a concept with no type key")
 	}
 }
