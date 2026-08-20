@@ -6,10 +6,17 @@ description: The scoring computation, its parameters, and the executor receipt i
 tags: [scoring, attestation, provenance]
 status: draft
 runtime: go
-computation: PerformIntegratedEvaluation
+computation: internal/adapter/queue/redpanda/integrated_evaluation_handler.go
+parameters:
+  - { name: job_id, type: string, required: true }
+  - { name: cv_text, type: string, required: true }
+  - { name: project_text, type: string, required: true }
 executor:
   resource: cmd/worker
-generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
+  receipt: [job_id, git_sha, model_id, provider, prompt_version, path_taken, temperature, max_tokens, attempts, raw_scores]
+attester:
+  resource: ../references/attesters/evaluation_receipt.py
+generated: {by: claude/opus-5, at: 2026-08-21T00:00:00Z}
 ---
 
 # Computation
@@ -21,7 +28,7 @@ The rubric the second call applies is [The project scoring rubric](../policies/p
 
 # Parameters
 
-These are the values that determine a score. All are fixed in code except the model, which rotates.
+These are the values that determine a score. All are fixed in code except the model, which rotates — which is why none of them is a `parameters` entry above: those are the typed holes a caller fills, and every value here is one the caller cannot reach.
 
 | Parameter | Value |
 |---|---|
@@ -36,7 +43,9 @@ These are the values that determine a score. All are fixed in code except the mo
 
 # Executor receipt
 
-**There is none, and that is the point of this concept.** The `results` table stores `job_id`,
+`executor.receipt` above declares what a run must return. **Nothing returns it, and that is the
+point of this concept** — the declaration is what makes the gap a failing check instead of a
+paragraph. The `results` table stores `job_id`,
 `cv_match_rate`, `cv_feedback`, `project_score`, `project_feedback`, `overall_summary`,
 `created_at`. Nothing else is persisted with a score:
 
@@ -55,17 +64,21 @@ aggregate only. `artifacts/` is `rm -rf`'d at the start of every E2E target.
 
 # Attester
 
-No attester exists. What a deterministic, LLM-free one could check **today**, from a stored result
-alone:
+[`references/attesters/evaluation_receipt.py`](../references/attesters/evaluation_receipt.py) is
+written against the receipt above, so today it fails every evaluation on the first check: the
+receipt is empty. That is the honest verdict. What it checks once the fields exist:
 
-- `0 ≤ cv_match_rate ≤ 1` and `1 ≤ project_score ≤ 10` before clamping, not after;
+- the receipt is for the job whose row is being attested;
+- the model, prompt version and temperature are the sanctioned ones, and the attempt count is
+  within the retry policy;
+- `0 ≤ cv_match_rate ≤ 1` and `1 ≤ project_score ≤ 10` before clamping, not after, and the stored
+  score is the pre-clamp one — a clamp that moved a score is a rejection, not a repair;
+- the path taken is one of the three known ones, and a
+  [derived](../defects/scores-are-fabricated-when-the-model-omits-them.md) score fails: it was
+  never assessed;
 - the three text fields are non-empty and are not the `"No feedback provided"` /
-  `"No summary provided"` defaults;
-- the response body is a bare JSON object with exactly the five expected keys;
-- `jobs.status = completed` implies a `results` row, which the write order already guarantees;
-- a failure code is drawn from the closed set in `classifyFailureCode`.
+  `"No summary provided"` defaults.
 
-What it **cannot** check until the receipt above exists: reproducibility, which model produced the
-score, and whether the score was assessed or derived. Those are the ones worth having — an
-evaluator that cannot attest its own scores is asking to be trusted on the same terms it refuses
-to extend to the candidates it grades.
+Every one of those needs a field the receipt does not carry yet. An evaluator that cannot attest
+its own scores is asking to be trusted on the same terms it refuses to extend to the candidates it
+grades, and the check is written now so that stays a red test rather than a paragraph.
