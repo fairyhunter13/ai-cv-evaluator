@@ -5,6 +5,10 @@ title: ai-cv-evaluator knowledge history
 
 # Bundle history
 
+## 2026-08-20
+
+- **Update**: `lint-knowledge` folds in `-Werror` and `lint-knowledge-strict` is deleted. The strict target ended in `|| true`, so the CI step that ran it reported nothing a build could act on; a broken link is a *warning*, which plain `okf check` also prints and exits 0 on. One blocking target now, reached from `lint-all`, the pre-commit hook and CI. All ten personal bundles were measured warning-free first, so this costs zero reds, and it was proved by adding a dangling link and watching `make lint-knowledge` exit 2.
+
 ## 2026-08-17
 
 - **Update**: index entries now carry the concept's own `description`. `make lint-knowledge-strict`
