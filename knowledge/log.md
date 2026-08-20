@@ -5,6 +5,10 @@ title: ai-cv-evaluator knowledge history
 
 # Bundle history
 
+## 2026-08-21
+
+- **Update**: the checker pin moves to `okfrules` v0.2.1, where `NoIntraBundleWikilinks` joins `Standard()`. It was `-strict`-only while one fleet bundle still carried bare wikilinks; that conversion finished and all ten bundles measured zero, so the rule now runs in every pinned repo rather than only the two that build their own checker. `Strict()` adds `LogVerbs` alone.
+
 ## 2026-08-20
 
 - **Update**: `make tools`, `lint-knowledge` and the gate test install and run `okfrules` (`@v0.2.0`) rather than stock `okf` — the same conformance check plus the rules the fleet keeps and OKF §11 forbids a conformant consumer from enforcing: a `resource:` naming a path that is gone, a `type` outside the skills' table, a `verified:` stamp naming no human. The pin arm below grades the new pin, so all three move in one commit.
