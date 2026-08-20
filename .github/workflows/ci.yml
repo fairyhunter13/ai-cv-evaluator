@@ -85,7 +85,7 @@ jobs:
 
       # Advisory: a forward link to a concept not yet written is legitimate.
       - name: Knowledge bundle warnings
-        run: make lint-knowledge-strict
+        run: make lint-knowledge
         continue-on-error: true
 
       - name: Vet

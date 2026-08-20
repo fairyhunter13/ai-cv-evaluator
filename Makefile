@@ -94,7 +94,7 @@ endef
 	encrypt-rfcs decrypt-rfcs encrypt-cv decrypt-cv encrypt-cv-original backup-rfcs backup-cv verify-cv decrypt-test-cv clean-test-cv \
 	ci-test openapi-validate build-matrix verify-test-placement gosec-sarif license-scan \
 	freemodels-test frontend-dev frontend-install frontend-build frontend-clean frontend-help run-e2e-tests docker-cleanup e2e-help
-.PHONY: lint-backend lint-frontend lint-infra lint-docs lint-knowledge lint-knowledge-strict lint-all install-git-hooks
+.PHONY: lint-backend lint-frontend lint-infra lint-docs lint-knowledge lint-all install-git-hooks
 
 all: fmt lint vet test
 
@@ -189,28 +189,19 @@ lint-docs:
 		fi; \
 	fi
 
+# -Werror blocks: the bundle is warning-free, so a warning can only be a new dangling link or
+# orphan. A broken link is a *warning* -- plain `check` prints it and exits 0, which is the gap.
+# The advisory `lint-knowledge-strict` sibling is gone: a target that always exited 0 reported
+# nothing a build could act on.
 lint-knowledge:
 	@if [ ! -d knowledge ]; then \
 		echo "No knowledge/ bundle; skipping"; \
 	elif [ -x $(PWD)/bin/okf ]; then \
-		$(PWD)/bin/okf check knowledge; \
+		$(PWD)/bin/okf check -Werror knowledge; \
 	elif command -v okf >/dev/null 2>&1; then \
-		okf check knowledge; \
+		okf check -Werror knowledge; \
 	else \
 		echo "okf not installed; run make tools"; exit 1; \
-	fi
-
-# Advisory sibling of lint-knowledge: reports OKF warnings and always exits 0. A forward link to a
-# concept not written yet is legitimate, so a warning must never decide a build.
-lint-knowledge-strict:
-	@if [ ! -d knowledge ]; then \
-		echo "No knowledge/ bundle; skipping"; \
-	elif [ -x $(PWD)/bin/okf ]; then \
-		$(PWD)/bin/okf check -Werror knowledge || true; \
-	elif command -v okf >/dev/null 2>&1; then \
-		okf check -Werror knowledge || true; \
-	else \
-		echo "okf not installed; run make tools"; \
 	fi
 
 lint-all: lint-backend lint-frontend lint-infra lint-docs lint-knowledge
