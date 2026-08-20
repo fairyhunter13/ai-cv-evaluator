@@ -196,12 +196,12 @@ lint-docs:
 lint-knowledge:
 	@if [ ! -d knowledge ]; then \
 		echo "No knowledge/ bundle; skipping"; \
-	elif [ -x $(PWD)/bin/okf ]; then \
-		$(PWD)/bin/okf check -Werror knowledge; \
-	elif command -v okf >/dev/null 2>&1; then \
-		okf check -Werror knowledge; \
+	elif [ -x $(PWD)/bin/okfrules ]; then \
+		$(PWD)/bin/okfrules check -Werror knowledge; \
+	elif command -v okfrules >/dev/null 2>&1; then \
+		okfrules check -Werror knowledge; \
 	else \
-		echo "okf not installed; run make tools"; exit 1; \
+		echo "okfrules not installed; run make tools"; exit 1; \
 	fi
 
 lint-all: lint-backend lint-frontend lint-infra lint-docs lint-knowledge
@@ -795,7 +795,7 @@ docker-build-ci:
 	GOBIN=$(PWD)/bin $(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	GOBIN=$(PWD)/bin $(GO) install gotest.tools/gotestsum@latest
 	# Pinned, unlike the others: this one decides whether lint-knowledge is green.
-	GOBIN=$(PWD)/bin $(GO) install github.com/fairyhunter13/okf/cmd/okf@v0.1.0
+	GOBIN=$(PWD)/bin $(GO) install github.com/fairyhunter13/okfrules/cmd/okfrules@v0.2.0
 
 
 # Security scan: gosec with SARIF output
