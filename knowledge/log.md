@@ -7,6 +7,7 @@ title: ai-cv-evaluator knowledge history
 
 ## 2026-08-20
 
+- **Creation**: [the bundle gate asserts that it is installed](decisions/the-bundle-gate-asserts-that-it-is-installed.md) — five arms in `internal/knowledgegate` red when `lint-knowledge` drops `-Werror` or swallows its exit, when the CI step reaching it is excused, when `.githooks/pre-commit` is `chmod -x` in the index, when the `okf` install loses its pin, or when `okf` accepts a concept with no `type` key. Each proved by breaking it. The leftover `continue-on-error` CI step that re-ran `make lint-knowledge` and discarded the answer is deleted; `lint-all` already runs it blocking.
 - **Update**: `lint-knowledge` folds in `-Werror` and `lint-knowledge-strict` is deleted. The strict target ended in `|| true`, so the CI step that ran it reported nothing a build could act on; a broken link is a *warning*, which plain `okf check` also prints and exits 0 on. One blocking target now, reached from `lint-all`, the pre-commit hook and CI. All ten personal bundles were measured warning-free first, so this costs zero reds, and it was proved by adding a dangling link and watching `make lint-knowledge` exit 2.
 
 ## 2026-08-17
