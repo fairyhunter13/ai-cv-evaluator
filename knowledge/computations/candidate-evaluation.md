@@ -9,7 +9,7 @@ runtime: go
 computation: PerformIntegratedEvaluation
 executor:
   resource: cmd/worker
-generated: {by: claude-opus-5, at: 2026-08-17}
+generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 ---
 
 # Computation

@@ -5,7 +5,7 @@ title: Scores are fabricated from unrelated fields when the model omits them
 description: calculateCVMatchRateFromAnalysis and calculateProjectScoreFromAnalysis derive a score from skill counts and complexity words, and it is returned as if the model produced it.
 tags: [scoring, llm, correctness]
 status: stable
-generated: {by: claude-opus-5, at: 2026-08-17}
+generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 ---
 
 # What is wrong
