@@ -5,7 +5,12 @@ title: The lint gate had never run
 description: A v2 version key over v1 directives, plus a pinned binary that was installed and then not invoked, meant golangci-lint never executed on this module until 2026-08-15.
 tags: [lint, ci, toolchain]
 status: stable
-generated: {by: claude-opus-5, at: 2026-08-17}
+generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
+sources:
+  - id: commit-5c122fb
+    resource: commit 5c122fb
+    title: "ci: make the lint gate actually run"
+    last_modified: 2026-08-15
 ---
 
 # Two independent faults, each sufficient
@@ -14,7 +19,7 @@ generated: {by: claude-opus-5, at: 2026-08-17}
 the lint target installed a pinned binary into `./bin` and then invoked the bare name from `PATH`,
 so whatever global `golangci-lint` happened to exist ran instead. v1 also cannot typecheck a
 go1.25 module — it reported `undefined: pgx` in code `go build` compiles cleanly, which is the kind
-of output that trains a reader to stop believing the tool [^1].
+of output that trains a reader to stop believing the tool [^commit-5c122fb].
 
 Fixed by migrating the config to v2, pinning v2.12.2, and invoking the pinned path.
 
@@ -36,4 +41,4 @@ The same green appears one directory over in
 [make test-e2e runs zero tests](../defects/make-test-e2e-runs-nothing.md), reached by a selector
 that can match nothing.
 
-[^1]: commit `5c122fb`, `ci: make the lint gate actually run`.
+[^commit-5c122fb]: commit `5c122fb`, `ci: make the lint gate actually run`.

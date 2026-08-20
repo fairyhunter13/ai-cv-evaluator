@@ -5,7 +5,7 @@ title: make test-e2e runs zero tests and exits 0
 description: Every E2E target filters on -run TestE2E_Core_RateLimitFriendly$, a name no test has, so the README's E2E command passes vacuously.
 tags: [e2e, ci, testing]
 status: stable
-generated: {by: claude-opus-5, at: 2026-08-17}
+generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 ---
 
 # What is wrong

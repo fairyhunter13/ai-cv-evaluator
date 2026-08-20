@@ -5,7 +5,7 @@ title: The project scoring rubric
 description: Five weighted parameters scored 1-5 — correctness 30, code quality 25, resilience 20, documentation 15, creativity 10 — stated only inside a Go prompt literal.
 tags: [scoring, rubric, product]
 status: stable
-generated: {by: claude-opus-5, at: 2026-08-17}
+generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 ---
 
 # The rubric

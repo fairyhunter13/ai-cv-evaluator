@@ -5,7 +5,7 @@ title: A failed step changes the scorer, not just the latency
 description: Any of the four evaluation steps failing degrades to a single-prompt fast path with a different prompt, and nothing stored says which one ran.
 tags: [scoring, llm, fallback]
 status: stable
-generated: {by: claude-opus-5, at: 2026-08-17}
+generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 ---
 
 # The behaviour
