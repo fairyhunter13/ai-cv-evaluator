@@ -11,30 +11,14 @@ they already cover — architecture and blue/green, day-2 operations, data reten
 limiting, frontend development — and `internal/adapter/ai/real/README.md` keeps the AI backoff
 write-up. Nothing here restates them.
 
-Four of the nine concern one subject: **nothing stored with a score says how it was produced.**
+Four of the ten concern one subject: **nothing stored with a score says how it was produced.**
 Start at [Candidate evaluation](computations/candidate-evaluation.md).
 
-# Attested Computation
+# Subdirectories
 
-* [Candidate evaluation](computations/candidate-evaluation.md) - The scoring computation, its parameters, and the executor receipt it does not yet write - which is why no score in the results table can be attested.
-
-# Constraint
-
-* [A failed step changes the scorer, not just the latency](constraints/a-failed-step-changes-the-scorer.md) - Any of the four evaluation steps failing degrades to a single-prompt fast path with a different prompt, and nothing stored says which one ran.
-* [Container limits are sized to a 1.9 GB server](constraints/container-limits-fit-a-1-9gb-server.md) - Production runs on 1.9 GB RAM; limits summed to ~8.7 GB and caused heavy swapping, and were rewritten to ~2.4 GB against measured actuals.
-
-# Decision
-
-* [The bundle gate asserts that it is installed](decisions/the-bundle-gate-asserts-that-it-is-installed.md) - Five arms fail when lint-knowledge stops passing -Werror, when the CI step that reaches it is excused, when the pre-commit hook is non-executable in the index, when the okf install loses its pin, or when the checker accepts everything.
-* [Observability was deprecated in production, and the docs still advertise it](decisions/observability-was-deprecated-in-production.md) - In June 2026 the observability stack moved behind a compose profile and trace export was removed, but README and docs/observability.md still publish live Grafana, Prometheus and Jaeger URLs.
-* [The lint gate had never run](decisions/the-lint-gate-had-never-run.md) - A v2 version key over v1 directives, plus a pinned binary that was installed and then not invoked, meant golangci-lint never executed on this module until 2026-08-15.
-
-# Defect
-
-* [make test-e2e runs zero tests and exits 0](defects/make-test-e2e-runs-nothing.md) - Every E2E target filters on -run TestE2E_Core_RateLimitFriendly$, a name no test has, so the README's E2E command passes vacuously.
-* [Scores are fabricated from unrelated fields when the model omits them](defects/scores-are-fabricated-when-the-model-omits-them.md) - calculateCVMatchRateFromAnalysis and calculateProjectScoreFromAnalysis derive a score from skill counts and complexity words, and it is returned as if the model produced it.
-* [The disk-full outage, and the five safeguards it bought](defects/the-disk-full-outage.md) - Image cleanup used double-quoted awk "{print $2}", so the shell expanded $2 to empty and nothing was ever pruned; 216 images filled the 40 GB disk.
-
-# Policy
-
-* [The project scoring rubric](policies/project-scoring-rubric.md) - Five weighted parameters scored 1-5 — correctness 30, code quality 25, resilience 20, documentation 15, creativity 10 — stated only inside a Go prompt literal.
+* [computations](computations/index.md) - The scoring computation, its parameters, and the executor receipt it does not yet write - which is why no score in the results table can be attested.
+* [constraints](constraints/index.md) - What the scorer's environment fixes: container limits sized to a 1.9 GB server, and a failed step that changes which scorer runs.
+* [decisions](decisions/index.md) - What this repo gates and what it still advertises: a lint gate that had never run, a bundle gate that asserts its own installation, and observability the docs still promise.
+* [defects](defects/index.md) - Three failures that each reported success: a green E2E target running zero tests, scores fabricated from unrelated fields, and the disk-full outage.
+* [policies](policies/index.md) - Five weighted parameters scored 1-5 — correctness 30, code quality 25, resilience 20, documentation 15, creativity 10 — stated only inside a Go prompt literal.
+* [references](references/index.md) - Deterministic verification code for computation receipts.
