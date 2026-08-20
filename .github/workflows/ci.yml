@@ -83,11 +83,6 @@ jobs:
       - name: Lint (backend/frontend/infra/docs/knowledge)
         run: make lint-all
 
-      # Advisory: a forward link to a concept not yet written is legitimate.
-      - name: Knowledge bundle warnings
-        run: make lint-knowledge
-        continue-on-error: true
-
       - name: Vet
         run: make vet
       - name: Security - Vulnerabilities
