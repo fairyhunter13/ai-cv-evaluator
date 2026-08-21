@@ -12,7 +12,7 @@ sources:
   - id: commit-da0eb09
     resource: commit da0eb09
     title: "fix: prevent disk-full outage with 5 permanent safeguards"
-    last_modified: 2026-03-27
+    last_modified: 2026-03-27T00:00:00Z
 ---
 
 # Root cause

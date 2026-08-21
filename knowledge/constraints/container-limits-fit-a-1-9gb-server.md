@@ -12,7 +12,7 @@ sources:
   - id: commit-2b86d70
     resource: commit 2b86d70
     title: "fix: right-size container memory limits for 1.9GB server"
-    last_modified: 2026-03-27
+    last_modified: 2026-03-27T00:00:00Z
 ---
 
 # The budget

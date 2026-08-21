@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Pre-push gate for the knowledge/ bundle.
+#
+# The pre-commit hook reaches the checker only through `make lint-all`, which exits 0 when make
+# is absent and is skipped outright by SKIP_PRE_COMMIT_LINT=1. That is the right shape for a
+# fast local loop and the wrong shape for a gate, so this calls the checker directly and has
+# no escape hatch but --no-verify.
+#
+# Skip with:  git push --no-verify
+#
+# Install:    git config core.hooksPath .githooks
+# Uninstall:  git config --unset core.hooksPath
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+if [[ -d "$REPO_ROOT/knowledge" ]]; then
+  OKF="$REPO_ROOT/bin/okfrules"
+  if [ ! -x "$OKF" ]; then
+    OKF="$(command -v okfrules 2>/dev/null)"
+  fi
+  if [ -z "$OKF" ] || [ ! -x "$OKF" ]; then
+    echo "[pre-push] ✗ okfrules is in neither bin/ nor PATH — knowledge/ cannot be checked"
+    echo "[pre-push]   make tools    # or: go install github.com/fairyhunter13/okf/cmd/okfrules@v0.6.0"
+    exit 1
+  fi
+  # A hook chmod -x'd in the *index* is planted non-executable in every future clone, and git
+  # skips a hook it cannot execute without saying a word.
+  HOOK_MODE="$(git -C "$REPO_ROOT" ls-files -s .githooks/pre-push 2>/dev/null | awk '{print $1}')"
+  if [ "$HOOK_MODE" != "100755" ]; then
+    echo "[pre-push] ✗ .githooks/pre-push is mode '$HOOK_MODE' in the index, want 100755 — every"
+    echo "[pre-push]   future clone of this repo would push ungated."
+    exit 1
+  fi
+  # And that the checker refuses something: every check above passes just as well against a
+  # checker that exits 0 on anything.
+  OKF_PROBE="$(mktemp -d)"
+  printf -- '---\ntitle: no type key\n---\n\nbody\n' > "$OKF_PROBE/broken.md"
+  if "$OKF" check "$OKF_PROBE" >/dev/null 2>&1; then
+    rm -rf "$OKF_PROBE"
+    echo "[pre-push] ✗ okfrules accepted a concept with no type key — the checker it found gates nothing"
+    exit 1
+  fi
+  rm -rf "$OKF_PROBE"
+  # -Werror, matching lint-knowledge: a broken link is a *warning*, which plain check prints
+  # and then exits 0 on.
+  if ! "$OKF" check -Werror "$REPO_ROOT/knowledge"; then
+    echo "[pre-push] ✗ knowledge/ is not a conformant OKF bundle — push blocked"
+    exit 1
+  fi
+fi
+
+exit 0

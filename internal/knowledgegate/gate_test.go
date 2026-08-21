@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-const okfPin = "github.com/fairyhunter13/okf/cmd/okfrules@v0.5.3"
+const okfPin = "github.com/fairyhunter13/okf/cmd/okfrules@v0.6.0"
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
@@ -85,6 +85,39 @@ func TestTheHookIsExecutableInTheIndexNotOnlyOnDisk(t *testing.T) {
 	}
 	if !strings.Contains(read(t, ".githooks/pre-commit"), "lint-all") {
 		t.Error(".githooks/pre-commit does not run lint-all, so nothing local reaches the bundle")
+	}
+}
+
+func TestThePrePushCallsTheCheckerWithoutTheMakePath(t *testing.T) {
+	root := repoRoot(t)
+	out, err := exec.Command("git", "-C", root, "ls-files", "-s", ".githooks/pre-push").Output()
+	if err != nil || len(out) == 0 {
+		t.Fatal(".githooks/pre-push is not tracked, so a fresh clone gets no push gate")
+	}
+	if mode := strings.Fields(string(out))[0]; mode != "100755" {
+		t.Fatalf(".githooks/pre-push is mode %s in the index, want 100755", mode)
+	}
+	// pre-commit reaches the checker only through make, exits 0 when make is absent, and
+	// honours SKIP_PRE_COMMIT_LINT=1. This one has to have none of those ways out.
+	body := read(t, ".githooks/pre-push")
+	for _, want := range []string{"check -Werror", "okfrules"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("pre-push does not mention %q", want)
+		}
+	}
+	// Executable lines only: the header comment names these on purpose, to say what this
+	// hook deliberately does not do, and matching it would grade the prose.
+	var code []string
+	for _, ln := range strings.Split(body, "\n") {
+		if t := strings.TrimSpace(ln); t != "" && !strings.HasPrefix(t, "#") {
+			code = append(code, t)
+		}
+	}
+	run := strings.Join(code, "\n")
+	for _, escape := range []string{"SKIP_PRE_COMMIT_LINT", "make lint", "|| true"} {
+		if strings.Contains(run, escape) {
+			t.Errorf("pre-push carries %q, which is the escape hatch pre-commit already has", escape)
+		}
 	}
 }
 
