@@ -283,7 +283,7 @@ services:
     profiles: ["observability"]
     image: prom/prometheus:v2.53.0
     volumes:
-      - ./deploy/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus-rules.yml:/etc/prometheus/prometheus-rules.yml:ro
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
