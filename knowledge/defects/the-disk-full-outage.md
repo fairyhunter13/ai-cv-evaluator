@@ -6,6 +6,8 @@ description: Image cleanup used double-quoted awk "{print $2}", so the shell exp
 tags: [deployment, outage, docker]
 status: stable
 generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
+verified:
+  - { by: process:okf-verify, at: 2026-08-21T02:26:57Z }
 sources:
   - id: commit-da0eb09
     resource: commit da0eb09

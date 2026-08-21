@@ -6,6 +6,8 @@ description: Production runs on 1.9 GB RAM; limits summed to ~8.7 GB and caused 
 tags: [deployment, memory, capacity]
 status: stable
 generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
+verified:
+  - { by: process:okf-verify, at: 2026-08-21T02:26:57Z }
 sources:
   - id: commit-2b86d70
     resource: commit 2b86d70
