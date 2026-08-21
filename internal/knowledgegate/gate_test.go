@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-const okfPin = "github.com/fairyhunter13/okf/cmd/okfrules@v0.5.1"
+const okfPin = "github.com/fairyhunter13/okf/cmd/okfrules@v0.5.2"
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
