@@ -39,11 +39,15 @@ the pin that mattered was `okfrules`, whose version decides a verdict on its own
 
 # A red step reddens the badge and blocks nothing
 
-`deploy.yml`'s `pre-deploy-checks` job hard-`exit 1`s only on the Codecov coverage check; it reads
-this workflow through `print_workflow_status "Security Scans"` under the comment "Soft, non-blocking
-checks: log latest status for visibility". So making govulncheck strict changed what the badge can
-say and not what can ship. Turning it into a deployment gate is a separate decision with a different
-blast radius, and this one does not make it.
+`deploy.yml`'s `security-gate` job blocks a deploy on CI, on Docker Publish and on Codecov coverage
+— five `exit 1`s between `:207` and `:332`. Security Scans is not among them: it is read at `:336`
+through `print_workflow_status`, under the comment "Soft, non-blocking checks: log latest status for
+visibility", and that function returns 0 whether the run is missing, red or green. So making
+govulncheck strict changed what the badge can say and not what can ship. Turning it into a
+deployment gate is a separate decision with a different blast radius, and this one does not make it.
+
+The step does run under `set -euo pipefail`, so a `curl` or `jq` failure inside the function still
+aborts it. It is non-blocking on a red scan, not unconditionally non-failing.
 
 # Why the other ten stay fail-open
 
