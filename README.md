@@ -12,16 +12,16 @@ Backend service that ingests a candidate CV + project report, evaluates against 
   - Username: `admin`
   - Password: `admin123`
 
-### Observability Stack (Production)
+### Observability Stack — not deployed
 
-- **Grafana Dashboards**: https://ai-cv-evaluator.web.id/grafana/
-  - HTTP Metrics (RED method)
-  - Job Queue Metrics
-  - AI Provider Metrics (latency percentiles p50/p95/p99/max, token usage, request rates)
-  - Request Drilldown (traces + logs)
-- **Prometheus**: https://ai-cv-evaluator.web.id/prometheus/
-- **Jaeger Traces**: https://ai-cv-evaluator.web.id/jaeger/
-- **Mailpit (Email Testing)**: https://ai-cv-evaluator.web.id/mailpit/
+Grafana, Prometheus, Loki, Jaeger, OTEL, Promtail, cAdvisor and Mailpit sit behind a compose
+`profiles: ["observability"]` gate and are **not started by a production deploy** — they do not fit
+the host's memory budget. The production URLs these dashboards would live at return nothing today.
+See [Observability was deprecated in production](knowledge/decisions/observability-was-deprecated-in-production.md).
+
+They do run locally (see Local Development below) and in production only when started explicitly
+with `--profile observability`. Dashboards available: HTTP Metrics (RED), Job Queue Metrics, AI
+Provider Metrics (p50/p95/p99/max latency, token usage, request rates), Request Drilldown.
 
 ### AI Metrics Features
 
@@ -66,7 +66,7 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 | [Architecture](docs/architecture/ARCHITECTURE.md) | System design, layering, the evaluation pipeline |
 | [Frontend development](docs/development/FRONTEND_DEVELOPMENT.md) | Admin frontend setup and workflow |
 | [Operations](docs/operations.md) | Running it in production |
-| [Observability](docs/observability.md) | Metrics, traces, dashboards |
+| [Observability](docs/observability.md) | Metrics, traces, dashboards (opt-in profile, not deployed) |
 | [Data retention](docs/data-retention.md) | What is stored, for how long |
 | [SSO rate limiting](docs/security/SSO_RATE_LIMITING.md) | Auth gate behaviour |
 

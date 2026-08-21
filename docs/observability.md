@@ -2,14 +2,22 @@
 
 This document describes the observability stack, dashboards, and operational procedures for monitoring and troubleshooting the AI CV Evaluator system.
 
+> **This stack is not running in production.** On 2026-06-12 it moved behind a compose
+> `profiles: ["observability"]` gate and was dropped from the deploy path, because Prometheus,
+> Grafana, Loki, Jaeger, OTEL, Promtail and cAdvisor together do not fit the host's memory budget.
+> Trace export is off for the same reason: the collector is not deployed. See
+> [Observability was deprecated in production](../knowledge/decisions/observability-was-deprecated-in-production.md).
+> Everything below applies to a local `docker compose up` and to a production run started
+> explicitly with `--profile observability`.
+
 ## Stack Overview
 
-| Component   | Purpose                          | Access URL (Production)                     |
+| Component   | Purpose                          | Path (behind the `observability` profile) |
 |-------------|----------------------------------|---------------------------------------------|
-| **Grafana** | Dashboards, alerts, log exploration | `https://ai-cv-evaluator.web.id/grafana/` |
-| **Prometheus** | Metrics collection & storage   | `https://ai-cv-evaluator.web.id/prometheus/` |
+| **Grafana** | Dashboards, alerts, log exploration | `/grafana/` |
+| **Prometheus** | Metrics collection & storage   | `/prometheus/` |
 | **Loki**    | Centralized log aggregation      | Via Grafana Explore                         |
-| **Jaeger**  | Distributed tracing              | `https://ai-cv-evaluator.web.id/jaeger/`    |
+| **Jaeger**  | Distributed tracing              | `/jaeger/`    |
 | **Promtail**| Log shipper (Docker containers → Loki) | Internal only                         |
 | **OTEL Collector** | Trace pipeline (app → Jaeger) | Internal only                          |
 

@@ -26,9 +26,14 @@ host does not have.
 
 # The consequence that outlived the change
 
-`README.md` and `docs/observability.md` still document live production Grafana, Prometheus and
-Jaeger endpoints. Someone debugging a production incident will follow them, find nothing, and not
-know whether the stack is down or was never there.
+For two months `README.md` and `docs/observability.md` went on documenting live production Grafana,
+Prometheus and Jaeger endpoints. Someone debugging a production incident would have followed them,
+found nothing, and not known whether the stack was down or was never there.
+
+Both now say the stack is profile-gated and not deployed, and the four production URLs are gone.
+The runbook itself was kept, not deleted: the dashboards, alert rules and compose services all still
+exist and still run under `--profile observability`, so the content was accurate — only its claim
+about where it was reachable was not.
 
 This is also why `slog` output is not a substitute for a stored receipt — see
 [Candidate evaluation](../computations/candidate-evaluation.md). The reasoning that made logs
