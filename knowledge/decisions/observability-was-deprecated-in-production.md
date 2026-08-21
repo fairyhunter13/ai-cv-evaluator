@@ -6,6 +6,8 @@ description: In June 2026 the observability stack moved behind a compose profile
 tags: [observability, deployment, stale-docs]
 status: stable
 generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
+verified:
+  - { by: process:okf-verify, at: 2026-08-21T02:26:57Z }
 sources:
   - id: observability-teardown
     resource: commits 0f826d2, 87520ff, 88bfaa5, f6b0502

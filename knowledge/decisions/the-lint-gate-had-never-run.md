@@ -6,6 +6,8 @@ description: A v2 version key over v1 directives, plus a pinned binary that was 
 tags: [lint, ci, toolchain]
 status: stable
 generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
+verified:
+  - { by: process:okf-verify, at: 2026-08-21T02:26:57Z }
 sources:
   - id: commit-5c122fb
     resource: commit 5c122fb
