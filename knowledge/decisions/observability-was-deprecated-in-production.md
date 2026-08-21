@@ -12,7 +12,7 @@ sources:
   - id: observability-teardown
     resource: commits 0f826d2, 87520ff, 88bfaa5, f6b0502
     title: "The four commits that put observability behind a compose profile"
-    last_modified: 2026-06-12
+    last_modified: 2026-06-12T00:00:00Z
 ---
 
 # What changed

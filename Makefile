@@ -795,7 +795,7 @@ docker-build-ci:
 	GOBIN=$(PWD)/bin $(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	GOBIN=$(PWD)/bin $(GO) install gotest.tools/gotestsum@latest
 	# Pinned, unlike the others: this one decides whether lint-knowledge is green.
-	GOBIN=$(PWD)/bin $(GO) install github.com/fairyhunter13/okf/cmd/okfrules@v0.5.3
+	GOBIN=$(PWD)/bin $(GO) install github.com/fairyhunter13/okf/cmd/okfrules@v0.6.0
 
 
 # Security scan: gosec with SARIF output

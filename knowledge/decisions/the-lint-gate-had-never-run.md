@@ -12,7 +12,7 @@ sources:
   - id: commit-5c122fb
     resource: commit 5c122fb
     title: "ci: make the lint gate actually run"
-    last_modified: 2026-08-15
+    last_modified: 2026-08-15T00:00:00Z
 ---
 
 # Two independent faults, each sufficient
