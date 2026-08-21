@@ -5,6 +5,10 @@ title: ai-cv-evaluator knowledge history
 
 # Bundle history
 
+## 2026-08-22
+
+- **Update**: [the security badge could not go red](decisions/the-security-badge-could-not-go-red.md) records what the strict govulncheck step does **not** buy. `deploy.yml`'s `pre-deploy-checks` hard-`exit 1`s only on the Codecov check and reads this workflow through `print_workflow_status "Security Scans"` under the comment "Soft, non-blocking checks", so a red scan now reddens the badge and blocks no deployment. Also corrected: an audit of yesterday's commit found its closing line, "the six archive/* tags stay", is wrong — this repository has two, and seven exist across five repositories in the fleet. The count reached no concept, and a commit message is not worth a history rewrite to fix, which is the same trade this fleet just declined at a thousand times the scale.
+
 ## 2026-08-21
 
 - **Creation**: [the security badge could not go red for a finding](decisions/the-security-badge-could-not-go-red.md). All eleven steps in `security.yml` carried `continue-on-error: true`, so no scanner finding could fail the job and `README.md:51` rendered a badge for a workflow incapable of the outcome it names — while `docker-publish.yml:258` declined to scan on the grounds that security.yml does it. govulncheck loses the excuse: `make vuln` already runs it hard-failing at `ci.yml:88`, and `ci.yml` has no schedule, so the `0 2 * * *` cron here is the only thing that re-scans unchanged code against a database that moves daily. The other ten stay advisory by decision; `SEMGREP_APP_TOKEN` and `SNYK_TOKEN` are both set, so those steps do run — the earlier reading that they were unconfigured no-ops was wrong.
