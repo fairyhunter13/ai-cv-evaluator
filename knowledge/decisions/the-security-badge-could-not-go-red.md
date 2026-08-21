@@ -37,6 +37,14 @@ The step installs `govulncheck@latest` rather than a pin, deliberately. Pinning 
 make the verdict reproducible, because the vulnerability database is fetched at run time either way;
 the pin that mattered was `okfrules`, whose version decides a verdict on its own.
 
+# A red step reddens the badge and blocks nothing
+
+`deploy.yml`'s `pre-deploy-checks` job hard-`exit 1`s only on the Codecov coverage check; it reads
+this workflow through `print_workflow_status "Security Scans"` under the comment "Soft, non-blocking
+checks: log latest status for visibility". So making govulncheck strict changed what the badge can
+say and not what can ship. Turning it into a deployment gate is a separate decision with a different
+blast radius, and this one does not make it.
+
 # Why the other ten stay fail-open
 
 `SEMGREP_APP_TOKEN` and `SNYK_TOKEN` are both set, so those steps do run and do produce findings —
