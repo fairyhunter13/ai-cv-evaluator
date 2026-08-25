@@ -27,9 +27,9 @@ human running the command the README documents.
 
 # What a fix has to do
 
-Renaming the filter to the real test is not sufficient on its own. A target whose test selector can
-silently match nothing will do this again; the durable form asserts a non-zero test count, or drops
-`-run` and lets the build tag do the selecting.
+Renaming the filter to the real test is not sufficient on its own. A target whose test selector
+can silently match nothing will do this again. The durable form asserts a non-zero test count, or
+drops `-run` and lets the build tag do the selecting.
 
 # The same shape in the knowledge gate
 
@@ -41,9 +41,11 @@ tool is optional is not a gate, which is the same lesson as a selector that can 
 
 # And the version it installed was floating
 
-Making `okf` mandatory left one thing unfixed: `tools` installed it `@latest`, so the verdict
+Making `okf` mandatory left one thing unfixed. `tools` installed it `@latest`. So the verdict
 `lint-knowledge` reports could change between two runs of the same commit, decided by a push to a
-different repo. Pinned to `v0.1.0` 2026-08-17. The three failures on this page are one failure —
-a green that does not mean what a reader takes it to mean — reached by a missing test, a missing
-tool, and an unnamed version. The fourth instance is
+different repo. Pinned to `v0.1.0` 2026-08-17.
+
+The three failures on this page are one failure: a
+green that does not mean what a reader takes it to mean. It is reached by a missing test, a
+missing tool, and an unnamed version. The fourth instance is
 [the lint gate that had never run](../decisions/the-lint-gate-had-never-run.md).

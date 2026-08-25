@@ -12,7 +12,7 @@ generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 
 `PerformIntegratedEvaluation` runs four steps — CV match, project deliverables, refinement,
 validation. Each one's error arm returns `performFastPathEvaluation(...)`, a single-prompt
-evaluation with its own prompt text. A timeout in step 2 is therefore not a retry of step 2: it is
+evaluation with its own prompt text. A timeout in step 2 is therefore not a retry of step 2. It is
 a different scorer, reading different instructions, producing the score that gets stored.
 
 RAG is separately best-effort by design — a missing embedding or an unreachable Qdrant is swallowed
@@ -21,9 +21,10 @@ and the step proceeds prompt-only. That degradation is also invisible in the res
 # Why it is written down
 
 The fallback is defensible; the silence is the constraint. Two candidates submitted an hour apart
-can be scored by two structurally different prompt chains, with different RAG context, and the
-`results` row is byte-identical in shape. Any comparison across jobs — a ranking, a threshold, a
-regression check on prompt changes — assumes a fixed scorer that the code does not provide.
+can be scored by two structurally different prompt chains, with different RAG context. The
+`results` row is byte-identical in shape. Any comparison across jobs assumes a fixed scorer, and
+the code does not provide one. That covers a ranking, a threshold, and a regression check on
+prompt changes.
 
 # What has to hold for a fix
 

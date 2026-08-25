@@ -2,7 +2,7 @@
 type: Attested Computation
 resource: internal/adapter/queue/redpanda/integrated_evaluation_handler.go
 title: Candidate evaluation
-description: The scoring computation, its parameters, and the executor receipt it does not yet write - which is why no score in the results table can be attested.
+description: The scoring computation, its parameters, and the executor receipt it does not yet write. That missing receipt is why no score in the results table can be attested.
 tags: [scoring, attestation, provenance]
 status: draft
 runtime: go
@@ -28,7 +28,9 @@ The rubric the second call applies is [The project scoring rubric](../policies/p
 
 # Parameters
 
-These are the values that determine a score. All are fixed in code except the model, which rotates — which is why none of them is a `parameters` entry above: those are the typed holes a caller fills, and every value here is one the caller cannot reach.
+These are the values that determine a score. All are fixed in code except the model, which rotates
+— which is why none of them is a `parameters` entry above. Those are the typed holes a caller
+fills, and every value here is one the caller cannot reach.
 
 | Parameter | Value |
 |---|---|
@@ -44,7 +46,7 @@ These are the values that determine a score. All are fixed in code except the mo
 # Executor receipt
 
 `executor.receipt` above declares what a run must return. **Nothing returns it, and that is the
-point of this concept** — the declaration is what makes the gap a failing check instead of a
+point of this concept**. The declaration is what makes the gap a failing check instead of a
 paragraph. The `results` table stores `job_id`,
 `cv_match_rate`, `cv_feedback`, `project_score`, `project_feedback`, `overall_summary`,
 `created_at`. Nothing else is persisted with a score:
@@ -52,9 +54,9 @@ paragraph. The `results` table stores `job_id`,
 - not the model id, provider or account that produced it;
 - not the prompt version — `test/testdata/golden/prompt_system.txt` reads like a pinned prompt but
   is referenced by zero Go code, and the live prompts are inline literals;
-- not which path ran — the three-call chain, the
-  [fast path](../constraints/a-failed-step-changes-the-scorer.md), or the
-  [fabricated derivation](../defects/scores-are-fabricated-when-the-model-omits-them.md);
+- not which path ran — the three-call chain, the [fast
+  path](../constraints/a-failed-step-changes-the-scorer.md), or the [fabricated
+  derivation](../defects/scores-are-fabricated-when-the-model-omits-them.md);
 - not the temperature, max_tokens or attempt count actually used;
 - not a git sha or build version — `ldflags` are only `-s -w` and no `main.version` exists.
 
@@ -76,9 +78,9 @@ receipt is empty. That is the honest verdict. What it checks once the fields exi
 - the path taken is one of the three known ones, and a
   [derived](../defects/scores-are-fabricated-when-the-model-omits-them.md) score fails: it was
   never assessed;
-- the three text fields are non-empty and are not the `"No feedback provided"` /
-  `"No summary provided"` defaults.
+- the three text fields are non-empty and are not the `"No feedback provided"` / `"No summary
+  provided"` defaults.
 
 Every one of those needs a field the receipt does not carry yet. An evaluator that cannot attest
-its own scores is asking to be trusted on the same terms it refuses to extend to the candidates it
-grades, and the check is written now so that stays a red test rather than a paragraph.
+its own scores asks to be trusted on terms it refuses. It refuses those same terms to the
+candidates it grades. The check is written now so that stays a red test rather than a paragraph.

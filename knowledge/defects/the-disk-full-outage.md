@@ -38,7 +38,7 @@ because the filter was empty".
 # The rule
 
 A cleanup step that can do nothing must say so. Prefer a command with no interpolated field over a
-pipeline that computes what to delete, and where a computation is unavoidable, assert on the count
-it produced.
+pipeline that computes what to delete. Where a computation is unavoidable, assert on the count it
+produced.
 
 [^commit-da0eb09]: commit `da0eb09`, `fix: prevent disk-full outage with 5 permanent safeguards`.

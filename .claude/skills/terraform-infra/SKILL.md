@@ -1,6 +1,6 @@
 ---
 name: terraform-infra
-description: Manage ai-cv-evaluator infrastructure with Terraform (Cloudflare DNS, VPS provisioning)
+description: Use when ai-cv-evaluator infrastructure must change through Terraform, such as a Cloudflare DNS record or the VPS provisioning. Never change one of those by hand instead.
 ---
 
 # Terraform Infrastructure Management
@@ -86,7 +86,8 @@ terraform apply -var="server_ip=43.157.225.155" -var="ssh_user=ubuntu" -var="ssh
 
 ## Secrets Management
 
-- **SOPS encryption**: Secrets encrypted with AGE key `age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u`
+- **SOPS encryption**: Secrets encrypted with AGE key
+  `age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u`
 - **Decrypt**: `sops -d secrets/env.production.sops.yaml`
 - **Edit**: `sops secrets/env.production.sops.yaml`
 - **Config**: `.sops.yaml` defines which files use which keys
@@ -95,5 +96,7 @@ terraform apply -var="server_ip=43.157.225.155" -var="ssh_user=ubuntu" -var="ssh
 
 - **Never commit terraform.tfvars** — contains API tokens (already in .gitignore)
 - **Terraform state**: Stored locally. Consider Terraform Cloud for team use.
-- **fail2ban on VPS**: maxretry=3, findtime=600s, bantime=3600s. If banned, wait 1 hour or ask someone with console access to unban.
-- **SOPS AGE key**: Must have the AGE private key in `$SOPS_AGE_KEY_FILE` or `~/.sops/age/keys.txt` to decrypt.
+- **fail2ban on VPS**: maxretry=3, findtime=600s, bantime=3600s. If banned, wait 1 hour or ask
+  someone with console access to unban.
+- **SOPS AGE key**: Must have the AGE private key in `$SOPS_AGE_KEY_FILE` or
+  `~/.sops/age/keys.txt` to decrypt.

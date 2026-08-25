@@ -68,7 +68,7 @@ terraform/
 terraform plan
 ```
 
-This will show:
+- This will show:
 - **+** Resources to be created (auth.example.com)
 - **~** Resources to be modified
 - **-** Resources to be destroyed (if any)
@@ -130,7 +130,8 @@ terraform destroy
 
 ## Security Notes
 
-- **Never commit `terraform.tfvars`** (contains API token) - already in `.gitignore`
+- **Never commit `terraform.tfvars`** (contains API token)
+- already in `.gitignore`
 - Store Terraform state securely (consider Terraform Cloud for team collaboration)
 - Use least-privilege API tokens (Zone:DNS:Edit only, scoped to specific zone)
 

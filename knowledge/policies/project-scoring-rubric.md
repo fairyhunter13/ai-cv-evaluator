@@ -20,9 +20,9 @@ generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 
 # Why this is filed as knowledge and not left in the code
 
-This is the product's scoring policy — what the service is *for* — and it exists in exactly one
-place: a concatenated string literal in `generateProjectEvaluationPrompt`, repeated a second time
-inside the same literal as a JSON output template. Changing a weight means editing prose in two
+This is the product's scoring policy, which is what the service is *for*. It exists in exactly one
+place: a concatenated string literal in `generateProjectEvaluationPrompt`. That literal repeats it
+a second time as a JSON output template. Changing a weight means editing prose in two
 halves of one Go string, and nothing compares them.
 
 A second rubric arrives at runtime as the `scoringRubric` argument (RAG top-2 from the Qdrant

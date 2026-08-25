@@ -12,8 +12,8 @@ generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
 
 When the LLM response carries no `cv_match_rate` or `project_score`, the handler computes one:
 
-- `calculateCVMatchRateFromAnalysis` — `len(technical_skills)/10`, else `experience_years/5`, else a
-  `project_complexity` word mapped to `0.9`/`0.7`/`0.5`/`0.6`.
+- `calculateCVMatchRateFromAnalysis` — `len(technical_skills)/10`, else `experience_years/5`, else
+  a `project_complexity` word mapped to `0.9`/`0.7`/`0.5`/`0.6`.
 - `calculateProjectScoreFromAnalysis` — `len(technologies)/5*10`, else the same complexity words
   mapped to `9`/`7`/`5`/`6`.
 
@@ -22,9 +22,9 @@ parameters are correctness, code quality, resilience, documentation and creativi
 
 # Why it matters more than a wrong number
 
-The fabricated value is written to `results` through the same path as a model-produced one, and the
-row has no column that distinguishes them — see
-[Candidate evaluation](../computations/candidate-evaluation.md). A caller reading
+The fabricated value is written to `results` through the same path as a model-produced one. The
+row has no column that distinguishes them — see [Candidate
+evaluation](../computations/candidate-evaluation.md). A caller reading
 `project_score: 8` cannot tell whether a reviewer model assessed the project or whether the
 candidate listed four technologies.
 

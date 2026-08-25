@@ -1,6 +1,6 @@
 ---
 name: production-diagnostics
-description: Diagnose ai-cv-evaluator production issues - health checks, Cloudflare, Docker, SSL
+description: Use when ai-cv-evaluator production is down, slow or returning errors, and you must find out why. Walks the health check, Cloudflare, Docker and SSL layers in order.
 ---
 
 # Production Diagnostics

@@ -5,6 +5,19 @@ title: ai-cv-evaluator knowledge history
 
 # Bundle history
 
+## 2026-08-25
+
+- **Update**: the hand-written prose in this bundle is rewritten toward plainer sentences. The
+  pass targets the three rules the fleet gate refuses on: one-idea imperatives, a 25-word cap on
+  other sentences, and a 6-sentence cap on a paragraph. Nineteen sentences were split, and six
+  index glosses were resynced into the concepts they name. No fact, object, qualifier or hedge was
+  dropped. Measured with `ccw ste report` over the tracked files, corpus `43a5cef8d234c3fe` before
+  and `955ff3ac19f43d10` after, dictionary
+  `49c777026741bf0473a201bf194c08bed3d6a6d92d85d3a0c0e50bb2500ba7ed`. The refusing count falls
+  from 81 to 40, and all 40 that remain sit in files outside the read-often set. This is a
+  readability pass. It is not a claim of conformance to ASD-STE100, whose approved dictionary is
+  not redistributable.
+
 ## 2026-08-22
 
 - **Update**: [the security badge could not go red](decisions/the-security-badge-could-not-go-red.md) records what the strict govulncheck step does **not** buy. `deploy.yml`'s `security-gate` job blocks on CI, Docker Publish and Codecov, and reads this workflow through `print_workflow_status "Security Scans"` under the comment "Soft, non-blocking checks", a function that returns 0 whether the run is missing, red or green — so a red scan now reddens the badge and blocks no deployment. (An earlier draft of this entry named the job `pre-deploy-checks` and said it exits only on Codecov; both were wrong, and the concept carries the corrected reading.) Also corrected: an audit of yesterday's commit found its closing line, "the six archive/* tags stay", is wrong — this repository has two, and seven exist across five repositories in the fleet. The count reached no concept, and a commit message is not worth a history rewrite to fix, which is the same trade this fleet just declined at a thousand times the scale.

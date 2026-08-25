@@ -1,6 +1,7 @@
 # AI Real Adapter - Backoff Configuration
 
-This document explains the backoff configuration system implemented for the AI real adapter to address the issue of unit tests using production-grade retry logic with 90-second timeouts.
+The AI real adapter has a backoff configuration system. It exists because unit tests used
+production-grade retry logic with 90-second timeouts.
 
 ## Problem
 
@@ -29,7 +30,7 @@ AI_BACKOFF_MULTIPLIER=1.5            # Exponential backoff multiplier
 
 #### Test Environment Defaults
 
-When `APP_ENV=test`, the system automatically uses:
+- When `APP_ENV=test`, the system automatically uses:
 - Max Elapsed Time: 5 seconds
 - Initial Interval: 100ms
 - Max Interval: 1 second

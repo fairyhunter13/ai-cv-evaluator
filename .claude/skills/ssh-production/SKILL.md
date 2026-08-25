@@ -1,6 +1,6 @@
 ---
 name: ssh-production
-description: Connect to ai-cv-evaluator production server via SSH and run diagnostics
+description: Use when a diagnosis needs a shell on the ai-cv-evaluator production server. Holds the SSH connection details and the on-host checks.
 ---
 
 # SSH Production Server
@@ -66,6 +66,9 @@ ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa ubuntu@43.157.225.155 "cd ~/ai-cv-eva
 
 ## Gotchas
 
-- **fail2ban**: Server has fail2ban with maxretry=3, bantime=3600s. Always use `-o IdentitiesOnly=yes -i ~/.ssh/id_rsa` to avoid trying multiple keys which triggers the ban.
-- **Blue/Green deploy**: Active backend color is in `~/ai-cv-evaluator/.active_color`. Check which is active before restarting.
-- **SOPS encryption**: Authelia configs and env files are SOPS-encrypted in the repo. On the server they're already decrypted.
+- **fail2ban**: Server has fail2ban with maxretry=3, bantime=3600s. Always use `-o
+  IdentitiesOnly=yes -i ~/.ssh/id_rsa` to avoid trying multiple keys which triggers the ban.
+- **Blue/Green deploy**: Active backend color is in `~/ai-cv-evaluator/.active_color`. Check which
+  is active before restarting.
+- **SOPS encryption**: Authelia configs and env files are SOPS-encrypted in the repo. On the
+  server they're already decrypted.

@@ -2,7 +2,7 @@
 type: Decision
 resource: docker-compose.prod.yml
 title: Observability was deprecated in production, and the docs still advertise it
-description: In June 2026 the observability stack moved behind a compose profile and trace export was removed, but README and docs/observability.md still publish live Grafana, Prometheus and Jaeger URLs.
+description: In June 2026 the observability stack moved behind a compose profile and trace export was removed. But README and docs/observability.md still publish live Grafana, Prometheus and Jaeger URLs.
 tags: [observability, deployment, stale-docs]
 status: stable
 generated: {by: claude/opus-5, at: 2026-08-17T00:00:00Z}
@@ -18,11 +18,10 @@ sources:
 # What changed
 
 Over 2026-06-12 the observability services were put behind a compose `profiles: ["observability"]`
-gate, dropped from the deploy path, and trace export was switched off because the collector was
-gone [^observability-teardown]. The driver was the same one behind
-[Container limits are sized to a 1.9 GB server](../constraints/container-limits-fit-a-1-9gb-server.md):
-Prometheus, Grafana, Loki, Jaeger, OTEL, Promtail and cAdvisor together are most of a budget the
-host does not have.
+gate, dropped from the deploy path. Trace export was switched off because the collector was gone
+[^observability-teardown]. The driver was the same one behind [Container limits are sized to
+a 1.9 GB server](../constraints/container-limits-fit-a-1-9gb-server.md). Prometheus, Grafana,
+Loki, Jaeger, OTEL, Promtail and cAdvisor together are most of a budget the host does not have.
 
 # The consequence that outlived the change
 
@@ -31,9 +30,9 @@ Prometheus and Jaeger endpoints. Someone debugging a production incident would h
 found nothing, and not known whether the stack was down or was never there.
 
 Both now say the stack is profile-gated and not deployed, and the four production URLs are gone.
-The runbook itself was kept, not deleted: the dashboards, alert rules and compose services all still
-exist and still run under `--profile observability`, so the content was accurate — only its claim
-about where it was reachable was not.
+The runbook itself was kept, not deleted. The dashboards, alert rules and compose services all
+still exist and still run under `--profile observability`, so the content was accurate. Only its
+claim about where it was reachable was not.
 
 This is also why `slog` output is not a substitute for a stored receipt — see
 [Candidate evaluation](../computations/candidate-evaluation.md). The reasoning that made logs

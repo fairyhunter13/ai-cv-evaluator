@@ -29,7 +29,7 @@ A button component with built-in loading state.
 - `size`: 'sm' | 'md' | 'lg' (default: 'md')
 - `fullWidth`: boolean (default: false)
 
-**Events:**
+- **Events:**
 - `click`: Emitted when button is clicked
 
 **Usage:**
@@ -47,7 +47,7 @@ A button component with built-in loading state.
 ### LoadingCard
 A card component with loading spinner for content areas.
 
-**Props:**
+- **Props:**
 - `text`: string (default: 'Loading...')
 
 **Usage:**
@@ -58,7 +58,7 @@ A card component with loading spinner for content areas.
 ### LoadingTable
 A table component with loading state for data tables.
 
-**Props:**
+- **Props:**
 - `title`: string (default: 'Loading')
 - `subtitle`: string (default: 'Please wait...')
 - `text`: string (default: 'Loading data...')
@@ -126,7 +126,7 @@ All async operations in the admin-frontend now have comprehensive loading states
 
 ## Accessibility
 
-All loading components include:
+- All loading components include:
 - Proper ARIA labels
 - Screen reader friendly text
 - Keyboard navigation support

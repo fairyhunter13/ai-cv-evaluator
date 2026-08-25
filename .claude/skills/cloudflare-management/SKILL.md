@@ -1,6 +1,6 @@
 ---
 name: cloudflare-management
-description: Manage Cloudflare DNS and security settings for example.com
+description: Use when a DNS record, a proxy setting or a security setting must change on example.com, or when you must read the current one. Talks to the Cloudflare API.
 ---
 
 # Cloudflare Management
@@ -93,7 +93,12 @@ curl -sS https://example.com/cdn-cgi/trace
 
 ## Gotchas
 
-- **Token permissions**: The token in `.env.production` needs Zone:DNS:Edit AND Zone:Settings:Edit for full management. If security settings return 9109 Unauthorized, the token needs to be updated in Cloudflare dashboard.
-- **Super Bot Fight Mode**: Only configurable via Cloudflare dashboard (not API) on free plans. If JS challenges are injected, check Security > Bots in dashboard.
-- **Proxied records**: All A records should be proxied=true for Cloudflare protection. Direct origin IP is 43.157.225.155.
-- **Subdomains**: example.com, auth.example.com, dashboard.example.com, keycloak.example.com
+- **Token permissions**: The token in `.env.production` needs Zone:DNS:Edit AND Zone:Settings:Edit
+  for full management. If security settings return 9109 Unauthorized, the token needs to be
+  updated in Cloudflare dashboard.
+- **Super Bot Fight Mode**: Only configurable via Cloudflare dashboard (not API) on free plans. If
+  JS challenges are injected, check Security > Bots in dashboard.
+- **Proxied records**: All A records should be proxied=true for Cloudflare protection. Direct
+  origin IP is 43.157.225.155.
+- **Subdomains**: example.com, auth.example.com,
+  dashboard.example.com, keycloak.example.com

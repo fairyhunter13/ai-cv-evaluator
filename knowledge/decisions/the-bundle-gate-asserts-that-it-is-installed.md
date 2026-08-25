@@ -2,7 +2,7 @@
 type: Decision
 resource: internal/knowledgegate/gate_test.go
 title: The bundle gate asserts that it is installed, not only that the bundle passes
-description: Five arms fail when lint-knowledge stops passing -Werror, when the CI step that reaches it is excused, when the pre-commit hook is non-executable in the index, when the okf install loses its pin, or when the checker accepts everything.
+description: Five arms fail. Two are lint-knowledge dropping -Werror, and the CI step reaching it being excused. Two more are the pre-commit hook non-executable in the index, and the okf install losing its pin. The fifth is a checker that accepts everything.
 tags: [okf, knowledge, gates, ci, makefile]
 status: stable
 generated: { by: claude/opus-5, at: 2026-08-20T21:00:00Z }

@@ -2,7 +2,7 @@
 type: Decision
 resource: .githooks/pre-push
 title: The push gate has no escape hatch the commit gate has
-description: pre-commit reaches the checker only through make lint-all, exits 0 when make is absent and is skipped outright by SKIP_PRE_COMMIT_LINT=1 — the right shape for a fast local loop and the wrong shape for a gate, so pre-push calls the checker directly.
+description: pre-commit reaches the checker only through make lint-all, exits 0 when make is absent and is skipped outright by SKIP_PRE_COMMIT_LINT=1. The right shape for a fast local loop and the wrong shape for a gate, so pre-push calls the checker directly.
 tags: [okf, knowledge, gate, hooks, make]
 generated:
   by: claude/opus-5
@@ -23,8 +23,8 @@ when a tool is missing. `git push --no-verify` is the only way past it.
 - it prints `make not found; skipping lint-all` and **exits 0** when `make` is absent;
 - it honours `SKIP_PRE_COMMIT_LINT=1`.
 
-All three are correct for what that hook is — a fast local loop over backend, frontend, infra,
-docs and knowledge at once, which has to stay skippable. None of them is correct for a gate. A
+All three are correct for what that hook is. A fast local loop over backend, frontend, infra, docs
+and knowledge at once, which has to stay skippable. None of them is correct for a gate. A
 commit gate whose two outcomes are "pass" and "skipped, exit 0" measures the machine it ran on.
 
 The make path stays. This is a second arm at a later moment, not a replacement.
@@ -39,8 +39,9 @@ has not run `make tools`.
 # Why the hook asserts things about itself
 
 `internal/knowledgegate/gate_test.go` asserts `.githooks/pre-push` is tracked and mode `100755` in
-the *index* — one chmod -x'd there is planted non-executable in every future clone and git skips it
-without printing anything — and that its executable lines carry none of the three escapes above.
-The hook's own refusal probe covers the rest: it feeds the checker a concept with no `type` key
-and blocks if that is accepted, which was verified by pointing `bin/okfrules` at a stub that exits
+the *index*. A hook chmod -x'd there is planted non-executable in every future clone, and git
+skips it without printing anything. The test also asserts that its executable lines carry none of
+the three escapes above.
+The hook's own refusal probe covers the rest. It feeds the checker a concept with no `type` key,
+and blocks if that is accepted. That was verified by pointing `bin/okfrules` at a stub that exits
 0 on everything.

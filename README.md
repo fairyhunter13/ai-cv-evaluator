@@ -15,7 +15,7 @@ Backend service that ingests a candidate CV + project report, evaluates against 
 ### Observability Stack — not deployed
 
 Grafana, Prometheus, Loki, Jaeger, OTEL, Promtail, cAdvisor and Mailpit sit behind a compose
-`profiles: ["observability"]` gate and are **not started by a production deploy** — they do not fit
+`profiles: ["observability"]` gate and are **not started by a production deploy**. They do not fit
 the host's memory budget. The production URLs these dashboards would live at return nothing today.
 See [Observability was deprecated in production](knowledge/decisions/observability-was-deprecated-in-production.md).
 
@@ -25,7 +25,8 @@ Provider Metrics (p50/p95/p99/max latency, token usage, request rates), Request 
 
 ### AI Metrics Features
 
-- **Token Counting**: Accurate LLM token counting using `tiktoken-go` (Go port of OpenAI's tiktoken)
+- **Token Counting**: Accurate LLM token counting using `tiktoken-go` (Go port of OpenAI's
+  tiktoken)
 - **Latency Percentiles**: p50, p95, p99, and max latency tracking for AI provider calls
 - **Provider Metrics**: Request rates and response times by provider (Groq, OpenRouter, OpenAI)
 - **Prometheus Metrics**: `ai_tokens_total`, `ai_requests_total`, `ai_request_duration_seconds`
@@ -43,19 +44,14 @@ Provider Metrics (p50/p95/p99/max latency, token usage, request rates), Request 
 
 - **CI (unit tests, 80% coverage gate, dev Playwright)**
   [![CI](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/ci.yml)
-
 - **Coverage (Codecov)**
   [![codecov](https://codecov.io/gh/fairyhunter13/ai-cv-evaluator/branch/main/graph/badge.svg)](https://codecov.io/gh/fairyhunter13/ai-cv-evaluator)
-
-- **Security Scans**
-  [![Security Scans](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml)
-
-- **Docker Publish**
-  [![Docker Publish](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/docker-publish.yml)
-
-- **Secrets Healthcheck**
-  [![Secrets Healthcheck](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/secrets-healthcheck.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/secrets-healthcheck.yml)
-
+- **Security Scans** [![Security
+  Scans](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/security.yml)
+- **Docker Publish** [![Docker
+  Publish](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/docker-publish.yml)
+- **Secrets Healthcheck** [![Secrets
+  Healthcheck](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/secrets-healthcheck.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/secrets-healthcheck.yml)
 - **Deploy (strict semantic versioning required)**
   [![Deploy](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/deploy.yml/badge.svg)](https://github.com/fairyhunter13/ai-cv-evaluator/actions/workflows/deploy.yml)
 
@@ -180,7 +176,8 @@ This repository uses SOPS (with age) to encrypt sensitive files so they can be c
   - `secrets/project.md.sops` and `secrets/project.md.enc` – encrypted study case project brief
   - `secrets/rfc/**.sops` – encrypted RFC submission markdowns
   - `secrets/cv/**.sops` – encrypted CV files (optimized + original)
-- Plaintext counterparts such as `.env`, `.env.production`, and `submissions/**` (CVs, RFCs, project.md) are **gitignored** and should not be committed.
+- Plaintext counterparts such as `.env`, `.env.production`, and `submissions/**` (CVs, RFCs,
+  project.md) are **gitignored** and should not be committed.
 
 ### Local prerequisites
 - Install `sops` and `age`.
@@ -280,10 +277,15 @@ Environment variables (see `.env.sample`):
 	- Queue / AI safety: `CONSUMER_MAX_CONCURRENCY` (defaults to 1), `OPENROUTER_MIN_INTERVAL` (defaults to 5s) for free-tier-friendly throughput
 - Frontend: `FRONTEND_SEPARATED` (enables API-only mode)
 
-Notes:
-- Groq chat uses an internal curated list of models (for example, `llama-3.1-8b-instant`, `llama-3.3-70b-versatile`). Groq model selection and fallback are automatic and not configurable via environment variables.
-- OpenRouter chat uses free models discovered from the OpenRouter API; there is no fixed chat model environment variable.
-- Embeddings are performed via OpenAI; set `OPENAI_API_KEY` and `EMBEDDINGS_MODEL` (default `text-embedding-3-small`). If `OPENAI_API_KEY` is not set, embeddings and RAG are skipped.
-- E2E tests run against live providers (no stub/mock). Ensure `OPENROUTER_API_KEY` (and `OPENAI_API_KEY` for RAG) are present before running E2E.
+- Notes:
+- Groq chat uses an internal curated list of models (for example, `llama-3.1-8b-instant`,
+  `llama-3.3-70b-versatile`). Groq model selection and fallback are automatic and not configurable
+  via environment variables.
+- OpenRouter chat uses free models discovered from the OpenRouter API; there is no fixed chat
+  model environment variable.
+- Embeddings are performed via OpenAI; set `OPENAI_API_KEY` and `EMBEDDINGS_MODEL` (default
+  `text-embedding-3-small`). If `OPENAI_API_KEY` is not set, embeddings and RAG are skipped.
+- E2E tests run against live providers (no stub/mock). Ensure `OPENROUTER_API_KEY` (and
+  `OPENAI_API_KEY` for RAG) are present before running E2E.
 - Frontend separation: Set `FRONTEND_SEPARATED=true` to enable API-only backend mode.
 
