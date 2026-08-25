@@ -5,6 +5,10 @@ description: Use when ai-cv-evaluator infrastructure must change through Terrafo
 
 # Terraform Infrastructure Management
 
+The host facts, the DNS table and the service list are in
+[../references/production-inventory.md](../references/production-inventory.md). Bind `ORIGIN` and
+`SSH` from it before the first command.
+
 ## Directory Structure
 
 ```
@@ -31,7 +35,7 @@ Edit `terraform.tfvars`:
 
 ```hcl
 cloudflare_api_token = "<from .env.production CLOUDFLARE_API_TOKEN>"
-server_ip            = "43.157.225.155"
+server_ip            = "<$ORIGIN>"
 domain_name          = "example.com"
 ```
 
@@ -48,11 +52,7 @@ terraform destroy       # Remove all managed DNS records (DANGEROUS)
 
 ### Managed DNS Records
 
-| Subdomain   | Type | Target         | Purpose          |
-| ----------- | ---- | -------------- | ---------------- |
-| `@` (root)  | A    | 43.157.225.155 | Main application |
-| `dashboard` | A    | 43.157.225.155 | Admin dashboard  |
-| `auth`      | A    | 43.157.225.155 | Authelia SSO     |
+The table is in the inventory.
 
 ## VPS Provisioning
 
@@ -65,7 +65,7 @@ cd terraform/vps
 Variables (via `-var` or `terraform.tfvars`):
 
 ```hcl
-server_ip       = "43.157.225.155"
+server_ip       = "<$ORIGIN>"
 ssh_user        = "ubuntu"
 ssh_private_key = file("~/.ssh/id_rsa")
 ```
@@ -80,8 +80,8 @@ ssh_private_key = file("~/.ssh/id_rsa")
 ```bash
 cd terraform/vps
 terraform init
-terraform plan -var="server_ip=43.157.225.155" -var="ssh_user=ubuntu" -var="ssh_private_key=$(cat ~/.ssh/id_rsa)"
-terraform apply -var="server_ip=43.157.225.155" -var="ssh_user=ubuntu" -var="ssh_private_key=$(cat ~/.ssh/id_rsa)"
+terraform plan -var="server_ip=$ORIGIN" -var="ssh_user=ubuntu" -var="ssh_private_key=$(cat ~/.ssh/id_rsa)"
+terraform apply -var="server_ip=$ORIGIN" -var="ssh_user=ubuntu" -var="ssh_private_key=$(cat ~/.ssh/id_rsa)"
 ```
 
 ## Secrets Management

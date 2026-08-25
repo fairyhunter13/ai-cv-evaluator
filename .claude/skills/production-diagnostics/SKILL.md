@@ -5,20 +5,24 @@ description: Use when ai-cv-evaluator production is down, slow or returning erro
 
 # Production Diagnostics
 
+The host facts, the DNS table and the service list are in
+[../references/production-inventory.md](../references/production-inventory.md). Bind `ORIGIN` and
+`SSH` from it before the first command.
+
 ## Quick Triage (no SSH needed)
 
 ### 1. Check backend health
 
 ```bash
 # Direct to origin (fast, bypasses Cloudflare)
-curl -sS -k https://43.157.225.155/healthz -H "Host: example.com"
-curl -sS -k https://43.157.225.155/readyz -H "Host: example.com"
+curl -sS -k https://$ORIGIN/healthz -H "Host: example.com"
+curl -sS -k https://$ORIGIN/readyz -H "Host: example.com"
 ```
 
 ### 2. Check Authelia (SSO)
 
 ```bash
-curl -sS -k https://43.157.225.155/api/health -H "Host: auth.example.com"
+curl -sS -k https://$ORIGIN/api/health -H "Host: auth.example.com"
 ```
 
 ### 3. Measure Cloudflare latency
@@ -28,7 +32,7 @@ curl -sS -k https://43.157.225.155/api/health -H "Host: auth.example.com"
 curl -sS -w "TTFB: %{time_starttransfer}s Total: %{time_total}s\n" -o /dev/null https://example.com/healthz
 
 # Direct (should be <200ms)
-curl -sS -k -w "TTFB: %{time_starttransfer}s Total: %{time_total}s\n" -o /dev/null https://43.157.225.155/healthz -H "Host: example.com"
+curl -sS -k -w "TTFB: %{time_starttransfer}s Total: %{time_total}s\n" -o /dev/null https://$ORIGIN/healthz -H "Host: example.com"
 ```
 
 ### 4. Test full redirect chain
@@ -41,13 +45,13 @@ curl -sS -L -w "Redirects: %{num_redirects} Total: %{time_total}s HTTP: %{http_c
 
 ```bash
 # Authelia JS bundle (~569KB) - if this fails, login page is blank
-curl -sS -k -o /dev/null -w "HTTP: %{http_code} Size: %{size_download}\n" https://43.157.225.155/static/js/index.CHT8JlKb.js -H "Host: auth.example.com"
+curl -sS -k -o /dev/null -w "HTTP: %{http_code} Size: %{size_download}\n" https://$ORIGIN/static/js/index.CHT8JlKb.js -H "Host: auth.example.com"
 ```
 
 ### 6. Check SSL certificate
 
 ```bash
-echo | openssl s_client -connect 43.157.225.155:443 -servername example.com 2>/dev/null | openssl x509 -noout -dates
+echo | openssl s_client -connect $ORIGIN:443 -servername example.com 2>/dev/null | openssl x509 -noout -dates
 ```
 
 ## SSH Diagnostics (when needed)
@@ -55,8 +59,6 @@ echo | openssl s_client -connect 43.157.225.155:443 -servername example.com 2>/d
 See skill: `ssh-production` for connection details.
 
 ```bash
-SSH="ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa ubuntu@43.157.225.155"
-
 # Disk space (most common issue)
 $SSH "df -h && docker system df"
 

@@ -5,6 +5,10 @@ description: Use when a DNS record, a proxy setting or a security setting must c
 
 # Cloudflare Management
 
+The host facts, the DNS table and the service list are in
+[../references/production-inventory.md](../references/production-inventory.md). Bind `ORIGIN` and
+`SSH` from it before the first command.
+
 ## Credentials
 
 - **API Token**: stored in `.env.production` as `CLOUDFLARE_API_TOKEN`
@@ -43,7 +47,7 @@ curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
 curl -sS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   -H "Content-Type: application/json" \
   "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
-  -d '{"type":"A","name":"subdomain","content":"43.157.225.155","proxied":true}'
+  -d '{"type":"A","name":"subdomain","content":"'"$ORIGIN"'","proxied":true}'
 ```
 
 ## Security Settings
@@ -85,7 +89,7 @@ curl -sS -X PATCH -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
 curl -sS -w "\nTTFB: %{time_starttransfer}s\n" https://example.com/healthz
 
 # Direct to origin (bypass Cloudflare)
-curl -sS -k -w "\nTTFB: %{time_starttransfer}s\n" https://43.157.225.155/healthz -H "Host: example.com"
+curl -sS -k -w "\nTTFB: %{time_starttransfer}s\n" https://$ORIGIN/healthz -H "Host: example.com"
 
 # Cloudflare trace
 curl -sS https://example.com/cdn-cgi/trace
@@ -98,7 +102,5 @@ curl -sS https://example.com/cdn-cgi/trace
   updated in Cloudflare dashboard.
 - **Super Bot Fight Mode**: Only configurable via Cloudflare dashboard (not API) on free plans. If
   JS challenges are injected, check Security > Bots in dashboard.
-- **Proxied records**: All A records should be proxied=true for Cloudflare protection. Direct
-  origin IP is 43.157.225.155.
-- **Subdomains**: example.com, auth.example.com,
-  dashboard.example.com, keycloak.example.com
+- **Proxied records**: every A record stays `proxied=true`. The origin IP and the subdomain list
+  are in the inventory.
