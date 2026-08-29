@@ -5,10 +5,7 @@
   behind a compose profile and trace export was removed. But README and docs/observability.md
   still publish live Grafana, Prometheus and Jaeger URLs.
 * [The bundle gate asserts that it is installed, not only that the bundle
-  passes](the-bundle-gate-asserts-that-it-is-installed.md) - Five arms fail. Two are
-  lint-knowledge dropping -Werror, and the CI step reaching it being excused. Two more are the
-  pre-commit hook non-executable in the index, and the okf install losing its pin. The fifth is a
-  checker that accepts everything.
+  passes](the-bundle-gate-asserts-that-it-is-installed.md) - Four arms fail. Two are lint-knowledge dropping -Werror, and the CI step reaching it being excused. The third is the okf install losing its pin, and the fourth is a checker that accepts everything. A fifth arm graded the pre-commit hook, which was deleted on 2026-08-29.
 * [The lint gate had never run](the-lint-gate-had-never-run.md) - A v2 version key sat over v1
   directives, and a pinned binary was installed and then not invoked. So golangci-lint never
   executed on this module until 2026-08-15.

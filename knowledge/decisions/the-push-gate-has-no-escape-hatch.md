@@ -27,7 +27,10 @@ All three are correct for what that hook is. A fast local loop over backend, fro
 and knowledge at once, which has to stay skippable. None of them is correct for a gate. A
 commit gate whose two outcomes are "pass" and "skipped, exit 0" measures the machine it ran on.
 
-The make path stays. This is a second arm at a later moment, not a replacement.
+The make path stays, in `make lint-all` and in CI. `.githooks/pre-commit` does not: the six-rule
+ruling of 2026-08-29 deleted it fleet-wide, and this hook became the only one. That does not change
+the argument above. It closes it. The commit gate whose two outcomes were "pass" and "skipped,
+exit 0" is gone, rather than standing beside a gate that has no way out.
 
 # Why it prefers bin/okfrules
 

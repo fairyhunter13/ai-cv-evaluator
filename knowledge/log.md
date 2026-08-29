@@ -64,3 +64,5 @@ title: ai-cv-evaluator knowledge history
   service does not write. It carries no `executor.receipt` and no `attester.resource`; both are
   what a fix would add. The concept exists to say, in one place, that no score in `results` can be
   attested — the four score-provenance concepts hang off it.
+
+- **Update**: `.githooks/pre-commit` is deleted, and with it the arm in `internal/knowledgegate` that graded its index mode. Hafiz ruled on 2026-08-29 that six rules keep a mechanism across the fleet and every other gate goes. This hook was already the weaker of the two: it reached the checker through `make lint-all`, exited 0 when `make` was absent, and honoured `SKIP_PRE_COMMIT_LINT=1`. `.githooks/pre-push` calls the checker directly and has none of those ways out, so nothing local was lost that was not already skippable. `make lint-all` still runs in CI and by hand. Two concepts and `CLAUDE.md` were rewritten in the same commit, and the four surviving `knowledgegate` arms pass.

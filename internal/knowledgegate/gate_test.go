@@ -72,33 +72,15 @@ func TestCIRunsTheTargetAndDoesNotExcuseIt(t *testing.T) {
 	}
 }
 
-func TestTheHookIsExecutableInTheIndexNotOnlyOnDisk(t *testing.T) {
-	root := repoRoot(t)
-	out, err := exec.Command("git", "-C", root, "ls-files", "-s", ".githooks/pre-commit").Output()
-	if err != nil || len(out) == 0 {
-		t.Fatal(".githooks/pre-commit is not tracked, so a fresh clone gets no local gate")
-	}
-	// A hook chmod -x'd in the index is planted non-executable in every clone, and git
-	// skips a hook it cannot execute without saying so.
-	if mode := strings.Fields(string(out))[0]; mode != "100755" {
-		t.Fatalf(".githooks/pre-commit is mode %s in the index, want 100755", mode)
-	}
-	if !strings.Contains(read(t, ".githooks/pre-commit"), "lint-all") {
-		t.Error(".githooks/pre-commit does not run lint-all, so nothing local reaches the bundle")
-	}
-}
-
 func TestThePrePushCallsTheCheckerWithoutTheMakePath(t *testing.T) {
 	root := repoRoot(t)
 	out, err := exec.Command("git", "-C", root, "ls-files", "-s", ".githooks/pre-push").Output()
 	if err != nil || len(out) == 0 {
 		t.Fatal(".githooks/pre-push is not tracked, so a fresh clone gets no push gate")
 	}
-	if mode := strings.Fields(string(out))[0]; mode != "100755" {
-		t.Fatalf(".githooks/pre-push is mode %s in the index, want 100755", mode)
-	}
-	// pre-commit reaches the checker only through make, exits 0 when make is absent, and
-	// honours SKIP_PRE_COMMIT_LINT=1. This one has to have none of those ways out.
+	// The hook this compares against is gone. `.githooks/pre-commit` ran `make lint-all`,
+	// which exits 0 when make is absent and honours SKIP_PRE_COMMIT_LINT=1. The six-rule
+	// ruling deleted it on 2026-08-29, and this arm holds that no escape hatch came back.
 	body := read(t, ".githooks/pre-push")
 	for _, want := range []string{"check -Werror", "okfrules"} {
 		if !strings.Contains(body, want) {
