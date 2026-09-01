@@ -21,7 +21,7 @@ if [[ -d "$REPO_ROOT/knowledge" ]]; then
   fi
   if [ -z "$OKF" ] || [ ! -x "$OKF" ]; then
     echo "[pre-push] ✗ okfrules is in neither bin/ nor PATH — knowledge/ cannot be checked"
-    echo "[pre-push]   make tools    # or: go install github.com/fairyhunter13/okf/cmd/okfrules@v0.6.0"
+    echo "[pre-push]   make tools    # or: go install github.com/fairyhunter13/okf/cmd/okfrules@v0.6.1"
     exit 1
   fi
   # -Werror, matching lint-knowledge: a broken link is a *warning*, which plain check prints

@@ -5,6 +5,10 @@ title: ai-cv-evaluator knowledge history
 
 # Bundle history
 
+## 2026-09-01
+
+- **Update**: the checker pin moves to okf `v0.6.1`. No rule changed tier and none changed behaviour: the tag exists because `@v0.6.0` installs a `README.md` denying its own `knowledge/` and a decision record contradicting the `rules/rules.go` it names as its `resource` — the two files a consumer reads to learn what the checker does. The gate's verdict on this bundle is unchanged. The move was read red first: the pin arm was run against the old literal and failed on it, so the test grades the number rather than passing either way.
+
 ## 2026-08-25
 
 - **Update**: the hand-written prose in this bundle is rewritten toward plainer sentences. The
