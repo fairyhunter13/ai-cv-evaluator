@@ -2,12 +2,12 @@ creation_rules:
   - path_regex: deploy/authelia/.*\.(yaml|yml|key)
     key_groups:
       - age:
-        - "age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u"
+        - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"
   - path_regex: secrets/.*\.sops\.yaml
     key_groups:
       - age:
-        - "age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u"
+        - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"
   - path_regex: secrets/cv/.*\.sops
     key_groups:
       - age:
-        - "age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u"
+        - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"

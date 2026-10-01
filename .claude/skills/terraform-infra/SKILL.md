@@ -87,7 +87,7 @@ terraform apply -var="server_ip=$ORIGIN" -var="ssh_user=ubuntu" -var="ssh_privat
 ## Secrets Management
 
 - **SOPS encryption**: Secrets encrypted with AGE key
-  `age1mxkhk7p4ngsl7yagkp0m2xa5ggzl2ppfgrfuadadsxdus8jcpugqsn9x5u`
+  `age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq`
 - **Decrypt**: `sops -d secrets/env.production.sops.yaml`
 - **Edit**: `sops secrets/env.production.sops.yaml`
 - **Config**: `.sops.yaml` defines which files use which keys
