@@ -198,6 +198,18 @@ jobs:
           docker compose ps
           exit 1
 
+      - name: Export SSO credentials from the decrypted env
+        run: |
+          user=$(grep -E '^ADMIN_USERNAME=' .env | head -n1 | cut -d= -f2-)
+          pass=$(grep -E '^ADMIN_PASSWORD=' .env | head -n1 | cut -d= -f2-)
+          if [ -z "$user" ] || [ -z "$pass" ]; then
+            echo "ADMIN_USERNAME/ADMIN_PASSWORD missing in decrypted .env" >&2
+            exit 1
+          fi
+          echo "::add-mask::$pass"
+          echo "SSO_USERNAME=$user" >> "$GITHUB_ENV"
+          echo "SSO_PASSWORD=$pass" >> "$GITHUB_ENV"
+
       - name: Run Playwright SSO + Grafana E2E spec
         run: |
           set -o pipefail
