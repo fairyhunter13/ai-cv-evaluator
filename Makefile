@@ -792,7 +792,7 @@ docker-build-ci:
  tools:
 	GOBIN=$(PWD)/bin $(GO) install github.com/mgechev/revive@latest
 	GOBIN=$(PWD)/bin $(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
-	GOBIN=$(PWD)/bin $(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	GOBIN=$(PWD)/bin $(GO) install golang.org/x/vuln/cmd/govulncheck@v1.4.0
 	GOBIN=$(PWD)/bin $(GO) install gotest.tools/gotestsum@latest
 	# Pinned, unlike the others: this one decides whether lint-knowledge is green.
 	GOBIN=$(PWD)/bin $(GO) install github.com/fairyhunter13/okf/cmd/okfrules@v0.6.1
