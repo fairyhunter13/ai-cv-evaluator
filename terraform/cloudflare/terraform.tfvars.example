@@ -4,4 +4,4 @@
 
 cloudflare_api_token = "your-cloudflare-api-token-here"
 server_ip            = "your-vps-ip-address-here"
-domain_name          = "example.com"
+domain_name          = "ai-cv-evaluator.web.id"

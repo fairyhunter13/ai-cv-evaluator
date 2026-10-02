@@ -7,7 +7,7 @@ variable "cloudflare_api_token" {
 variable "domain_name" {
   description = "Root domain name managed in Cloudflare"
   type        = string
-  default     = "example.com"
+  default     = "ai-cv-evaluator.web.id"
 }
 
 variable "server_ip" {

@@ -29,8 +29,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PRODUCTION_URL: https://example.com
-  DASHBOARD_URL: https://dashboard.example.com
+  PRODUCTION_URL: https://ai-cv-evaluator.web.id
+  DASHBOARD_URL: https://dashboard.ai-cv-evaluator.web.id
 
 jobs:
   pre-deploy-checks:
@@ -1242,25 +1242,25 @@ jobs:
           echo "=== SSL Certificate Validation ==="
 
           # Check main domain
-          echo "Checking SSL for example.com..."
-          echo | openssl s_client -connect example.com:443 -servername example.com 2>/dev/null | openssl x509 -noout -dates || echo "Warning: SSL check failed"
+          echo "Checking SSL for ai-cv-evaluator.web.id..."
+          echo | openssl s_client -connect ai-cv-evaluator.web.id:443 -servername ai-cv-evaluator.web.id 2>/dev/null | openssl x509 -noout -dates || echo "Warning: SSL check failed"
 
           # Check dashboard domain
-          echo "Checking SSL for dashboard.example.com..."
-          echo | openssl s_client -connect dashboard.example.com:443 -servername dashboard.example.com 2>/dev/null | openssl x509 -noout -dates || echo "Warning: SSL check failed"
+          echo "Checking SSL for dashboard.ai-cv-evaluator.web.id..."
+          echo | openssl s_client -connect dashboard.ai-cv-evaluator.web.id:443 -servername dashboard.ai-cv-evaluator.web.id 2>/dev/null | openssl x509 -noout -dates || echo "Warning: SSL check failed"
 
       - name: Validate DNS records
         run: |
           echo "=== DNS Record Validation ==="
 
-          echo "Checking example.com..."
-          dig +short example.com A
+          echo "Checking ai-cv-evaluator.web.id..."
+          dig +short ai-cv-evaluator.web.id A
 
-          echo "Checking dashboard.example.com..."
-          dig +short dashboard.example.com A
+          echo "Checking dashboard.ai-cv-evaluator.web.id..."
+          dig +short dashboard.ai-cv-evaluator.web.id A
 
-          echo "Checking auth.example.com..."
-          dig +short auth.example.com A
+          echo "Checking auth.ai-cv-evaluator.web.id..."
+          dig +short auth.ai-cv-evaluator.web.id A
 
       - name: Disable Cloudflare proxy for E2E tests
         env:
@@ -1275,7 +1275,7 @@ jobs:
           fi
 
           api_base="https://api.cloudflare.com/client/v4"
-          records=("example.com" "dashboard.example.com" "auth.example.com")
+          records=("ai-cv-evaluator.web.id" "dashboard.ai-cv-evaluator.web.id" "auth.ai-cv-evaluator.web.id")
 
           for name in "${records[@]}"; do
             echo "Disabling proxy for ${name}..."
@@ -1303,11 +1303,11 @@ jobs:
           ORIGIN_IP="${{ secrets.SSH_HOST }}"
           if [[ "${ORIGIN_IP}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Overriding /etc/hosts to map production hostnames to origin IP ${ORIGIN_IP}"
-            sudo sh -c "printf '%s\n' \"${ORIGIN_IP} example.com\" \"${ORIGIN_IP} dashboard.example.com\" \"${ORIGIN_IP} auth.example.com\" >> /etc/hosts"
+            sudo sh -c "printf '%s\n' \"${ORIGIN_IP} ai-cv-evaluator.web.id\" \"${ORIGIN_IP} dashboard.ai-cv-evaluator.web.id\" \"${ORIGIN_IP} auth.ai-cv-evaluator.web.id\" >> /etc/hosts"
             echo "Hosts override applied. Current resolution:"
-            getent hosts example.com || true
-            getent hosts dashboard.example.com || true
-            getent hosts auth.example.com || true
+            getent hosts ai-cv-evaluator.web.id || true
+            getent hosts dashboard.ai-cv-evaluator.web.id || true
+            getent hosts auth.ai-cv-evaluator.web.id || true
           else
             echo "⚠ SSH_HOST is not an IPv4 address (${ORIGIN_IP}); skipping /etc/hosts override"
           fi
@@ -1368,7 +1368,7 @@ jobs:
           fi
 
           api_base="https://api.cloudflare.com/client/v4"
-          records=("example.com" "dashboard.example.com" "auth.example.com")
+          records=("ai-cv-evaluator.web.id" "dashboard.ai-cv-evaluator.web.id" "auth.ai-cv-evaluator.web.id")
 
           for name in "${records[@]}"; do
             echo "Enabling proxy for ${name}..."
@@ -1446,9 +1446,9 @@ jobs:
           fi
 
           records=(
-            "example.com"
-            "dashboard.example.com"
-            "auth.example.com"
+            "ai-cv-evaluator.web.id"
+            "dashboard.ai-cv-evaluator.web.id"
+            "auth.ai-cv-evaluator.web.id"
           )
 
           api_base="https://api.cloudflare.com/client/v4"
@@ -1513,7 +1513,7 @@ jobs:
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_server_ip: ${{ secrets.SSH_HOST }}
-          TF_VAR_domain_name: "example.com"
+          TF_VAR_domain_name: "ai-cv-evaluator.web.id"
         run: |
           for attempt in 1 2 3; do
             echo "terraform apply attempt $attempt of 3..."

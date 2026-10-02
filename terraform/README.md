@@ -31,7 +31,7 @@ terraform/
 
 2. **Cloudflare API Token**
    - Go to https://dash.cloudflare.com/profile/api-tokens
-   - Create token with **Zone:DNS:Edit** permissions for `example.com`
+   - Create token with **Zone:DNS:Edit** permissions for `ai-cv-evaluator.web.id`
    - Copy token value
 
 3. **VPS Server IP**
@@ -53,7 +53,7 @@ terraform/
    ```hcl
    cloudflare_api_token = "your-actual-cloudflare-api-token"
    server_ip            = "your-vps-ip-address"
-   domain_name          = "example.com"
+   domain_name          = "ai-cv-evaluator.web.id"
    ```
 
 4. **Initialize Terraform**:
@@ -69,7 +69,7 @@ terraform plan
 ```
 
 - This will show:
-- **+** Resources to be created (auth.example.com)
+- **+** Resources to be created (auth.ai-cv-evaluator.web.id)
 - **~** Resources to be modified
 - **-** Resources to be destroyed (if any)
 
@@ -79,8 +79,8 @@ terraform apply
 ```
 
 Review the plan and type `yes` to confirm. Terraform will:
-1. Create A record for `auth.example.com` (Authelia)
-2. Ensure `example.com` and `dashboard.example.com` exist
+1. Create A record for `auth.ai-cv-evaluator.web.id` (Authelia)
+2. Ensure `ai-cv-evaluator.web.id` and `dashboard.ai-cv-evaluator.web.id` exist
 3. Output DNS configuration summary
 
 #### Verify DNS records
@@ -89,9 +89,9 @@ Review the plan and type `yes` to confirm. Terraform will:
 terraform output dns_summary
 
 # Verify DNS resolution
-dig auth.example.com
-dig dashboard.example.com
-dig example.com
+dig auth.ai-cv-evaluator.web.id
+dig dashboard.ai-cv-evaluator.web.id
+dig ai-cv-evaluator.web.id
 ```
 
 ### DNS Records Managed

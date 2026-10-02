@@ -64,8 +64,8 @@ limit_req_zone $binary_remote_addr zone=oauth2_callback_zone:10m rate=5r/s;
 
 These protections are applied to:
 
-- `example.com` - Main API server
-- `dashboard.example.com` - Admin dashboard
+- `ai-cv-evaluator.web.id` - Main API server
+- `dashboard.ai-cv-evaluator.web.id` - Admin dashboard
 
 ### Configuration Files
 
@@ -93,7 +93,7 @@ To verify rate limiting is working:
 ```bash
 # Rapid requests should get throttled
 for i in {1..50}; do
-  curl -s -o /dev/null -w "%{http_code}\n" https://example.com/oauth2/start
+  curl -s -o /dev/null -w "%{http_code}\n" https://ai-cv-evaluator.web.id/oauth2/start
 done
 # Expect 429 responses after burst threshold
 ```

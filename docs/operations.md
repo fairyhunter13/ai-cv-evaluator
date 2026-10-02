@@ -75,7 +75,7 @@ docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d --no-deps backend worker
 
 # 3. Verify health
-curl https://example.com/healthz
+curl https://ai-cv-evaluator.web.id/healthz
 
 # 4. If issues, rollback
 docker compose -f docker-compose.prod.yml up -d --no-deps backend worker
@@ -106,7 +106,7 @@ docker compose -f docker-compose.prod.yml up -d --no-deps backend worker
 
 ```bash
 # 1. Ensure DNS points to server
-dig example.com
+dig ai-cv-evaluator.web.id
 
 # 2. Run certbot for initial certificate
 docker run -it --rm \
@@ -114,8 +114,8 @@ docker run -it --rm \
   -v /var/www/certbot:/var/www/certbot \
   certbot/certbot certonly \
   --webroot -w /var/www/certbot \
-  -d example.com \
-  -d dashboard.example.com
+  -d ai-cv-evaluator.web.id \
+  -d dashboard.ai-cv-evaluator.web.id
 
 # 3. Reload nginx
 docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
@@ -227,8 +227,8 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs -f backend
 
 # Application health
-curl https://example.com/healthz
-curl https://example.com/readyz
+curl https://ai-cv-evaluator.web.id/healthz
+curl https://ai-cv-evaluator.web.id/readyz
 ```
 
 ## Backup Procedures

@@ -15,43 +15,43 @@ The host facts, the DNS table and the service list are in
 
 ```bash
 # Direct to origin (fast, bypasses Cloudflare)
-curl -sS -k https://$ORIGIN/healthz -H "Host: example.com"
-curl -sS -k https://$ORIGIN/readyz -H "Host: example.com"
+curl -sS -k https://$ORIGIN/healthz -H "Host: ai-cv-evaluator.web.id"
+curl -sS -k https://$ORIGIN/readyz -H "Host: ai-cv-evaluator.web.id"
 ```
 
 ### 2. Check Authelia (SSO)
 
 ```bash
-curl -sS -k https://$ORIGIN/api/health -H "Host: auth.example.com"
+curl -sS -k https://$ORIGIN/api/health -H "Host: auth.ai-cv-evaluator.web.id"
 ```
 
 ### 3. Measure Cloudflare latency
 
 ```bash
 # Through Cloudflare
-curl -sS -w "TTFB: %{time_starttransfer}s Total: %{time_total}s\n" -o /dev/null https://example.com/healthz
+curl -sS -w "TTFB: %{time_starttransfer}s Total: %{time_total}s\n" -o /dev/null https://ai-cv-evaluator.web.id/healthz
 
 # Direct (should be <200ms)
-curl -sS -k -w "TTFB: %{time_starttransfer}s Total: %{time_total}s\n" -o /dev/null https://$ORIGIN/healthz -H "Host: example.com"
+curl -sS -k -w "TTFB: %{time_starttransfer}s Total: %{time_total}s\n" -o /dev/null https://$ORIGIN/healthz -H "Host: ai-cv-evaluator.web.id"
 ```
 
 ### 4. Test full redirect chain
 
 ```bash
-curl -sS -L -w "Redirects: %{num_redirects} Total: %{time_total}s HTTP: %{http_code}\n" -o /dev/null https://example.com/
+curl -sS -L -w "Redirects: %{num_redirects} Total: %{time_total}s HTTP: %{http_code}\n" -o /dev/null https://ai-cv-evaluator.web.id/
 ```
 
 ### 5. Check static asset loading (blank screen diagnostic)
 
 ```bash
 # Authelia JS bundle (~569KB) - if this fails, login page is blank
-curl -sS -k -o /dev/null -w "HTTP: %{http_code} Size: %{size_download}\n" https://$ORIGIN/static/js/index.CHT8JlKb.js -H "Host: auth.example.com"
+curl -sS -k -o /dev/null -w "HTTP: %{http_code} Size: %{size_download}\n" https://$ORIGIN/static/js/index.CHT8JlKb.js -H "Host: auth.ai-cv-evaluator.web.id"
 ```
 
 ### 6. Check SSL certificate
 
 ```bash
-echo | openssl s_client -connect $ORIGIN:443 -servername example.com 2>/dev/null | openssl x509 -noout -dates
+echo | openssl s_client -connect $ORIGIN:443 -servername ai-cv-evaluator.web.id 2>/dev/null | openssl x509 -noout -dates
 ```
 
 ## SSH Diagnostics (when needed)

@@ -36,7 +36,7 @@ Edit `terraform.tfvars`:
 ```hcl
 cloudflare_api_token = "<from .env.production CLOUDFLARE_API_TOKEN>"
 server_ip            = "<$ORIGIN>"
-domain_name          = "example.com"
+domain_name          = "ai-cv-evaluator.web.id"
 ```
 
 ### Commands

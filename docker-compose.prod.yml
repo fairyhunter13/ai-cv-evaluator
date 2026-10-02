@@ -24,7 +24,7 @@ services:
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - ADMIN_SESSION_SECRET=${ADMIN_SESSION_SECRET}
-      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-https://example.com,https://dashboard.example.com}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-https://ai-cv-evaluator.web.id,https://dashboard.ai-cv-evaluator.web.id}
     networks:
       default:
         aliases:
@@ -415,8 +415,8 @@ services:
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
       # Authelia URL (Production Domain)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://auth.example.com
-      OAUTH2_PROXY_LOGIN_URL: https://auth.example.com/api/oidc/authorization
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://auth.ai-cv-evaluator.web.id
+      OAUTH2_PROXY_LOGIN_URL: https://auth.ai-cv-evaluator.web.id/api/oidc/authorization
       # Internal Docker Network Access
       OAUTH2_PROXY_REDEEM_URL: http://authelia:9091/api/oidc/token
       OAUTH2_PROXY_OIDC_JWKS_URL: http://authelia:9091/jwks.json
@@ -426,13 +426,13 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_COOKIE_SAMESITE: lax
-      OAUTH2_PROXY_COOKIE_DOMAINS: "example.com,.example.com"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "ai-cv-evaluator.web.id,.ai-cv-evaluator.web.id"
       OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
-      OAUTH2_PROXY_REDIRECT_URL: https://example.com/oauth2/callback
+      OAUTH2_PROXY_REDIRECT_URL: https://ai-cv-evaluator.web.id/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
-      OAUTH2_PROXY_WHITELIST_DOMAINS: ".example.com"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
       OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"
@@ -458,8 +458,8 @@ services:
     environment:
       OAUTH2_PROXY_PROVIDER: oidc
       # Authelia URL (Production Domain)
-      OAUTH2_PROXY_OIDC_ISSUER_URL: https://auth.example.com
-      OAUTH2_PROXY_LOGIN_URL: https://auth.example.com/api/oidc/authorization
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://auth.ai-cv-evaluator.web.id
+      OAUTH2_PROXY_LOGIN_URL: https://auth.ai-cv-evaluator.web.id/api/oidc/authorization
       # Internal Docker Network Access
       OAUTH2_PROXY_REDEEM_URL: http://authelia:9091/api/oidc/token
       OAUTH2_PROXY_OIDC_JWKS_URL: http://authelia:9091/jwks.json
@@ -469,13 +469,13 @@ services:
       OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?set in .env.production}
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_COOKIE_SAMESITE: lax
-      OAUTH2_PROXY_COOKIE_DOMAINS: "example.com,.example.com"
+      OAUTH2_PROXY_COOKIE_DOMAINS: "ai-cv-evaluator.web.id,.ai-cv-evaluator.web.id"
       OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
       OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
-      OAUTH2_PROXY_REDIRECT_URL: https://dashboard.example.com/oauth2/callback
+      OAUTH2_PROXY_REDIRECT_URL: https://dashboard.ai-cv-evaluator.web.id/oauth2/callback
       OAUTH2_PROXY_UPSTREAMS: static://200
       OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
-      OAUTH2_PROXY_WHITELIST_DOMAINS: ".example.com"
+      OAUTH2_PROXY_WHITELIST_DOMAINS: ".ai-cv-evaluator.web.id"
       OAUTH2_PROXY_INSECURE_OIDC_ALLOW_UNVERIFIED_EMAIL: "true"
       OAUTH2_PROXY_INSECURE_OIDC_SKIP_ISSUER_VERIFICATION: "true"
       OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true"

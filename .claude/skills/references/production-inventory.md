@@ -20,7 +20,7 @@ export SSH="ssh -o IdentitiesOnly=yes -i ~/.ssh/id_rsa ubuntu@$ORIGIN"
 | SSH user | `ubuntu` |
 | Private key | `~/.ssh/id_rsa` |
 | Deploy directory | `~/ai-cv-evaluator/` |
-| Domain | `example.com` |
+| Domain | `ai-cv-evaluator.web.id` |
 
 `IdentitiesOnly=yes` is not optional. fail2ban runs with `maxretry=3` and `bantime=3600s`, and a
 client that offers several keys reaches that count on its own.
@@ -33,7 +33,7 @@ client that offers several keys reaches that count on its own.
 | `dashboard` | A | `43.157.225.155` | Admin dashboard |
 | `auth` | A | `43.157.225.155` | Authelia SSO |
 
-`keycloak.example.com` also resolves. Every A record is proxied, so a direct call to the
+`keycloak.ai-cv-evaluator.web.id` also resolves. Every A record is proxied, so a direct call to the
 origin needs `-k` and an explicit `Host` header.
 
 Terraform owns these records. Change one through `terraform/cloudflare`, never by hand.

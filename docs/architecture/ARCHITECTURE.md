@@ -29,7 +29,7 @@ High-level components:
 - oauth2-proxy is configured as an OIDC client of Authelia. Prod runs two of them —
   `oauth2-proxy-app` fronts the app host, `oauth2-proxy-dashboard` the dashboard host. They are one
   session, not two: same client id, same `OAUTH2_PROXY_COOKIE_SECRET`, and a cookie domain of
-  `.example.com`. That shared secret is what makes the portal hop below credential-free,
+  `.ai-cv-evaluator.web.id`. That shared secret is what makes the portal hop below credential-free,
   so rotating it for one instance and not the other logs everyone out of the other host.
 - Nginx uses `auth_request` to call oauth2-proxy for all protected routes.
 - On 401, nginx redirects to `/oauth2/start?rd=...`.

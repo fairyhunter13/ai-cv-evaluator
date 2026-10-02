@@ -1,6 +1,6 @@
 ---
 name: cloudflare-management
-description: Use when a DNS record, a proxy setting or a security setting must change on example.com, or when you must read the current one. Talks to the Cloudflare API.
+description: Use when a DNS record, a proxy setting or a security setting must change on ai-cv-evaluator.web.id, or when you must read the current one. Talks to the Cloudflare API.
 ---
 
 # Cloudflare Management
@@ -14,7 +14,7 @@ The host facts, the DNS table and the service list are in
 - **API Token**: stored in `.env.production` as `CLOUDFLARE_API_TOKEN`
 - **Zone ID**: stored in `.env.production` as `CLOUDFLARE_ZONE_ID`
 - **Account ID**: stored in `.env.production` as `CLOUDFLARE_ACCOUNT_ID`
-- **Domain**: example.com
+- **Domain**: ai-cv-evaluator.web.id
 
 ## Load Credentials
 
@@ -86,13 +86,13 @@ curl -sS -X PATCH -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
 
 ```bash
 # Through Cloudflare
-curl -sS -w "\nTTFB: %{time_starttransfer}s\n" https://example.com/healthz
+curl -sS -w "\nTTFB: %{time_starttransfer}s\n" https://ai-cv-evaluator.web.id/healthz
 
 # Direct to origin (bypass Cloudflare)
-curl -sS -k -w "\nTTFB: %{time_starttransfer}s\n" https://$ORIGIN/healthz -H "Host: example.com"
+curl -sS -k -w "\nTTFB: %{time_starttransfer}s\n" https://$ORIGIN/healthz -H "Host: ai-cv-evaluator.web.id"
 
 # Cloudflare trace
-curl -sS https://example.com/cdn-cgi/trace
+curl -sS https://ai-cv-evaluator.web.id/cdn-cgi/trace
 ```
 
 ## Gotchas
