@@ -3,11 +3,22 @@ creation_rules:
     key_groups:
       - age:
         - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"
+        - "age18y6d3jk79rvl27k6ux4fprk45rvfgxyux4a9wxjdsz3cstvecv0qcm90j6"
   - path_regex: secrets/.*\.sops\.yaml
     key_groups:
       - age:
         - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"
-  - path_regex: secrets/cv/.*\.sops
+        - "age18y6d3jk79rvl27k6ux4fprk45rvfgxyux4a9wxjdsz3cstvecv0qcm90j6"
+  - path_regex: secrets/cv/optimized_cv_2025\.md\.sops$
+    key_groups:
+      - age:
+        - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"
+        - "age18y6d3jk79rvl27k6ux4fprk45rvfgxyux4a9wxjdsz3cstvecv0qcm90j6"
+  - path_regex: secrets/(cv|rfc)/.*\.sops$
+    key_groups:
+      - age:
+        - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"
+  - path_regex: secrets/project\.md\.(sops|enc)$
     key_groups:
       - age:
         - "age19txs0a7xl89m2f0983fn0k3szj78n3tcjv8gddkvzk72r3fwsa3ssw0clq"
