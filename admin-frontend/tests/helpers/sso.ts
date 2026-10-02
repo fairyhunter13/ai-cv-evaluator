@@ -7,7 +7,7 @@ export const isSSOLoginUrl = (input: string | URL): boolean => {
     url.includes('/api/oidc/authorization') ||
     url.includes('/api/oidc/authorize') ||
     url.includes('/login/oauth/authorize') ||
-    url.includes('auth.example.com') ||
+    url.includes('auth.ai-cv-evaluator.web.id') ||
     url.includes('workflow=openid_connect');
 };
 
